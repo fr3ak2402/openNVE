@@ -1,0 +1,2 @@
+neuromorphic_drivers==0.19.2
+pip==26.3
