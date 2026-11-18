@@ -25,7 +25,18 @@ from .models import MODELS, CameraModel, get_model
 
 __version__ = "0.1.0"
 
+try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
+    from ._bundle import NEUROMORPHIC_DRIVERS_VERSION
+except ImportError:
+    import importlib.metadata as _metadata
+
+    try:
+        NEUROMORPHIC_DRIVERS_VERSION = _metadata.version("neuromorphic_drivers")
+    except _metadata.PackageNotFoundError:
+        NEUROMORPHIC_DRIVERS_VERSION = None
+
 __all__ = [
+    "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
     "BackgroundActivityConfig",
     "BackgroundActivityFilter",

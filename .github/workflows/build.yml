@@ -1,5 +1,6 @@
-# Builds the opennve wheel and source distribution, runs the tests and attaches
-# the files to the GitHub release for tags starting with "v" (for instance v0.1.0).
+# Builds openNVE wheels with neuromorphic_drivers (fr3ak2402 fork, SE1-S4 driver) embedded,
+# for Python 3.14 and newer on Linux, macOS and Windows, and tests them.
+# For tags starting with "v" (for instance v0.1.0), the wheels are attached to a GitHub release.
 name: Build
 
 on:
@@ -12,72 +13,98 @@ on:
 permissions:
   contents: write
 
+env:
+  # neuromorphic_drivers version that is embedded (branch, tag or commit of fr3ak2402/neuromorphic-drivers)
+  NEUROMORPHIC_DRIVERS_REF: main
+
 jobs:
-  test:
-    name: Test (Python ${{ matrix.python }} on ${{ matrix.os }})
+  wheels:
+    name: Wheels ${{ matrix.os }} (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ["3.12", "3.14"]
+        include:
+          - { os: ubuntu-latest, target: x86_64, interpreters: "-i python3.14 python3.15" }
+          - { os: ubuntu-24.04-arm, target: aarch64, interpreters: "-i python3.14 python3.15" }
+          - { os: windows-latest, target: x64, interpreters: "--find-interpreter" }
+          - { os: macos-latest, target: aarch64, interpreters: "--find-interpreter" }
+          - { os: macos-15-intel, target: x86_64, interpreters: "--find-interpreter" }
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: neuromorphic-drivers -> target
-
-      # neuromorphic_drivers with the SE1-S4 driver, built from the fork
-      - name: Install neuromorphic_drivers (fr3ak2402 fork)
-        shell: bash
-        run: |
-          git clone --depth 1 https://github.com/fr3ak2402/neuromorphic-drivers.git
-          python -m pip install --upgrade pip
-          python -m pip install ./neuromorphic-drivers/python
-
-      - name: Test
-        shell: bash
-        run: |
-          python -m pip install -e ".[test]"
-          python -m pytest -v
-          opennve models
-          opennve check examples/cameras.json
-
-  build:
-    name: Build wheel and sdist
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
       - uses: actions/checkout@v4
+        with:
+          repository: fr3ak2402/neuromorphic-drivers
+          ref: ${{ env.NEUROMORPHIC_DRIVERS_REF }}
+          path: neuromorphic-drivers
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: |
+            3.14
+            3.15
+          allow-prereleases: true
 
-      - name: Build
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
+      - name: Build neuromorphic_drivers
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: neuromorphic-drivers/python
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          before-script-linux: |
+            (dnf install -y clang || yum install -y clang || true)
+          args: --release --out ../../nd-dist ${{ matrix.interpreters }}
 
-      - name: Check wheel contents
+      - name: Bundle openNVE wheels
+        shell: bash
         run: |
-          python -m zipfile -l dist/*.whl
-          python -m zipfile -l dist/*.whl | grep -q "opennve/__init__.py"
+          ls nd-dist
+          python tools/bundle_wheel.py nd-dist --out dist --min-python 3.14
+          ls dist
+
+      - name: Test (Python 3.14)
+        uses: ./.github/actions/test-wheel
+        with:
+          python-version: "3.14"
+
+      - name: Test (Python 3.15)
+        uses: ./.github/actions/test-wheel
+        with:
+          python-version: "3.15"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: opennve-dist
-          path: dist/*
+          name: opennve-${{ matrix.os }}-${{ matrix.target }}
+          path: dist/*.whl
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opennve-sdist
+          path: dist/*.tar.gz
+
+  release:
+    name: Attach to release
+    needs: [wheels, sdist]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: opennve-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

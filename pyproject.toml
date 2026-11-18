@@ -7,7 +7,7 @@ name = "opennve"
 version = "0.1.0"
 description = "Open Neuromorphic Vision Engine: camera discovery, JSON configuration and filters for event cameras"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     # The SENSING SE1-S4 driver is in the fr3ak2402/neuromorphic-drivers wheel (0.19.2 or newer)
     "neuromorphic_drivers>=0.19.2",
