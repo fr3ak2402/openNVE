@@ -105,6 +105,14 @@ python examples/list_cameras.py
 python examples/viewer.py examples/cameras.json   # Q: exit, F: filter on/off
 ```
 
+## Wheels
+
+GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) tests openNVE on Linux and Windows against neuromorphic_drivers from the fr3ak2402 fork and builds `opennve-<version>-py3-none-any.whl` (works on every platform). The wheel is an artifact of each run; for tags starting with `v` (for instance `git tag v0.1.0 && git push --tags`) it is also attached to a GitHub release.
+
+```sh
+pip install opennve-0.1.0-py3-none-any.whl
+```
+
 ## Tests
 
 ```sh
