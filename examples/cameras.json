@@ -1,0 +1,43 @@
+{
+    "cameras": [
+        {
+            "name": "left",
+            "model": "SE1-S4",
+            "serial": "05110634",
+            "settings": {
+                "biases": {
+                    "diff_on": 20,
+                    "diff_off": 20
+                },
+                "clock": "internal_with_output_enabled",
+                "enable_external_trigger": true,
+                "rate_limiter": null
+            },
+            "filter": {
+                "polarity": "both",
+                "background_activity": {
+                    "enabled": true,
+                    "time_us": 5000,
+                    "min_neighbors": 1
+                }
+            }
+        },
+        {
+            "name": "right",
+            "model": "SE1-S4",
+            "serial": "05110636",
+            "settings": {
+                "biases": {
+                    "diff_on": 20,
+                    "diff_off": 20
+                },
+                "clock": "external"
+            },
+            "filter": {
+                "background_activity": {
+                    "enabled": true
+                }
+            }
+        }
+    ]
+}

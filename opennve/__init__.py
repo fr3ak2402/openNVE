@@ -1,0 +1,52 @@
+"""openNVE - Open Neuromorphic Vision Engine.
+
+    import opennve
+
+    opennve.list_cameras()                       # connected cameras
+    config = opennve.CameraConfig.from_json(...) # or opennve.load_configs("cameras.json")
+    with opennve.open_camera(config) as camera:
+        for packet in camera.events():
+            print(len(packet.polarity_events))
+"""
+
+from .camera import CameraPacket, EventCamera, open_camera, open_cameras
+from .config import (
+    CameraConfig,
+    load_config,
+    load_configs,
+    save_configs,
+    settings_from_dict,
+    settings_to_dict,
+)
+from .devices import EVK3HDDriver, EVK4Driver, SE1S4Driver
+from .discovery import CameraInfo, list_cameras, list_cameras_json
+from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
+from .models import MODELS, CameraModel, get_model
+
+__version__ = "0.1.0"
+
+__all__ = [
+    "MODELS",
+    "BackgroundActivityConfig",
+    "BackgroundActivityFilter",
+    "CameraConfig",
+    "CameraInfo",
+    "CameraModel",
+    "CameraPacket",
+    "EVK3HDDriver",
+    "EVK4Driver",
+    "EventCamera",
+    "EventFilter",
+    "FilterConfig",
+    "SE1S4Driver",
+    "get_model",
+    "list_cameras",
+    "list_cameras_json",
+    "load_config",
+    "load_configs",
+    "open_camera",
+    "open_cameras",
+    "save_configs",
+    "settings_from_dict",
+    "settings_to_dict",
+]
