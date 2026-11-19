@@ -22,7 +22,7 @@ Download the wheel for your platform from the [releases](https://github.com/fr3a
 
 ```sh
 pip uninstall -y neuromorphic_drivers     # only if installed separately (see below)
-pip install opennve-0.12.1-cp314-cp314-win_amd64.whl
+pip install opennve-0.13.0-cp314-cp314-win_amd64.whl
 ```
 
 pip installs numpy and OpenCV automatically.

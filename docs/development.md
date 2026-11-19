@@ -64,14 +64,14 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.12.2"`).
+1. Increase the version in `pyproject.toml` (`version = "0.13.1"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.12.2
+   git tag v0.13.1
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.12.2`.
+4. The action builds all wheels and attaches them to the release `v0.13.1`.
 
 ## New Python version
 
