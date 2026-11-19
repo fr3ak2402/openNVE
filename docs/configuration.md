@@ -28,6 +28,7 @@ Each camera is described by a JSON object:
         "width": 1280,
         "height": 720,
         "mode": "time_surface",
+        "time_surface": {"decay": "linear", "tau_us": 100000},
         "tiles": {"size": 80, "min_events": 1}
     }
 }
@@ -163,7 +164,8 @@ See [Time windows and frames](time-windows.md) for details.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `width`, `height` | number or `null` | `null` (sensor size) | Frame size in pixels; events outside are ignored |
-| `mode` | string | `"time_surface"` | `time_surface`, `binary` or `count` |
+| `mode` | string | `"time_surface"` | `time_surface` (time surfaces), `binary` or `count` |
+| `time_surface` | object | `{"decay": "linear", "tau_us": 100000}` | Time surface decay: `linear` or `exponential` with the time constant `tau_us` (µs) |
 | `tiles` | object or `null` | `null` | `{"size": 80, "min_events": 1}`: split each frame into 80 × 80 tiles, skip tiles with fewer than `min_events` events (`0` = all tiles) |
 
 The frames are built from the time windows (`window`) by `camera.frames()`. Details in [Frames and tiles](frames.md).

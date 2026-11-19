@@ -11,6 +11,7 @@ It works the same for live cameras and [RAW files](raw-files.md).
     "width": 1280,
     "height": 720,
     "mode": "time_surface",
+    "time_surface": {"decay": "linear", "tau_us": 100000},
     "tiles": {"size": 80, "min_events": 1}
 }
 ```
@@ -18,7 +19,9 @@ It works the same for live cameras and [RAW files](raw-files.md).
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `width`, `height` | number or `null` | `null` | Frame size in pixels. `null` = sensor size (1280 × 720 for the SE1-S4). Events outside the frame are ignored (no scaling) |
-| `mode` | string | `"time_surface"` | `time_surface`, `binary` or `count` (see below) |
+| `mode` | string | `"time_surface"` | `time_surface` to use time surfaces, or `binary` / `count` (see below) |
+| `time_surface.decay` | string | `"linear"` | `linear` or `exponential` (only used with `"mode": "time_surface"`) |
+| `time_surface.tau_us` | number | `100000` | Time constant of the exponential decay in µs |
 | `tiles` | object or `null` | `null` | Tile grid. `null` = no tiles, only the whole frame. A number such as `80` is short for `{"size": 80}` |
 | `tiles.size` | number | `80` | Tile size in pixels (square tiles) |
 | `tiles.min_events` | number | `1` | Only tiles with at least this many events are returned. `1` skips empty tiles, `0` returns all tiles |
@@ -29,9 +32,23 @@ Every frame has the shape **height × width × 2**, `float32`. Channel 0 holds t
 
 | Mode | Pixel value |
 |---|---|
-| `time_surface` | Linear time surface: `(t_last − start_t) / (end_t − start_t)` of the latest event of the pixel and polarity in the window, between 0 and 1. Newer events have higher values. `0` where there was no event (also for an event exactly at `start_t`) |
+| `time_surface`, decay `linear` | `(t_last − start_t) / (end_t − start_t)` of the latest event of the pixel and polarity in the window, between 0 and 1. Newer events have higher values. `0` where there was no event (also for an event exactly at `start_t`) |
+| `time_surface`, decay `exponential` | `exp(−(end_t − t_last) / tau_us)` of the latest event, between 0 and 1. An event at the end of the window gives about 1, older events decay exponentially. `0` where there was no event |
 | `binary` | `1.0` where at least one event occurred, else `0.0` |
 | `count` | Number of events of the pixel and polarity |
+
+### Linear or exponential?
+
+- **Linear** spreads the values evenly over the window: an event in the middle of a 40 ms window gives 0.5. The values depend only on the position of the event in the window, so they are comparable between windows of the same length.
+- **Exponential** emphasizes the most recent events: with `tau_us` = 20000 (20 ms), an event 20 ms before the end of the window gives `exp(−1)` ≈ 0.37, one 40 ms before ≈ 0.14. A small `tau_us` keeps only the newest motion visible (sharp edges), a large one behaves almost like `binary`. Unlike the linear decay, events at the very start of the window are not 0.
+
+The value of `tau_us` is in microseconds and independent of the window length. With 40 ms windows, values between 10000 and 100000 are typical.
+
+```json
+"frame": {"mode": "time_surface", "time_surface": {"decay": "exponential", "tau_us": 20000}}
+```
+
+`"time_surface": "exponential"` is short for `{"decay": "exponential"}`. For one frame, the decay can also be chosen in code: `window.frame(decay="exponential")`, `engine.build(events, start_t, end_t, decay="linear")`.
 
 ## Tiles
 
@@ -131,23 +148,24 @@ tiles = engine.generate_frame(frame_data, threshold=5, select_insects_points=Tru
 surface = FrameEngine.create_linear_time_surface(frame_data, 1280, 720, start, end)
 ```
 
-`tau` and `activity_threshold` are accepted and ignored, as before. `frame.tile_dicts()` converts the tiles of a new `Frame` to the same list format.
+`tau` and `activity_threshold` are accepted and ignored, as before, so `generate_frame` keeps giving linear time surfaces. For exponential time surfaces, use the new interface (`FrameEngine(..., decay="exponential", tau_us=...)` or the `time_surface` configuration). `frame.tile_dicts()` converts the tiles of a new `Frame` to the same list format.
 
 ## API
 
 | Name | Description |
 |---|---|
-| `FrameConfig(width=None, height=None, mode="time_surface", tiles=None)` | Frame settings (`from_dict`, `to_dict`) |
+| `FrameConfig(width=None, height=None, mode="time_surface", tiles=None, time_surface=TimeSurfaceConfig())` | Frame settings (`from_dict`, `to_dict`) |
+| `TimeSurfaceConfig(decay="linear", tau_us=100000)` | Time surface settings |
 | `TileConfig(size=80, min_events=1)` | Tile settings |
-| `FrameEngine(width, height, tile_size=None, mode="time_surface", min_events=1)` | Builds frames: `build(events, start_t, end_t, camera="")`, `build_window(window)`, `from_config(config, sensor_width, sensor_height)` |
-| `Frame` | `camera`, `start_t`, `end_t`, `mode`, `data`, `width`, `height`, `event_count`, `tiles`, `tile_rows`, `tile_cols`, `events`, `window`, `split(tile_size, min_events, data)`, `tile_event_counts(tile_size)`, `tile(id)`, `tile_dicts()`, `to_image()` |
+| `FrameEngine(width, height, tile_size=None, mode="time_surface", min_events=1, decay="linear", tau_us=100000)` | Builds frames: `build(events, start_t, end_t, camera="", mode=None, decay=None)`, `build_window(window)`, `from_config(config, sensor_width, sensor_height)` |
+| `Frame` | `camera`, `start_t`, `end_t`, `mode`, `decay`, `data`, `width`, `height`, `event_count`, `tiles`, `tile_rows`, `tile_cols`, `events`, `window`, `split(tile_size, min_events, data)`, `tile_event_counts(tile_size)`, `tile(id)`, `tile_dicts()`, `to_image()` |
 | `split_into_tiles(data, tile_size, event_counts=None, min_events=0)` | Splits any array (height × width × …) into tiles |
 | `tile_grid(width, height, tile_size)` | `(rows, columns)` of the tile grid |
 | `Tile` | `id`, `row`, `col`, `x`, `y`, `width`, `height`, `event_count` (`None` if unknown), `data`, `to_dict()` |
 | `EventCamera.frames()` / `read_frames()` / `update_frame()` | Frames of a live camera |
 | `RawReader.frames()` / `read_frames()` | Frames of a RAW file (`open_raw(..., frame={...})` overrides the configuration) |
-| `EventWindow.frame(config=None, mode=None)` | Frame of one window |
+| `EventWindow.frame(config=None, mode=None, decay=None)` | Frame of one window |
 
 ## Performance
 
-Building a 1280 × 720 time surface from 2 million events takes about 85 ms on one CPU core, splitting it into 80 px tiles about 15 ms (about 3.5 times faster than the previous implementation). With 40 ms windows, typical event rates leave plenty of time for further processing.
+Building a 1280 × 720 time surface (linear or exponential) from 2 million events takes about 70–85 ms on one CPU core, splitting it into 80 px tiles about 15 ms (about 3.5 times faster than the previous implementation). With 40 ms windows, typical event rates leave plenty of time for further processing.

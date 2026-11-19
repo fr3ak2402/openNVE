@@ -85,18 +85,24 @@ class EventWindow:
     output_config: OutputConfig = dataclasses.field(default_factory=OutputConfig, repr=False)
     frame_config: FrameConfig = dataclasses.field(default_factory=FrameConfig, repr=False)
 
-    def frame(self, config: typing.Union[FrameConfig, dict, None] = None, mode: typing.Optional[str] = None) -> Frame:
+    def frame(
+        self,
+        config: typing.Union[FrameConfig, dict, None] = None,
+        mode: typing.Optional[str] = None,
+        decay: typing.Optional[str] = None,
+    ) -> Frame:
         """Builds the frame (and tiles) of this window with the frame engine.
 
         config: FrameConfig or dict, default: the "frame" section of the camera configuration.
         mode: overrides the mode ("time_surface", "binary" or "count").
+        decay: overrides the time surface decay ("linear" or "exponential").
         Returns a Frame: frame.data (height x width x 2, float32), frame.tiles, frame.events.
         """
         if config is None:
             config = self.frame_config
         elif isinstance(config, dict):
             config = FrameConfig.from_dict(config)
-        return FrameEngine.from_config(config, self.width, self.height).build_window(self, mode=mode)
+        return FrameEngine.from_config(config, self.width, self.height).build_window(self, mode=mode, decay=decay)
 
     @property
     def duration_ms(self) -> float:

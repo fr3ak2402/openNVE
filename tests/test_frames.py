@@ -194,3 +194,43 @@ def test_camera_frames_then_split(monkeypatch):
     frame = window.frame()  # default configuration: no tiles
     assert frame.tiles == []
     assert [t.id for t in frame.split(80)] == [1, 2]
+
+
+def test_exponential_time_surface():
+    import math
+
+    events = _events([(1000, 1, 2, True), (1500, 1, 2, True), (1250, 1, 2, False), (1000, 3, 0, False)])
+    engine = opennve.FrameEngine(4, 3, decay="exponential", tau_us=500)
+    frame = engine.build(events, 1000, 2000)
+    assert frame.decay == "exponential" and frame.data.dtype == np.float32
+    assert frame.data[2, 1, 1] == pytest.approx(math.exp(-(2000 - 1500) / 500))  # latest ON event
+    assert frame.data[2, 1, 0] == pytest.approx(math.exp(-(2000 - 1250) / 500))
+    assert frame.data[0, 3, 0] == pytest.approx(math.exp(-2))  # an event at start_t is not 0
+    assert frame.data[0, 0, 0] == 0.0  # no event
+    linear = engine.build(events, 1000, 2000, decay="linear")
+    assert linear.decay == "linear" and linear.data[2, 1, 1] == pytest.approx(0.5)
+    assert engine.build(events, 1000, 2000, mode="binary").decay is None
+
+
+def test_time_surface_config():
+    config = opennve.CameraConfig.from_dict(
+        {"model": "SE1-S4", "frame": {"mode": "time_surface", "time_surface": {"decay": "Exponential", "tau_us": 20000}}}
+    )
+    assert config.frame.time_surface == opennve.TimeSurfaceConfig(decay="exponential", tau_us=20000)
+    assert opennve.CameraConfig.from_dict(config.to_dict()) == config
+    assert opennve.FrameConfig().time_surface.decay == "linear"
+    assert opennve.FrameConfig.from_dict({"time_surface": "exponential"}).time_surface.decay == "exponential"
+    for time_surface, message in (
+        ({"decay": "log"}, "decay must be one of"),
+        ({"tau_us": 0}, "tau_us must be a positive"),
+        ({"tau": 1000}, "unknown frame.time_surface"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            opennve.FrameConfig.from_dict({"time_surface": time_surface})
+    window = opennve.EventWindow(
+        camera="left", start_t=0, end_t=40_000, width=4, height=4,
+        polarity_events=_events([(30_000, 1, 1, True)]),
+        frame_config=config.frame,
+    )
+    assert window.frame().data[1, 1, 1] == pytest.approx(np.exp(-0.5))
+    assert window.frame(decay="linear").data[1, 1, 1] == pytest.approx(0.75)

@@ -6,13 +6,15 @@ JSON example (camera configuration):
         "width": 1280,
         "height": 720,
         "mode": "time_surface",
+        "time_surface": {"decay": "linear", "tau_us": 100000},
         "tiles": {"size": 80, "min_events": 1}
     }
 
 Modes (all frames have the shape height x width x 2, float32, channel = polarity 0 / 1):
 
-    time_surface: linear time surface, (t_last - start_t) / (end_t - start_t) of the latest
-                  event per pixel and polarity, 0 where there was no event
+    time_surface: time surface of the latest event per pixel and polarity, 0 where there was no event
+                  decay "linear":      (t_last - start_t) / (end_t - start_t)
+                  decay "exponential": exp(-(end_t - t_last) / tau_us)
     binary:       1.0 where at least one event occurred, else 0.0
     count:        number of events per pixel and polarity
 
@@ -49,6 +51,28 @@ class TileConfig:
             raise ValueError("frame.tiles.min_events must be an integer >= 0")
 
 
+TIME_SURFACE_DECAYS = ("linear", "exponential")
+
+
+@dataclasses.dataclass
+class TimeSurfaceConfig:
+    """Time surface settings (mode "time_surface").
+
+    decay "linear":      (t_last - start_t) / (end_t - start_t), 0 for an event at start_t
+    decay "exponential": exp(-(end_t - t_last) / tau_us), close to 1 for recent events
+    tau_us is only used by the exponential decay.
+    """
+
+    decay: str = "linear"
+    tau_us: float = 100_000
+
+    def validate(self):
+        if self.decay not in TIME_SURFACE_DECAYS:
+            raise ValueError(f"frame.time_surface.decay must be one of {', '.join(TIME_SURFACE_DECAYS)}")
+        if isinstance(self.tau_us, bool) or not isinstance(self.tau_us, (int, float)) or not self.tau_us > 0:
+            raise ValueError("frame.time_surface.tau_us must be a positive number (microseconds)")
+
+
 @dataclasses.dataclass
 class FrameConfig:
     """Frame settings: size (None = sensor size), mode and optional tiles."""
@@ -57,6 +81,7 @@ class FrameConfig:
     height: typing.Optional[int] = None
     mode: str = "time_surface"
     tiles: typing.Optional[TileConfig] = None
+    time_surface: TimeSurfaceConfig = dataclasses.field(default_factory=TimeSurfaceConfig)
 
     def validate(self):
         for name in ("width", "height"):
@@ -67,19 +92,21 @@ class FrameConfig:
             raise ValueError(f"frame.mode must be one of {', '.join(FRAME_MODES)}")
         if self.tiles is not None:
             self.tiles.validate()
+        self.time_surface.validate()
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
             "width": self.width,
             "height": self.height,
             "mode": self.mode,
+            "time_surface": dataclasses.asdict(self.time_surface),
             "tiles": None if self.tiles is None else dataclasses.asdict(self.tiles),
         }
 
     @classmethod
     def from_dict(cls, data: typing.Optional[dict[str, typing.Any]]) -> "FrameConfig":
         data = dict(data or {})
-        unknown = set(data) - {"width", "height", "mode", "tiles"}
+        unknown = set(data) - {"width", "height", "mode", "tiles", "time_surface"}
         if unknown:
             raise ValueError(f"unknown frame setting(s): {', '.join(sorted(unknown))}")
         tiles = data.get("tiles")
@@ -92,11 +119,24 @@ class FrameConfig:
             if unknown:
                 raise ValueError(f"unknown frame.tiles setting(s): {', '.join(sorted(unknown))}")
             tiles = TileConfig(**tiles)
+        time_surface = data.get("time_surface")
+        if time_surface is None:
+            time_surface = {}
+        elif isinstance(time_surface, str):
+            time_surface = {"decay": time_surface}  # "time_surface": "exponential" is accepted as well
+        if not isinstance(time_surface, dict):
+            raise ValueError("frame.time_surface must be an object, for instance {\"decay\": \"exponential\"}")
+        unknown = set(time_surface) - {"decay", "tau_us"}
+        if unknown:
+            raise ValueError(f"unknown frame.time_surface setting(s): {', '.join(sorted(unknown))}")
+        if "decay" in time_surface:
+            time_surface = {**time_surface, "decay": str(time_surface["decay"]).lower()}
         result = cls(
             width=data.get("width"),
             height=data.get("height"),
             mode=str(data.get("mode", "time_surface")).lower(),
             tiles=tiles,
+            time_surface=TimeSurfaceConfig(**time_surface),
         )
         result.validate()
         return result
@@ -142,6 +182,7 @@ class Frame:
         camera: Camera name.
         start_t, end_t: Time window in µs (camera time).
         mode: "time_surface", "binary" or "count".
+        decay: "linear" or "exponential" for time surfaces, else None.
         data: Frame, shape (height, width, 2), float32 (channel = polarity).
         event_count: Number of events used (inside the frame and the time window).
         tiles: Selected tiles (empty list if tiles are disabled).
@@ -159,6 +200,7 @@ class Frame:
     tile_rows: int = 0
     tile_cols: int = 0
     window: typing.Any = dataclasses.field(default=None, repr=False)
+    decay: typing.Optional[str] = None
     # positions of the events used for the frame (for split)
     event_x: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
     event_y: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
@@ -344,6 +386,8 @@ class FrameEngine:
         tile_size: Tile size in pixels, or None for no tiles.
         mode: "time_surface", "binary" or "count".
         min_events: Minimum number of events of a returned tile (0 = all tiles).
+        decay: Time surface decay, "linear" or "exponential".
+        tau_us: Time constant of the exponential decay in µs.
 
     The original arguments frame_width, frame_height and frame_tile_size are accepted as well,
     so FrameEngine(frame_width=1280, frame_height=720, frame_tile_size=80) works as before.
@@ -356,6 +400,8 @@ class FrameEngine:
         tile_size: typing.Optional[int] = None,
         mode: str = "time_surface",
         min_events: int = 1,
+        decay: str = "linear",
+        tau_us: float = 100_000,
         *,
         frame_width: typing.Optional[int] = None,
         frame_height: typing.Optional[int] = None,
@@ -371,12 +417,15 @@ class FrameEngine:
             height=int(height),
             mode=mode,
             tiles=None if tile_size is None else TileConfig(size=int(tile_size), min_events=int(min_events)),
+            time_surface=TimeSurfaceConfig(decay=decay, tau_us=tau_us),
         )
         config.validate()
         self.config = config
         self.width = config.width
         self.height = config.height
         self.mode = config.mode
+        self.decay = config.time_surface.decay
+        self.tau_us = float(config.time_surface.tau_us)
         self.tile_size = None if config.tiles is None else config.tiles.size
         self.min_events = 1 if config.tiles is None else config.tiles.min_events
         size = self.tile_size or 1
@@ -392,6 +441,8 @@ class FrameEngine:
             tile_size=None if config.tiles is None else config.tiles.size,
             mode=config.mode,
             min_events=1 if config.tiles is None else config.tiles.min_events,
+            decay=config.time_surface.decay,
+            tau_us=config.time_surface.tau_us,
         )
 
     # Frames
@@ -404,11 +455,16 @@ class FrameEngine:
         camera: str = "",
         window: typing.Any = None,
         mode: typing.Optional[str] = None,
+        decay: typing.Optional[str] = None,
     ) -> Frame:
-        """Builds the frame and the tiles of the events in [start_t, end_t)."""
+        """Builds the frame and the tiles of the events in [start_t, end_t).
+        mode and decay override the engine settings for this frame."""
         mode = mode or self.mode
+        decay = decay or self.decay
         if mode not in FRAME_MODES:
             raise ValueError(f"mode must be one of {', '.join(FRAME_MODES)}")
+        if decay not in TIME_SURFACE_DECAYS:
+            raise ValueError(f"decay must be one of {', '.join(TIME_SURFACE_DECAYS)}")
         if end_t <= start_t:
             raise ValueError("end_t must be greater than start_t")
         x, y, p, t = _columns(events)
@@ -418,7 +474,7 @@ class FrameEngine:
         )
         if not np.all(valid):
             x, y, p, t = x[valid], y[valid], p[valid], t[valid]
-        data = self._frame(x, y, p, t, float(start_t), float(end_t - start_t), mode)
+        data = self._frame(x, y, p, t, float(start_t), float(end_t - start_t), mode, decay)
         tiles = self._tiles(data, x, y)
         return Frame(
             camera=camera,
@@ -431,25 +487,38 @@ class FrameEngine:
             tile_rows=self.tile_rows,
             tile_cols=self.tile_cols,
             window=window,
+            decay=decay if mode == "time_surface" else None,
             event_x=x.astype(np.uint16),
             event_y=y.astype(np.uint16),
             _tile_size=self.tile_size,
             _min_events=self.min_events,
         )
 
-    def build_window(self, window, mode: typing.Optional[str] = None) -> Frame:
+    def build_window(self, window, mode: typing.Optional[str] = None, decay: typing.Optional[str] = None) -> Frame:
         """Builds the frame of an EventWindow."""
         return self.build(
-            window.polarity_events, window.start_t, window.end_t, camera=window.camera, window=window, mode=mode
+            window.polarity_events,
+            window.start_t,
+            window.end_t,
+            camera=window.camera,
+            window=window,
+            mode=mode,
+            decay=decay,
         )
 
-    def _frame(self, x, y, p, t, start_t: float, duration: float, mode: str) -> np.ndarray:
+    def _frame(self, x, y, p, t, start_t: float, duration: float, mode: str, decay: str = "linear") -> np.ndarray:
         size = self.height * self.width * 2
         index = (y * self.width + x) * 2 + p
         if mode == "time_surface":
             last = np.full(size, -1.0, dtype=np.float64)
             np.maximum.at(last, index, t - start_t)  # latest event, also for unsorted events
-            data = np.where(last >= 0, last / duration, 0.0).astype(np.float32)
+            present = last >= 0
+            if decay == "linear":
+                values = last / duration
+            else:
+                # exp(-(end_t - t_last) / tau): 1 for an event at the end of the window
+                values = np.exp((last - duration) / self.tau_us)
+            data = np.where(present, values, 0.0).astype(np.float32)
         elif mode == "binary":
             data = np.zeros(size, dtype=np.float32)
             data[index] = 1.0
