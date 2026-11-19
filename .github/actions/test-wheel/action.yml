@@ -19,10 +19,10 @@ runs:
           VENV_BIN="$RUNNER_TEMP/venv-${{ inputs.python-version }}/bin"
         fi
         "$VENV_BIN/python" -m pip install --upgrade pip
-        "$VENV_BIN/python" -m pip install numpy pytest
+        "$VENV_BIN/python" -m pip install numpy opencv-python pytest
         "$VENV_BIN/python" -m pip install --no-index --find-links dist opennve
         cd "$RUNNER_TEMP"
-        "$VENV_BIN/python" -c "import sys, opennve, neuromorphic_drivers as nd; print(sys.version); print(opennve.__file__, opennve.NEUROMORPHIC_DRIVERS_VERSION); assert 'site-packages' in opennve.__file__; assert hasattr(nd, 'sensing_se1_s4')"
+        "$VENV_BIN/python" -c "import sys, opennve, neuromorphic_drivers as nd; print(sys.version); print(opennve.__file__, opennve.NEUROMORPHIC_DRIVERS_VERSION); assert 'site-packages' in opennve.__file__; assert hasattr(nd, 'sensing_se1_s4'); import cv2; print('opencv', cv2.__version__)"
         "$VENV_BIN/opennve" models
         "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json"
         cd "$GITHUB_WORKSPACE"

@@ -12,10 +12,10 @@ dependencies = [
     # The SENSING SE1-S4 driver is in the fr3ak2402/neuromorphic-drivers wheel (0.19.2 or newer)
     "neuromorphic_drivers>=0.19.2",
     "numpy>=1.26",
+    "opencv-python>=4.10",
 ]
 
 [project.optional-dependencies]
-viewer = ["opencv-python"]
 test = ["pytest"]
 
 [project.scripts]

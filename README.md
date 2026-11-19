@@ -11,12 +11,11 @@ Supported models: SENSING SE1-S4-USB, Prophesee EVK4, EVK3 HD, EVK1 Gen4, iniVat
 
 ## Installation
 
-Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver, nothing else needs to be installed. Python 3.14 or newer is required.
+Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver; pip installs the other dependencies (numpy, OpenCV) automatically. Python 3.14 or newer is required.
 
 ```sh
 pip uninstall -y neuromorphic_drivers   # if a separate neuromorphic_drivers is installed
 pip install opennve-0.1.0-cp314-cp314-win_amd64.whl
-pip install opencv-python                # for examples/viewer.py
 ```
 
 | File name contains | Platform |
@@ -32,7 +31,7 @@ pip install opencv-python                # for examples/viewer.py
 On Windows, install the camera driver once per computer: `neuromorphic-drivers-install-windows-driver`.
 On Linux: `neuromorphic-drivers-install-udev-rules`.
 
-For development (source checkout), install neuromorphic_drivers from the fork first, then `pip install -e ".[viewer,test]"`.
+For development (source checkout), install neuromorphic_drivers from the fork first, then `pip install -e ".[test]"`.
 
 ## Command line
 
