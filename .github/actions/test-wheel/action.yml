@@ -22,10 +22,12 @@ runs:
         "$VENV_BIN/python" -m pip install numpy opencv-python pytest
         # optional extra: tests with pandas DataFrames run if a pandas wheel exists for this Python version
         "$VENV_BIN/python" -m pip install --only-binary :all: pandas || echo "no pandas wheel, DataFrame tests are skipped"
+        # optional extra: agents with TensorFlow Lite models (LiteRT has no wheels for macOS x86_64)
+        "$VENV_BIN/python" -m pip install --only-binary :all: ai-edge-litert || echo "no LiteRT wheel, TensorFlow Lite tests are skipped"
         "$VENV_BIN/python" -m pip install --no-index --find-links dist opennve
         cd "$RUNNER_TEMP"
         "$VENV_BIN/python" -c "import sys, opennve, neuromorphic_drivers as nd; print(sys.version); print(opennve.__file__, opennve.NEUROMORPHIC_DRIVERS_VERSION); assert 'site-packages' in opennve.__file__; assert hasattr(nd, 'sensing_se1_s4'); import cv2; print('opencv', cv2.__version__)"
         "$VENV_BIN/opennve" models
-        "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json"
+        "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json" "$GITHUB_WORKSPACE/examples/frames.json" "$GITHUB_WORKSPACE/examples/agents.json"
         cd "$GITHUB_WORKSPACE"
         "$VENV_BIN/pytest" -q -p no:cacheprovider tests

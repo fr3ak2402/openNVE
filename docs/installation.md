@@ -31,6 +31,8 @@ pip installs numpy and OpenCV automatically. Reading `.raw` files and building f
 pip install "opennve-0.25.9-cp314-cp314-win_amd64.whl[pandas]"
 ```
 
+For [agents](agents.md) with TensorFlow Lite models, install LiteRT with the extra `tflite` (`pip install "opennve-0.25.9-cp314-cp314-win_amd64.whl[tflite]"` or `pip install ai-edge-litert`). TensorFlow / Keras models need TensorFlow; for Python 3.14 this is currently `pip install tf-nightly`, see [Agents](agents.md#installation).
+
 > **Important:** The wheel contains `neuromorphic_drivers` 0.19.2 with the SE1-S4 driver. A separately installed `neuromorphic_drivers` would overwrite it (and vice versa), so uninstall it first.
 
 > **Note:** Install the wheel **without** `-r`. `pip install -r file.whl` reads the wheel as a text file and fails with `UnicodeDecodeError`.

@@ -352,6 +352,29 @@ for frame in camera.frames(frame_configs[0]):  # "tiles": null
 
 ---
 
+## Agents (TensorFlow models)
+
+Agents run TensorFlow Lite (LiteRT) and TensorFlow / Keras models on the tiles or frames of each time window. They are configured in their own file (`agents.json`). See [Agents](agents.md) for the configuration, installation of the runtimes and results.
+
+| Name | Description |
+|---|---|
+| `load_agents(path)` / `load_agent(path, name=None)` | Agents of a file (models are loaded on first use) |
+| `Agent(config, model=None)` / `Agent.from_model(model, **settings)` | `load()`, `predict(frame / tiles / array) -> AgentResult`, `predict_batch(batch)`, `input`, `close()` |
+| `run_agents(source, agents, frame_configs=None, duration_ms=None)` | Generator: one `AgentStep` (`window`, `frames`, `results`) per time window of a camera or RAW file |
+| `process_window(window, agents, frame_configs=None)` | `AgentStep` for one window |
+| `AgentConfig`, `PreprocessConfig`, `PredictionConfig` | Agent settings (`load_agent_configs`, `load_agent_config`, `save_agent_configs`) |
+| `AgentResult` | `predictions`, `selected`, `outputs`, `inference_ms`, `by_tile()`, `to_dict()` |
+| `Prediction` | `tile`, `tile_id`, `output`, `outputs`, `class_id`, `label`, `score`, `selected` |
+
+```python
+agents = opennve.load_agents("agents.json")
+for step in opennve.run_agents(camera, agents, opennve.load_frame_configs("frames.json")):
+    for prediction in step["insects"].selected:
+        print(prediction.tile_id, prediction.label, prediction.score)
+```
+
+---
+
 ## RAW files
 
 `.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.

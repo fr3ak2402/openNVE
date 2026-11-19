@@ -21,8 +21,11 @@ dependencies = [
 [project.optional-dependencies]
 # Events as pandas DataFrames (FrameEngine.generate_frame / build accept DataFrames with x, y, p, t)
 pandas = ["pandas>=2.2"]
+# Agents: TensorFlow Lite models (.tflite) with LiteRT. TensorFlow models (.keras, .h5, SavedModel)
+# need TensorFlow, which is installed separately (Python 3.14: tf-nightly, see docs/agents.md)
+tflite = ["ai-edge-litert>=2.3"]
 test = ["pytest"]
-all = ["pandas>=2.2", "pytest"]
+all = ["pandas>=2.2", "ai-edge-litert>=2.3", "pytest"]
 
 [project.scripts]
 opennve = "opennve.__main__:main"

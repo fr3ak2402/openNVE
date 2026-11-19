@@ -8,3 +8,7 @@ numpy>=1.26
 opencv-python>=4.10
 # optional: events as pandas DataFrames
 pandas>=2.2
+# optional: agents with TensorFlow Lite models (.tflite)
+ai-edge-litert>=2.3
+# optional: agents with TensorFlow models (.keras, .h5, SavedModel). TensorFlow has no stable
+# release for Python 3.14 yet: pip install tf-nightly (or tensorflow once 3.14 wheels exist)

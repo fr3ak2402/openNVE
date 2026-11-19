@@ -14,6 +14,22 @@
             print(frame.name, frame.data.shape, len(frame.tiles))
 """
 
+from .agents import (
+    Agent,
+    AgentConfig,
+    AgentResult,
+    AgentStep,
+    Prediction,
+    PredictionConfig,
+    PreprocessConfig,
+    load_agent,
+    load_agent_config,
+    load_agent_configs,
+    load_agents,
+    process_window,
+    run_agents,
+    save_agent_configs,
+)
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
 from .config import (
     CameraConfig,
@@ -62,6 +78,20 @@ except ImportError:
         NEUROMORPHIC_DRIVERS_VERSION = None
 
 __all__ = [
+    "Agent",
+    "AgentConfig",
+    "AgentResult",
+    "AgentStep",
+    "Prediction",
+    "PredictionConfig",
+    "PreprocessConfig",
+    "load_agent",
+    "load_agent_config",
+    "load_agent_configs",
+    "load_agents",
+    "process_window",
+    "run_agents",
+    "save_agent_configs",
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
     "FRAME_MODES",

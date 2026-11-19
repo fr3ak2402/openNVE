@@ -1,0 +1,41 @@
+{
+    "agents": [
+        {
+            "name": "insects",
+            "model": "models/insects.tflite",
+            "backend": "auto",
+            "input": "tiles",
+            "frame": "tiles80",
+            "batch_size": 64,
+            "threads": 2,
+            "preprocess": {
+                "channels": "both",
+                "pad": true,
+                "resize": null,
+                "layout": "nhwc",
+                "scale": 1.0
+            },
+            "prediction": {
+                "activation": "none",
+                "labels": ["background", "insect"],
+                "threshold": 0.5
+            }
+        },
+        {
+            "name": "scene",
+            "model": "models/scene.keras",
+            "backend": "auto",
+            "input": "frame",
+            "frame": "binary",
+            "call": "predict",
+            "preprocess": {
+                "channels": "sum",
+                "resize": [160, 90]
+            },
+            "prediction": {
+                "activation": "softmax",
+                "labels": ["empty", "motion", "crowd"]
+            }
+        }
+    ]
+}
