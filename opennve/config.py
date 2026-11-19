@@ -15,7 +15,8 @@ A camera configuration describes one camera:
         "filter": {
             "polarity": "both",
             "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
-        }
+        },
+        "output": {"fields": ["c", "x", "y", "p", "t"]}
     }
 
 - name: free name of the camera in your setup
@@ -24,6 +25,8 @@ A camera configuration describes one camera:
 - settings: hardware settings, passed to the camera (fields of the model's
   neuromorphic_drivers Configuration; omitted fields keep their default value)
 - filter: software filters applied to the events (see opennve.filters)
+- output: fields of the output events, in order (see opennve.output):
+  c = camera name, x, y, p = polarity (1 ON / 0 OFF), t = timestamp in µs
 
 A configuration file contains either one camera object, a list of camera objects,
 or {"cameras": [...]}.
@@ -41,6 +44,7 @@ import typing
 import numpy as np
 
 from .filters import FilterConfig
+from .output import OutputConfig
 from .models import CameraModel, get_model
 
 PathLike = typing.Union[str, pathlib.Path]
@@ -199,6 +203,7 @@ class CameraConfig:
     serial: typing.Optional[str] = None
     settings: typing.Any = None
     filter: FilterConfig = dataclasses.field(default_factory=FilterConfig)
+    output: OutputConfig = dataclasses.field(default_factory=OutputConfig)
 
     def __post_init__(self):
         if isinstance(self.model, str):
@@ -213,6 +218,8 @@ class CameraConfig:
             )
         if isinstance(self.filter, dict):
             self.filter = FilterConfig.from_dict(self.filter)
+        if isinstance(self.output, dict):
+            self.output = OutputConfig.from_dict(self.output)
         if self.name is None:
             self.name = self.model.id if self.serial is None else f"{self.model.id}-{self.serial}"
 
@@ -225,6 +232,7 @@ class CameraConfig:
             "serial": self.serial,
             "settings": settings_to_dict(self.settings),
             "filter": self.filter.to_dict(),
+            "output": self.output.to_dict(),
         }
 
     def to_json(self, indent: typing.Optional[int] = 4) -> str:
@@ -234,7 +242,7 @@ class CameraConfig:
     def from_dict(cls, data: dict[str, typing.Any]) -> "CameraConfig":
         if not isinstance(data, dict):
             raise ValueError("a camera configuration must be an object")
-        unknown = set(data) - {"name", "model", "serial", "settings", "filter"}
+        unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output"}
         if unknown:
             raise ValueError(f"unknown camera setting(s): {', '.join(sorted(unknown))}")
         if "model" not in data:
@@ -249,6 +257,7 @@ class CameraConfig:
             serial=serial,
             settings=settings_from_dict(model, data.get("settings")),
             filter=FilterConfig.from_dict(data.get("filter")),
+            output=OutputConfig.from_dict(data.get("output")),
         )
 
     @classmethod

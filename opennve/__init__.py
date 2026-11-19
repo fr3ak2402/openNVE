@@ -6,7 +6,7 @@
     config = opennve.CameraConfig.from_json(...) # or opennve.load_configs("cameras.json")
     with opennve.open_camera(config) as camera:
         for packet in camera.events():
-            print(len(packet.polarity_events))
+            print(packet.events)  # structured array in the configured output format (c, x, y, p, t)
 """
 
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
@@ -22,6 +22,7 @@ from .devices import EVK3HDDriver, EVK4Driver, SE1S4Driver
 from .discovery import CameraInfo, list_cameras, list_cameras_json
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
+from .output import OutputConfig, to_csv, to_rows
 
 __version__ = "0.1.0"
 
@@ -38,6 +39,9 @@ except ImportError:
 __all__ = [
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
+    "OutputConfig",
+    "to_csv",
+    "to_rows",
     "BackgroundActivityConfig",
     "BackgroundActivityFilter",
     "CameraConfig",

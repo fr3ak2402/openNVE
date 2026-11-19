@@ -20,6 +20,15 @@
                     "time_us": 5000,
                     "min_neighbors": 1
                 }
+            },
+            "output": {
+                "fields": [
+                    "c",
+                    "x",
+                    "y",
+                    "p",
+                    "t"
+                ]
             }
         },
         {
@@ -37,6 +46,14 @@
                 "background_activity": {
                     "enabled": true
                 }
+            },
+            "output": {
+                "fields": [
+                    "t",
+                    "x",
+                    "y",
+                    "p"
+                ]
             }
         }
     ]

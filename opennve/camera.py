@@ -10,6 +10,7 @@ import numpy as np
 
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
 from .filters import EventFilter, FilterConfig
+from .output import OutputConfig, to_csv, to_rows
 from .models import get_model
 
 
@@ -24,6 +25,7 @@ class CameraPacket:
         trigger_events: External trigger events, or None.
         raw_event_count: Number of polarity events before the filter.
         packet: The original neuromorphic_drivers packet.
+        output_config: Output format of the camera configuration ("output" section).
     """
 
     camera: str
@@ -32,6 +34,23 @@ class CameraPacket:
     trigger_events: typing.Optional[np.ndarray]
     raw_event_count: int
     packet: Any
+    output_config: OutputConfig = dataclasses.field(default_factory=OutputConfig, repr=False)
+
+    @property
+    def events(self) -> np.ndarray:
+        """Filtered polarity events in the configured output format, for instance with
+        "fields": ["c", "x", "y", "p", "t"] a structured array with fields c, x, y, p, t."""
+        if self.polarity_events is None:
+            return np.empty(0, dtype=self.output_config.dtype(self.camera))
+        return self.output_config.format(self.polarity_events, self.camera)
+
+    def rows(self) -> list[tuple]:
+        """Events in the output format as tuples, for instance [("left", 12, 40, 1, 1003), ...]."""
+        return to_rows(self.events)
+
+    def to_csv(self, header: bool = False, delimiter: str = ",") -> str:
+        """Events in the output format as CSV text, for instance "left,12,40,1,1003"."""
+        return to_csv(self.events, header=header, delimiter=delimiter)
 
 
 class EventCamera:
@@ -55,6 +74,7 @@ class EventCamera:
         *,
         configuration: Any = None,
         filter: FilterConfig | dict | None = None,
+        output: OutputConfig | dict | None = None,
         name: str | None = None,
         iterator_timeout: float = 0.02,
     ) -> None:
@@ -66,6 +86,7 @@ class EventCamera:
             serial=serial,
             settings=configuration,
             filter=filter if filter is not None else FilterConfig(),
+            output=output if output is not None else OutputConfig(),
         )
 
         # Initialize internal device references
@@ -110,6 +131,7 @@ class EventCamera:
             serial=config.serial,
             configuration=config.settings,
             filter=config.filter,
+            output=config.output,
             name=config.name,
             iterator_timeout=iterator_timeout,
         )
@@ -215,6 +237,7 @@ class EventCamera:
             trigger_events=getattr(packet, "trigger_events", None),
             raw_event_count=raw_event_count,
             packet=packet,
+            output_config=self.config.output,
         )
 
     def events(self) -> Iterator[CameraPacket]:
@@ -266,8 +289,15 @@ class EventCamera:
         self.config.filter = filter
         self._build_filter()
 
+    def update_output(self, output: OutputConfig | dict) -> None:
+        """Replace the output format, for instance {"fields": ["c", "x", "y", "p", "t"]}."""
+        if isinstance(output, dict):
+            output = OutputConfig.from_dict(output)
+        output.validate()
+        self.config.output = output
+
     def apply_config(self, config: CameraConfig | dict | str) -> None:
-        """Apply a complete camera configuration (settings, filter and name) to the open camera."""
+        """Apply a complete camera configuration (settings, filter, output and name) to the open camera."""
         if isinstance(config, str):
             config = CameraConfig.from_json(config)
         elif isinstance(config, dict):
@@ -278,6 +308,7 @@ class EventCamera:
             raise ValueError(f"the configuration is for serial {config.serial}, the camera is {self.config.serial}")
         self.update_configuration(config.settings)
         self.update_filter(config.filter)
+        self.update_output(config.output)
         self.config.name = config.name
 
     # Lifecycle
