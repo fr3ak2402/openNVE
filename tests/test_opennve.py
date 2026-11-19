@@ -154,7 +154,11 @@ def test_window_config():
     config = opennve.CameraConfig.from_dict({"model": "SE1-S4", "window": {"duration_ms": 2.5}})
     assert config.window.duration_us == 2500
     assert opennve.CameraConfig.from_dict(config.to_dict()) == config
-    assert opennve.CameraConfig(model="SE1-S4").window is None
+    assert opennve.CameraConfig(model="SE1-S4").window.duration_ms == 40
+    assert opennve.CameraConfig.from_dict({"model": "SE1-S4"}).window.duration_us == 40_000
+    disabled = opennve.CameraConfig.from_dict({"model": "SE1-S4", "window": None})
+    assert disabled.window is None and disabled.to_dict()["window"] is None
+    assert opennve.CameraConfig.from_dict(disabled.to_dict()).window is None
     for window, message in (
         ({"duration_ms": 0}, "must be in"),
         ({"duration_ms": "10"}, "must be a number"),

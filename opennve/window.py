@@ -2,9 +2,11 @@
 
 JSON example (camera configuration):
 
-    "window": {"duration_ms": 10}
+    "window": {"duration_ms": 40}
 
-Windows are aligned to the camera clock: with 10 ms, windows are [0, 10) ms, [10, 20) ms, ...
+Default: 40 ms (also if the "window" section is missing). "window": null disables windows.
+
+Windows are aligned to the camera clock: with 40 ms, windows are [0, 40) ms, [40, 80) ms, ...
 of the camera timestamps, so synchronized cameras produce windows with the same boundaries.
 A window is complete as soon as the camera time passes its end, also if there are no events
 (empty windows are produced for periods without events).
@@ -21,6 +23,8 @@ from .output import OutputConfig, to_csv, to_rows
 
 FRAME_MODES = ("count", "polarity", "binary", "color")
 
+DEFAULT_DURATION_MS = 40.0
+
 # Periods without events longer than this many windows are skipped instead of producing empty windows
 MAXIMUM_EMPTY_WINDOWS = 10_000
 
@@ -29,7 +33,7 @@ MAXIMUM_EMPTY_WINDOWS = 10_000
 class WindowConfig:
     """Duration of the time windows, in milliseconds (0.01 ms to 60 s)."""
 
-    duration_ms: float = 10.0
+    duration_ms: float = DEFAULT_DURATION_MS
 
     def validate(self):
         if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, (int, float)):
@@ -49,7 +53,7 @@ class WindowConfig:
         if data is None:
             return None
         if not isinstance(data, dict):
-            raise ValueError("window must be an object, for instance {\"duration_ms\": 10}, or null")
+            raise ValueError("window must be an object, for instance {\"duration_ms\": 40}, or null")
         unknown = set(data) - {"duration_ms"}
         if unknown:
             raise ValueError(f"unknown window setting(s): {', '.join(sorted(unknown))}")

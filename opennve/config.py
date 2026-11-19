@@ -17,7 +17,7 @@ A camera configuration describes one camera:
             "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
         },
         "output": {"fields": ["x", "y", "p", "t"]},
-        "window": {"duration_ms": 10}
+        "window": {"duration_ms": 40}
     }
 
 - name: free name of the camera in your setup
@@ -30,7 +30,7 @@ A camera configuration describes one camera:
   x, y, p = polarity (1 ON / 0 OFF), t = timestamp in µs
   (the camera name is stored once per packet, not per event)
 - window: duration of the time windows used by EventCamera.windows(), for instance to
-  build frames (see opennve.window), or null
+  build frames (see opennve.window). Default {"duration_ms": 40}, null disables windows
 
 A configuration file contains either one camera object, a list of camera objects,
 or {"cameras": [...]}.
@@ -209,7 +209,7 @@ class CameraConfig:
     settings: typing.Any = None
     filter: FilterConfig = dataclasses.field(default_factory=FilterConfig)
     output: OutputConfig = dataclasses.field(default_factory=OutputConfig)
-    window: typing.Optional[WindowConfig] = None
+    window: typing.Optional[WindowConfig] = dataclasses.field(default_factory=WindowConfig)
 
     def __post_init__(self):
         if isinstance(self.model, str):
@@ -267,7 +267,7 @@ class CameraConfig:
             settings=settings_from_dict(model, data.get("settings")),
             filter=FilterConfig.from_dict(data.get("filter")),
             output=OutputConfig.from_dict(data.get("output")),
-            window=WindowConfig.from_dict(data.get("window")),
+            window=WindowConfig.from_dict(data["window"]) if "window" in data else WindowConfig(),
         )
 
     @classmethod

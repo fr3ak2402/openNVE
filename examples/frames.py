@@ -30,7 +30,7 @@ def to_image(frame: np.ndarray, mode: str) -> np.ndarray:
 def main():
     mode = 0
     with opennve.open_camera(path=CONFIG_PATH, name=CAMERA_NAME) as camera:
-        window_config = camera.config.window or opennve.WindowConfig(duration_ms=10)
+        window_config = camera.config.window or opennve.WindowConfig()  # 40 ms
         print(f"{camera.name}: {window_config.duration_ms} ms windows")
         for window in camera.windows(window_config.duration_ms):
             # window.events: events of this window in the output format (x, y, p, t)
