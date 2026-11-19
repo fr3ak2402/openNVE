@@ -57,17 +57,19 @@ Windows work as described in [Time windows and frames](time-windows.md). At the 
 ### Frames and tiles
 
 ```python
+tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+
 with opennve.open_raw("recording.raw", config_path="cameras.json", name="left") as raw:
-    for frame in raw.frames():  # with the "frame" configuration, see Frames and tiles
+    for frame in raw.frames(tiles80):  # frame configuration, see Frames and tiles
         for tile in frame.tiles:
             ...
 ```
 
-`open_raw(..., frame={"tiles": {"size": 80}})` overrides the frame settings. See [Frames and tiles](frames.md).
+`raw.frame_sets(opennve.load_frame_configs("frames.json"))` yields one frame per frame configuration and window (`{name: Frame}`). See [Frames and tiles](frames.md).
 
 ### Same settings as the live camera
 
-Pass the camera configuration to process the file with the same name, filter, output format, window duration and frame settings as the live camera. Hardware settings (`settings`) are ignored, since the events are already recorded.
+Pass the camera configuration to process the file with the same name, filter, output format and window duration as the live camera. Frames are configured separately, so the same frame configuration can be used for both. Hardware settings (`settings`) are ignored, since the events are already recorded.
 
 ```python
 raw = opennve.open_raw("recording.raw", config_path="cameras.json", name="left")
@@ -127,7 +129,8 @@ raw = opennve.open_raw("camera_data.bin", format="EVT3", width=1280, height=720)
 | `read()` | Next packet, or `None` at the end of the file |
 | `windows(duration_ms=None)` | Generator: yields `EventWindow` objects, including the last one |
 | `read_windows(duration_ms=None)` | Windows completed by the next packet (often `[]`), `None` at the end of the file |
-| `frames(duration_ms=None)` / `read_frames(...)` | Frames and tiles of the windows ([Frames and tiles](frames.md)) |
+| `frames(config=None, duration_ms=None)` / `read_frames(...)` | Frames and tiles of the windows ([Frames and tiles](frames.md)) |
+| `frame_sets(configs, duration_ms=None)` / `read_frame_sets(...)` | `{name: Frame}` per window, one frame per frame configuration |
 | `read_all()` | Rest of the file at once: `(polarity events, trigger events)` |
 | `info()` | Path, format, resolution, serial number, size, header, settings |
 | `header` | `RawHeader`: `fields`, `format`, `width`, `height`, `endianness`, `data_offset`, `serial` |

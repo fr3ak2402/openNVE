@@ -17,8 +17,7 @@ A camera configuration describes one camera:
             "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
         },
         "output": {"fields": ["x", "y", "p", "t"]},
-        "window": {"duration_ms": 40},
-        "frame": {"width": 1280, "height": 720, "mode": "time_surface", "tiles": {"size": 80, "min_events": 1}}
+        "window": {"duration_ms": 40}
     }
 
 - name: free name of the camera in your setup
@@ -32,11 +31,13 @@ A camera configuration describes one camera:
   (the camera name is stored once per packet, not per event)
 - window: duration of the time windows used by EventCamera.windows(), for instance to
   build frames (see opennve.window). Default {"duration_ms": 40}, null disables windows
-- frame: frames built from each time window by EventCamera.frames() (see opennve.frames):
-  size (null = sensor size), mode (time_surface, binary, count) and tiles (null = no tiles)
+
+Frame settings are not part of the camera configuration: they are separate, named frame
+configurations (see opennve.frames and load_frame_configs), passed to camera.frames(config).
 
 A configuration file contains either one camera object, a list of camera objects,
-or {"cameras": [...]}.
+or {"cameras": [...]}. A file with {"cameras": [...], "frames": [...]} is accepted as well,
+the frames are read with load_frame_configs.
 """
 
 from __future__ import annotations
@@ -51,7 +52,6 @@ import typing
 import numpy as np
 
 from .filters import FilterConfig
-from .frames import FrameConfig
 from .output import OutputConfig
 from .window import WindowConfig
 from .models import CameraModel, get_model
@@ -214,7 +214,6 @@ class CameraConfig:
     filter: FilterConfig = dataclasses.field(default_factory=FilterConfig)
     output: OutputConfig = dataclasses.field(default_factory=OutputConfig)
     window: typing.Optional[WindowConfig] = dataclasses.field(default_factory=WindowConfig)
-    frame: FrameConfig = dataclasses.field(default_factory=FrameConfig)
 
     def __post_init__(self):
         if isinstance(self.model, str):
@@ -233,8 +232,6 @@ class CameraConfig:
             self.output = OutputConfig.from_dict(self.output)
         if isinstance(self.window, dict):
             self.window = WindowConfig.from_dict(self.window)
-        if isinstance(self.frame, dict):
-            self.frame = FrameConfig.from_dict(self.frame)
         if self.name is None:
             self.name = self.model.id if self.serial is None else f"{self.model.id}-{self.serial}"
 
@@ -249,7 +246,6 @@ class CameraConfig:
             "filter": self.filter.to_dict(),
             "output": self.output.to_dict(),
             "window": None if self.window is None else self.window.to_dict(),
-            "frame": self.frame.to_dict(),
         }
 
     def to_json(self, indent: typing.Optional[int] = 4) -> str:
@@ -259,7 +255,13 @@ class CameraConfig:
     def from_dict(cls, data: dict[str, typing.Any]) -> "CameraConfig":
         if not isinstance(data, dict):
             raise ValueError("a camera configuration must be an object")
-        unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output", "window", "frame"}
+        if "frame" in data:
+            raise ValueError(
+                "\"frame\" is not part of the camera configuration: put the frame settings in a frame "
+                "configuration file ({\"frames\": [...]}, see opennve.load_frame_configs) and pass them "
+                "to camera.frames(config)"
+            )
+        unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output", "window"}
         if unknown:
             raise ValueError(f"unknown camera setting(s): {', '.join(sorted(unknown))}")
         if "model" not in data:
@@ -276,7 +278,6 @@ class CameraConfig:
             filter=FilterConfig.from_dict(data.get("filter")),
             output=OutputConfig.from_dict(data.get("output")),
             window=WindowConfig.from_dict(data["window"]) if "window" in data else WindowConfig(),
-            frame=FrameConfig.from_dict(data.get("frame")),
         )
 
     @classmethod

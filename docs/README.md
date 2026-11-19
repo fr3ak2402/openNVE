@@ -33,7 +33,7 @@ Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in
 - **Configure:** one JSON file per setup, with one entry per camera
 - **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
 - **Recordings:** `opennve.open_raw("recording.raw")` reads `.raw` files with the same interface
-- **Frames:** `camera.frames()` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
+- **Frames:** named frame configurations (`frames.json`), separate from the cameras; `camera.frames(config)` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
 
 ## Supported cameras
 

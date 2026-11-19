@@ -2,7 +2,8 @@
 
     python -m opennve list [--json] [--config cameras.json]
     python -m opennve template SE1-S4 [--serial 05110634] [--name left]
-    python -m opennve check cameras.json
+    python -m opennve frame-template [--name tiles80] [--width 1280 --height 720] [--tiles 80]
+    python -m opennve check cameras.json frames.json
     python -m opennve models
     python -m opennve driver [--install] [--model SE1-S4] [--force]
     python -m opennve raw recording.raw [--json]
@@ -15,6 +16,7 @@ import json
 import sys
 
 from .config import CameraConfig, load_configs
+from .frames import FrameConfig, TileConfig, TimeSurfaceConfig, frame_configs_from_data
 from .discovery import list_cameras
 from .models import MODELS
 
@@ -41,11 +43,43 @@ def _template(args) -> int:
     return 0
 
 
+def _frame_template(args) -> int:
+    config = FrameConfig(
+        name=args.name,
+        width=args.width,
+        height=args.height,
+        mode=args.mode,
+        tiles=None if args.tiles is None else TileConfig(size=args.tiles),
+        time_surface=TimeSurfaceConfig(decay=args.decay),
+    )
+    config.validate()
+    print(json.dumps({"frames": [config.to_dict()]}, indent=4))
+    return 0
+
+
+def _describe_frame(config: FrameConfig) -> str:
+    size = f"{config.width or 'sensor'} x {config.height or 'sensor'}"
+    mode = config.mode + (f" ({config.time_surface.decay})" if config.mode == "time_surface" else "")
+    tiles = f"tiles {config.tiles.size} px" if config.tiles else "no tiles"
+    return f"{size}, {mode}, {tiles}"
+
+
 def _check(args) -> int:
-    configs = load_configs(args.path)
-    for config in configs:
-        print(f"{config.name}: {config.model.id} {config.serial or '(first available)'}")
-    print(f"{len(configs)} camera(s), configuration is valid")
+    for path in args.paths:
+        with open(path, encoding="utf-8") as file:
+            data = json.load(file)
+        has_frames = isinstance(data, dict) and "frames" in data
+        has_cameras = not has_frames or "cameras" in data
+        print(path)
+        if has_cameras:
+            configs = load_configs(path)
+            for config in configs:
+                print(f"  camera {config.name}: {config.model.id} {config.serial or '(first available)'}")
+        if has_frames:
+            frames = frame_configs_from_data(data, path)
+            for frame in frames:
+                print(f"  frame {frame.name}: {_describe_frame(frame)}")
+        print("  configuration is valid")
     return 0
 
 
@@ -134,8 +168,17 @@ def main(argv=None) -> int:
     command.add_argument("--name")
     command.set_defaults(function=_template)
 
-    command = commands.add_parser("check", help="validate a configuration file")
-    command.add_argument("path")
+    command = commands.add_parser("frame-template", help="print a JSON frame configuration file")
+    command.add_argument("--name", default="frame1")
+    command.add_argument("--width", type=int, help="frame width in pixels (default: sensor width)")
+    command.add_argument("--height", type=int, help="frame height in pixels (default: sensor height)")
+    command.add_argument("--mode", default="time_surface", choices=("time_surface", "binary", "count"))
+    command.add_argument("--decay", default="linear", choices=("linear", "exponential"))
+    command.add_argument("--tiles", type=int, help="tile size in pixels, for instance 80 (default: no tiles)")
+    command.set_defaults(function=_frame_template)
+
+    command = commands.add_parser("check", help="validate camera and frame configuration files")
+    command.add_argument("paths", nargs="+")
     command.set_defaults(function=_check)
 
     command = commands.add_parser("driver", help="show or install the USB driver of the cameras (WinUSB on Windows)")

@@ -129,6 +129,13 @@ with opennve.open_camera(path="examples/cameras.json", name="left") as camera:
         frame = window.to_frame("count")  # "count", "polarity", "binary" or "color"
         break
 
+# Frames and tiles with named frame configurations (separate file, see docs/frames.md)
+tiles80 = opennve.load_frame_config("examples/frames.json", "tiles80")
+with opennve.open_camera(path="examples/cameras.json", name="left") as camera:
+    for frame in camera.frames(tiles80):  # one frame per time window, 80 x 80 tiles
+        print(frame.name, frame.data.shape, [tile.id for tile in frame.tiles])
+        break
+
 # Several cameras (synchronization secondaries are started first)
 cameras = opennve.open_cameras(configs)
 ```
@@ -142,7 +149,7 @@ python examples/list_cameras.py
 python examples/viewer.py examples/cameras.json   # Q: exit, F: filter on/off
 python examples/frames.py examples/cameras.json left   # one frame per time window, M: frame mode
 python examples/raw_player.py recording.raw             # play a .raw recording as frames
-python examples/tiles.py examples/cameras.json left    # frames and tiles from the frame engine
+python examples/tiles.py examples/cameras.json --camera left --frame tiles80   # frames and tiles (examples/frames.json)
 ```
 
 ## Wheels

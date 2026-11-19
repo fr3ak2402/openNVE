@@ -28,18 +28,35 @@ opennve template SE1-S4
 opennve template SE1-S4 --serial 05110634 --name left > left.json
 ```
 
-## `opennve check <file>`
+## `opennve frame-template`
 
-Validates a configuration file without opening a camera.
+Prints a frame configuration file (`{"frames": [...]}`) with one configuration, see [Frames and tiles](frames.md).
 
 ```sh
-opennve check cameras.json
+opennve frame-template --name tiles80 --width 1280 --height 720 --tiles 80 > frames.json
+opennve frame-template --name recent --decay exponential
+opennve frame-template --name binary --mode binary
+```
+
+Without `--width` / `--height` the sensor size is used, without `--tiles` the frame is not split.
+
+## `opennve check <file> [<file> ...]`
+
+Validates camera and frame configuration files without opening a camera.
+
+```sh
+opennve check cameras.json frames.json
 ```
 
 ```text
-left: SE1-S4 05110634
-right: SE1-S4 05110636
-2 camera(s), configuration is valid
+cameras.json
+  camera left: SE1-S4 05110634
+  camera right: SE1-S4 05110636
+  configuration is valid
+frames.json
+  frame full: 1280 x 720, time_surface (linear), no tiles
+  frame tiles80: 1280 x 720, time_surface (linear), tiles 80 px
+  configuration is valid
 ```
 
 Errors name the camera and the field, for instance `cameras.json: camera 1: settings.clock must be one of internal, internal_with_output_enabled, external`. The exit code is then `1`.

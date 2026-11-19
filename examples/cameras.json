@@ -31,19 +31,6 @@
             },
             "window": {
                 "duration_ms": 40
-            },
-            "frame": {
-                "width": 1280,
-                "height": 720,
-                "mode": "time_surface",
-                "time_surface": {
-                    "decay": "linear",
-                    "tau_us": 100000
-                },
-                "tiles": {
-                    "size": 80,
-                    "min_events": 1
-                }
             }
         },
         {
@@ -72,13 +59,6 @@
             },
             "window": {
                 "duration_ms": 40
-            },
-            "frame": {
-                "mode": "time_surface",
-                "time_surface": {
-                    "decay": "exponential",
-                    "tau_us": 20000
-                }
             }
         }
     ]

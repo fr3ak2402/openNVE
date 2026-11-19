@@ -1,14 +1,15 @@
 """
-Frames and tiles from a camera or a RAW file, built with the "frame" configuration.
+Frames and tiles from a camera or a RAW file, built with a named frame configuration.
 
-    python examples/tiles.py examples/cameras.json left        # live camera "left"
-    python examples/tiles.py recording.raw                      # RAW file (default frame settings + 80 px tiles)
-    python examples/tiles.py recording.raw examples/cameras.json left
+    python examples/tiles.py examples/cameras.json --camera left --frame tiles80
+    python examples/tiles.py recording.raw --frame exponential
+    python examples/tiles.py recording.raw --frames my_frames.json --frame full
 
-Keys: Q / ESC exit, T show/hide tile borders.
+The frame configurations are read from examples/frames.json (--frames), separately from the
+camera configuration. Keys: Q / ESC exit, T show/hide tile borders, F next frame configuration.
 """
 
-import sys
+import argparse
 
 import cv2
 
@@ -16,26 +17,34 @@ import opennve
 
 
 def open_source(arguments):
-    if arguments[0].lower().endswith(".raw"):
-        config_path = arguments[1] if len(arguments) > 1 else None
-        name = arguments[2] if len(arguments) > 2 else None
-        frame = None if config_path else {"tiles": {"size": 80}}
-        return opennve.open_raw(arguments[0], config_path=config_path, name=name, frame=frame, speed=1.0)
-    return opennve.open_camera(path=arguments[0], name=arguments[1] if len(arguments) > 1 else None)
+    if arguments.source.lower().endswith(".raw"):
+        return opennve.open_raw(arguments.source, speed=1.0)
+    return opennve.open_camera(path=arguments.source, name=arguments.camera)
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("source", help="camera configuration file or .raw file")
+    parser.add_argument("--camera", help="camera name in the configuration file")
+    parser.add_argument("--frames", default="examples/frames.json", help="frame configuration file")
+    parser.add_argument("--frame", help="name of the frame configuration (default: the first)")
+    arguments = parser.parse_args()
+
+    frame_configs = opennve.load_frame_configs(arguments.frames)
+    names = [config.name for config in frame_configs]
+    index = names.index(arguments.frame) if arguments.frame else 0
     draw_tiles = True
-    with open_source(sys.argv[1:]) as source:
-        for frame in source.frames():  # one frame per time window (40 ms by default)
+    with open_source(arguments) as source:
+        for window in source.windows():  # one time window per 40 ms (camera "window" setting)
+            frame = window.frame(frame_configs[index])
             # frame.data: height x width x 2 (float32), frame.tiles: selected tiles, frame.events: x, y, p, t
             for tile in frame.tiles:
                 pass  # for instance: agent.process(tile.id, tile.data)
             image = frame.to_image(draw_tiles=draw_tiles)
             cv2.putText(
                 image,
-                f"{frame.camera} | {frame.start_t / 1e6:.3f} s | {frame.event_count} events | "
-                f"{len(frame.tiles)} tiles | {frame.mode}",
+                f"{frame.camera} | {frame.name} | {frame.start_t / 1e6:.3f} s | {frame.event_count} events | "
+                f"{len(frame.tiles)} tiles",
                 (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
@@ -48,6 +57,8 @@ def main():
                 break
             if key == ord("t"):
                 draw_tiles = not draw_tiles
+            if key == ord("f"):
+                index = (index + 1) % len(frame_configs)
     cv2.destroyAllWindows()
 
 

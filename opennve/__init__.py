@@ -7,6 +7,11 @@
     with opennve.open_camera(config) as camera:
         for packet in camera.events():
             print(packet.events)  # structured array in the configured output format (x, y, p, t)
+
+    frame_configs = opennve.load_frame_configs("frames.json")  # named frame configurations
+    with opennve.open_camera(config) as camera:
+        for frame in camera.frames(frame_configs[0]):  # one frame per time window (40 ms)
+            print(frame.name, frame.data.shape, len(frame.tiles))
 """
 
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
@@ -30,6 +35,11 @@ from .frames import (
     Tile,
     TileConfig,
     TimeSurfaceConfig,
+    as_frame_config,
+    as_frame_configs,
+    load_frame_config,
+    load_frame_configs,
+    save_frame_configs,
     split_into_tiles,
     tile_grid,
 )
@@ -62,6 +72,11 @@ __all__ = [
     "TileConfig",
     "TimeSurfaceConfig",
     "TIME_SURFACE_DECAYS",
+    "as_frame_config",
+    "as_frame_configs",
+    "load_frame_config",
+    "load_frame_configs",
+    "save_frame_configs",
     "split_into_tiles",
     "tile_grid",
     "RawHeader",

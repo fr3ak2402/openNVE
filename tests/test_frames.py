@@ -1,9 +1,15 @@
 """Tests for the frame engine (frames and tiles)."""
 
+import pathlib
+
 import numpy as np
 import pytest
 
 import opennve
+
+EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / "examples"
+FRAMES_JSON = str(EXAMPLES / "frames.json")
+CAMERAS_JSON = str(EXAMPLES / "cameras.json")
 
 EVENT_DTYPE = np.dtype([("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("on", "?")])
 
@@ -16,13 +22,15 @@ def _events(points):
 
 
 def test_frame_config():
-    config = opennve.CameraConfig.from_dict(
-        {"model": "SE1-S4", "frame": {"width": 1280, "height": 720, "mode": "binary", "tiles": {"size": 80}}}
+    config = opennve.FrameConfig.from_dict(
+        {"name": "tiles80", "width": 1280, "height": 720, "mode": "binary", "tiles": {"size": 80}}
     )
-    assert config.frame.tiles.size == 80 and config.frame.tiles.min_events == 1
-    assert opennve.CameraConfig.from_dict(config.to_dict()) == config
-    assert opennve.CameraConfig(model="SE1-S4").frame == opennve.FrameConfig()  # sensor size, time surface, no tiles
+    assert config.name == "tiles80" and config.tiles.size == 80 and config.tiles.min_events == 1
+    assert opennve.FrameConfig.from_dict(config.to_dict()) == config
+    assert opennve.FrameConfig.from_json(config.to_json()) == config
+    assert config.copy(name="small", width=640).width == 640 and config.width == 1280
     assert opennve.FrameConfig.from_dict({"tiles": 64}).tiles.size == 64
+    assert opennve.as_frame_config(None) == opennve.FrameConfig()  # sensor size, time surface, no tiles
     for frame, message in (
         ({"mode": "gray"}, "frame.mode"),
         ({"width": 0}, "frame.width"),
@@ -30,9 +38,57 @@ def test_frame_config():
         ({"tiles": {"size": 80, "min_events": -1}}, "min_events"),
         ({"tiles": {"width": 80}}, "unknown frame.tiles"),
         ({"resolution": "1280x720"}, "unknown frame setting"),
+        ({"name": ""}, "frame.name"),
     ):
         with pytest.raises(ValueError, match=message):
-            opennve.CameraConfig.from_dict({"model": "SE1-S4", "frame": frame})
+            opennve.FrameConfig.from_dict(frame)
+
+
+def test_frame_config_is_not_part_of_the_camera_config():
+    assert "frame" not in opennve.CameraConfig(model="SE1-S4").to_dict()
+    with pytest.raises(ValueError, match="frame configuration file"):
+        opennve.CameraConfig.from_dict({"model": "SE1-S4", "frame": {"tiles": 80}})
+
+
+def test_frame_config_files(tmp_path):
+    configs = opennve.load_frame_configs(FRAMES_JSON)
+    assert [c.name for c in configs] == ["full", "tiles80", "exponential", "binary"]
+    assert opennve.load_frame_config(FRAMES_JSON, "exponential").time_surface.decay == "exponential"
+    with pytest.raises(ValueError, match="no frame configuration named 'x'"):
+        opennve.load_frame_config(FRAMES_JSON, "x")
+    with pytest.raises(ValueError, match="specify a name"):
+        opennve.load_frame_config(FRAMES_JSON)
+    path = tmp_path / "frames.json"
+    opennve.save_frame_configs(path, configs)
+    assert opennve.load_frame_configs(path) == configs
+    opennve.save_frame_configs(path, configs[1])  # one object
+    assert opennve.load_frame_config(path) == configs[1]
+    # names are optional (frame1, frame2, ...) but must be unique
+    path.write_text('[{"tiles": 80}, {"mode": "count"}]')
+    assert [c.name for c in opennve.load_frame_configs(path)] == ["frame1", "frame2"]
+    path.write_text('{"frames": [{"name": "a"}, {"name": "a"}]}')
+    with pytest.raises(ValueError, match="duplicate frame configuration name"):
+        opennve.load_frame_configs(path)
+    path.write_text('{"frames": [{"name": "a", "mode": "gray"}]}')
+    with pytest.raises(ValueError, match="frame configuration 0: frame.mode"):
+        opennve.load_frame_configs(path)
+    # one file with cameras and frames
+    path.write_text('{"cameras": [{"name": "left", "model": "SE1-S4"}], "frames": [{"name": "full"}]}')
+    assert opennve.load_configs(path)[0].name == "left" and opennve.load_frame_configs(path)[0].name == "full"
+    # dict {name: configuration}
+    assert [c.name for c in opennve.as_frame_configs({"a": {"tiles": 80}, "b": opennve.FrameConfig()})] == ["a", "b"]
+
+
+def test_cli_frame_config(tmp_path, capsys):
+    from opennve.__main__ import main
+
+    assert main(["frame-template", "--name", "t", "--tiles", "80", "--width", "1280", "--height", "720"]) == 0
+    path = tmp_path / "frames.json"
+    path.write_text(capsys.readouterr().out)
+    assert opennve.load_frame_config(path, "t").tiles.size == 80
+    assert main(["check", CAMERAS_JSON, str(path)]) == 0
+    output = capsys.readouterr().out
+    assert "camera left" in output and "frame t: 1280 x 720, time_surface (linear), tiles 80 px" in output
 
 
 def test_time_surface():
@@ -103,12 +159,16 @@ def test_window_frame_and_image():
         width=160,
         height=80,
         polarity_events=_events([(20_000, 10, 10, True), (30_000, 90, 50, False)]),
-        frame_config=opennve.FrameConfig(tiles=opennve.TileConfig(size=80)),
     )
-    frame = window.frame()
-    assert frame.camera == "left" and [t.id for t in frame.tiles] == [1, 2]
+    frame = window.frame(opennve.FrameConfig(name="tiles", tiles=opennve.TileConfig(size=80)))
+    assert frame.camera == "left" and frame.name == "tiles" and [t.id for t in frame.tiles] == [1, 2]
     assert frame.events.dtype.names == ("x", "y", "p", "t") and len(frame.events) == 2
     assert window.frame({"mode": "binary"}).data[10, 10, 1] == 1.0
+    frames = window.frames([{"name": "binary", "mode": "binary"}, {"name": "tiles", "tiles": 80}])
+    assert list(frames) == ["binary", "tiles"] and frames["binary"].name == "binary"
+    assert frames["binary"].data[10, 10, 1] == 1.0 and len(frames["tiles"].tiles) == 2
+    with pytest.raises(TypeError, match="duration_ms"):
+        window.frame(40)
     image = frame.to_image()
     assert image.shape == (80, 160, 3) and image[10, 10, 1] == 127 and image[50, 90, 2] == 191
     assert tuple(image[0, 0]) == (255, 255, 255)  # tile border
@@ -123,14 +183,21 @@ def test_camera_frames(monkeypatch):
         "name": "left",
         "model": "SE1-S4",
         "window": {"duration_ms": 0.01},
-        "frame": {"mode": "binary", "tiles": {"size": 50}},
     }
+    frame_configs = [
+        opennve.FrameConfig(name="binary", mode="binary", tiles=opennve.TileConfig(size=50)),
+        opennve.FrameConfig(name="small", width=50, height=50),
+    ]
     with opennve.open_camera(config) as camera:
-        frames = list(camera.frames())
+        frames = list(camera.frames(frame_configs[0]))
         assert [(f.start_t, f.end_t) for f in frames] == [(0, 10), (10, 20)]
         assert frames[0].data.shape == (100, 100, 2) and [t.id for t in frames[0].tiles] == [1]
-        camera.update_frame({"width": 50, "height": 50})
-        assert camera.config.frame.width == 50
+        assert frames[0].name == "binary" and frames[0].mode == "binary"
+    with opennve.open_camera(config) as camera:
+        sets = list(camera.frame_sets(frame_configs))
+        assert [list(s) for s in sets] == [["binary", "small"]] * 2
+        assert sets[0]["small"].data.shape == (50, 50, 2)
+        assert sets[0]["binary"].window is sets[0]["small"].window  # same time window
 
 
 def test_raw_frames(tmp_path):
@@ -139,9 +206,13 @@ def test_raw_frames(tmp_path):
     events = _random_events(10, count=2000, span=120_000)
     path = tmp_path / "a.raw"
     path.write_bytes(_header("EVT3;height=720;width=1280") + encode_evt3(events))
-    with opennve.open_raw(path, frame={"tiles": {"size": 80}}) as raw:
-        frames = list(raw.frames())
+    with opennve.open_raw(path) as raw:
+        frames = list(raw.frames({"name": "tiles80", "tiles": {"size": 80}}))
     assert [f.start_t for f in frames] == [1_000_000, 1_040_000, 1_080_000]
+    with opennve.open_raw(path) as raw:
+        sets = list(raw.frame_sets(opennve.load_frame_configs(FRAMES_JSON)))
+    assert len(sets) == 3 and sets[0]["binary"].data.shape == (360, 640, 2)
+    assert sum(s["full"].event_count for s in sets) == 2000
     assert sum(f.event_count for f in frames) == 2000
     assert all(len(f.tiles) > 0 and f.data.shape == (720, 1280, 2) for f in frames)
 
@@ -213,11 +284,11 @@ def test_exponential_time_surface():
 
 
 def test_time_surface_config():
-    config = opennve.CameraConfig.from_dict(
-        {"model": "SE1-S4", "frame": {"mode": "time_surface", "time_surface": {"decay": "Exponential", "tau_us": 20000}}}
+    config = opennve.FrameConfig.from_dict(
+        {"mode": "time_surface", "time_surface": {"decay": "Exponential", "tau_us": 20000}}
     )
-    assert config.frame.time_surface == opennve.TimeSurfaceConfig(decay="exponential", tau_us=20000)
-    assert opennve.CameraConfig.from_dict(config.to_dict()) == config
+    assert config.time_surface == opennve.TimeSurfaceConfig(decay="exponential", tau_us=20000)
+    assert opennve.FrameConfig.from_dict(config.to_dict()) == config
     assert opennve.FrameConfig().time_surface.decay == "linear"
     assert opennve.FrameConfig.from_dict({"time_surface": "exponential"}).time_surface.decay == "exponential"
     for time_surface, message in (
@@ -230,10 +301,9 @@ def test_time_surface_config():
     window = opennve.EventWindow(
         camera="left", start_t=0, end_t=40_000, width=4, height=4,
         polarity_events=_events([(30_000, 1, 1, True)]),
-        frame_config=config.frame,
     )
-    assert window.frame().data[1, 1, 1] == pytest.approx(np.exp(-0.5))
-    assert window.frame(decay="linear").data[1, 1, 1] == pytest.approx(0.75)
+    assert window.frame(config).data[1, 1, 1] == pytest.approx(np.exp(-0.5))
+    assert window.frame(config, decay="linear").data[1, 1, 1] == pytest.approx(0.75)
 
 
 def test_pandas_dataframe_input():

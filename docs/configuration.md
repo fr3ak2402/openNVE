@@ -23,13 +23,6 @@ Each camera is described by a JSON object:
     },
     "window": {
         "duration_ms": 40
-    },
-    "frame": {
-        "width": 1280,
-        "height": 720,
-        "mode": "time_surface",
-        "time_surface": {"decay": "linear", "tau_us": 100000},
-        "tiles": {"size": 80, "min_events": 1}
     }
 }
 ```
@@ -159,16 +152,17 @@ The **camera name** is not an event field. It is stored once per packet or windo
 
 See [Time windows and frames](time-windows.md) for details.
 
-## `frame` – frames and tiles
+## Frame settings
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `width`, `height` | number or `null` | `null` (sensor size) | Frame size in pixels; events outside are ignored |
-| `mode` | string | `"time_surface"` | `time_surface` (time surfaces), `binary` or `count` |
-| `time_surface` | object | `{"decay": "linear", "tau_us": 100000}` | Time surface decay: `linear` or `exponential` with the time constant `tau_us` (µs) |
-| `tiles` | object or `null` | `null` | `{"size": 80, "min_events": 1}`: split each frame into 80 × 80 tiles, skip tiles with fewer than `min_events` events (`0` = all tiles) |
+Frame settings (size, mode, time surface, tiles) are **not** part of the camera configuration. They are kept in separate, named frame configurations, usually in their own file (`frames.json`), so that several frame configurations can be defined and combined with any camera or RAW file:
 
-The frames are built from the time windows (`window`) by `camera.frames()`. Details in [Frames and tiles](frames.md).
+```python
+tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+for frame in camera.frames(tiles80):
+    ...
+```
+
+See [Frames and tiles](frames.md) for the format. A camera configuration with a `frame` section is rejected with a message pointing there.
 
 ## Example: two synchronized cameras
 

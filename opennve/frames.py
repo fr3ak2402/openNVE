@@ -1,14 +1,31 @@
 """Frame engine: converts the events of a time window into frames (tensors) and tiles.
 
-JSON example (camera configuration):
+Frame configurations are separate from the camera configurations. A frame configuration file
+contains one or more named frame configurations (like the cameras in a camera configuration file):
 
-    "frame": {
-        "width": 1280,
-        "height": 720,
-        "mode": "time_surface",
-        "time_surface": {"decay": "linear", "tau_us": 100000},
-        "tiles": {"size": 80, "min_events": 1}
+    {
+        "frames": [
+            {
+                "name": "full",
+                "width": 1280,
+                "height": 720,
+                "mode": "time_surface",
+                "time_surface": {"decay": "linear", "tau_us": 100000},
+                "tiles": null
+            },
+            {
+                "name": "tiles80",
+                "mode": "time_surface",
+                "time_surface": {"decay": "exponential", "tau_us": 20000},
+                "tiles": {"size": 80, "min_events": 1}
+            }
+        ]
     }
+
+Load it with load_frame_configs("frames.json") (list) or load_frame_config("frames.json", "tiles80"),
+and pass a configuration to camera.frames(config), raw.frames(config) or window.frame(config).
+Several configurations at once: camera.frame_sets(configs) or window.frames(configs).
+width / height null = sensor size of the camera or file.
 
 Modes (all frames have the shape height x width x 2, float32, channel = polarity 0 / 1):
 
@@ -27,9 +44,13 @@ and columns start at 1. Only tiles with at least min_events events are returned
 from __future__ import annotations
 
 import dataclasses
+import json
+import pathlib
 import typing
 
 import numpy as np
+
+PathLike = typing.Union[str, pathlib.Path]
 
 FRAME_MODES = ("time_surface", "binary", "count")
 
@@ -75,15 +96,18 @@ class TimeSurfaceConfig:
 
 @dataclasses.dataclass
 class FrameConfig:
-    """Frame settings: size (None = sensor size), mode and optional tiles."""
+    """One frame configuration: name, size (None = sensor size), mode, time surface and optional tiles."""
 
     width: typing.Optional[int] = None
     height: typing.Optional[int] = None
     mode: str = "time_surface"
     tiles: typing.Optional[TileConfig] = None
     time_surface: TimeSurfaceConfig = dataclasses.field(default_factory=TimeSurfaceConfig)
+    name: typing.Optional[str] = None
 
     def validate(self):
+        if self.name is not None and (not isinstance(self.name, str) or not self.name.strip()):
+            raise ValueError("frame.name must be a non-empty string or null")
         for name in ("width", "height"):
             value = getattr(self, name)
             if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 0 < value <= 65535):
@@ -96,6 +120,7 @@ class FrameConfig:
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
+            "name": self.name,
             "width": self.width,
             "height": self.height,
             "mode": self.mode,
@@ -106,7 +131,7 @@ class FrameConfig:
     @classmethod
     def from_dict(cls, data: typing.Optional[dict[str, typing.Any]]) -> "FrameConfig":
         data = dict(data or {})
-        unknown = set(data) - {"width", "height", "mode", "tiles", "time_surface"}
+        unknown = set(data) - {"name", "width", "height", "mode", "tiles", "time_surface"}
         if unknown:
             raise ValueError(f"unknown frame setting(s): {', '.join(sorted(unknown))}")
         tiles = data.get("tiles")
@@ -137,9 +162,124 @@ class FrameConfig:
             mode=str(data.get("mode", "time_surface")).lower(),
             tiles=tiles,
             time_surface=TimeSurfaceConfig(**time_surface),
+            name=data.get("name"),
         )
         result.validate()
         return result
+
+    def to_json(self, indent: typing.Optional[int] = 4) -> str:
+        return json.dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, text: str) -> "FrameConfig":
+        return cls.from_dict(json.loads(text))
+
+    def copy(self, **changes) -> "FrameConfig":
+        """Copy with changes, for instance config.copy(name="small", width=640, height=360)."""
+        return FrameConfig.from_dict({**self.to_dict(), **changes})
+
+
+def as_frame_config(config: typing.Union[FrameConfig, dict, str, None]) -> FrameConfig:
+    """FrameConfig from a FrameConfig, a dict, a JSON string or None (default configuration)."""
+    if config is None:
+        return FrameConfig()
+    if isinstance(config, FrameConfig):
+        config.validate()
+        return config
+    if isinstance(config, dict):
+        return FrameConfig.from_dict(config)
+    if isinstance(config, str):
+        return FrameConfig.from_json(config)
+    raise TypeError(
+        f"expected a FrameConfig, a dict or a JSON string, got {type(config).__name__} "
+        "(the window duration is passed as duration_ms=...)"
+    )
+
+
+def as_frame_configs(configs) -> list[FrameConfig]:
+    """List of FrameConfig with unique names from a list (or a dict name -> configuration).
+    Configurations without a name are called frame1, frame2, ..."""
+    if isinstance(configs, (FrameConfig, str)) or (isinstance(configs, dict) and not _is_name_mapping(configs)):
+        configs = [configs]
+    elif isinstance(configs, dict):
+        configs = [
+            dataclasses.replace(as_frame_config(config), name=name) for name, config in configs.items()
+        ]
+    result = []
+    for index, config in enumerate(configs):
+        config = as_frame_config(config)
+        if config.name is None:
+            config = dataclasses.replace(config, name=f"frame{index + 1}")
+        result.append(config)
+    names = [config.name for config in result]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(f"duplicate frame configuration name(s): {', '.join(duplicates)}")
+    if not result:
+        raise ValueError("no frame configuration")
+    return result
+
+
+def _is_name_mapping(data: dict) -> bool:
+    return bool(data) and all(isinstance(value, (dict, FrameConfig)) for value in data.values()) and not (
+        set(data) & {"name", "width", "height", "mode", "tiles", "time_surface"}
+    )
+
+
+# ------------------------------------------------------------------ frame configuration files
+
+
+def frame_configs_from_data(data: typing.Any, source: str = "frame configuration") -> list[FrameConfig]:
+    """Frame configurations from parsed JSON: one object, a list or {"frames": [...]}."""
+    if isinstance(data, dict) and "frames" in data:
+        data = data["frames"]
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        raise ValueError(f"{source}: expected a frame configuration object, a list or {{\"frames\": [...]}}")
+    configs = []
+    for index, item in enumerate(data):
+        if not isinstance(item, dict):
+            raise ValueError(f"{source}: frame configuration {index} must be an object")
+        try:
+            configs.append(FrameConfig.from_dict(item))
+        except ValueError as error:
+            raise ValueError(f"{source}: frame configuration {index}: {error}") from error
+    try:
+        return as_frame_configs(configs)
+    except ValueError as error:
+        raise ValueError(f"{source}: {error}") from error
+
+
+def load_frame_configs(path: PathLike) -> list[FrameConfig]:
+    """Loads a frame configuration file with one configuration, a list or {"frames": [...]}.
+    Configurations without a name are called frame1, frame2, ..."""
+    data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    return frame_configs_from_data(data, str(path))
+
+
+def load_frame_config(path: PathLike, name: typing.Optional[str] = None) -> FrameConfig:
+    """Loads one frame configuration from a file (by name if the file has several)."""
+    configs = load_frame_configs(path)
+    if name is None:
+        if len(configs) != 1:
+            raise ValueError(f"{path} contains {len(configs)} frame configurations, specify a name")
+        return configs[0]
+    for config in configs:
+        if config.name == name:
+            return config
+    names = ", ".join(config.name for config in configs)
+    raise ValueError(f"{path}: no frame configuration named {name!r} (available: {names})")
+
+
+def save_frame_configs(path: PathLike, configs: typing.Union[FrameConfig, typing.Sequence[FrameConfig]]):
+    """Saves one frame configuration (as an object) or several (as {"frames": [...]})."""
+    if isinstance(configs, FrameConfig):
+        configs.validate()
+        data: typing.Any = configs.to_dict()
+    else:
+        data = {"frames": [config.to_dict() for config in as_frame_configs(list(configs))]}
+    pathlib.Path(path).write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
 
 
 # ------------------------------------------------------------------ results
@@ -180,6 +320,7 @@ class Frame:
 
     Attributes:
         camera: Camera name.
+        name: Name of the frame configuration (None if it has none).
         start_t, end_t: Time window in µs (camera time).
         mode: "time_surface", "binary" or "count".
         decay: "linear" or "exponential" for time surfaces, else None.
@@ -204,6 +345,7 @@ class Frame:
     # positions of the events used for the frame (for split)
     event_x: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
     event_y: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    name: typing.Optional[str] = None
 
     def tile_event_counts(self, tile_size: int) -> np.ndarray:
         """Number of events per tile, shape (tile rows, tile columns)."""
@@ -406,6 +548,7 @@ class FrameEngine:
         frame_width: typing.Optional[int] = None,
         frame_height: typing.Optional[int] = None,
         frame_tile_size: typing.Optional[int] = None,
+        name: typing.Optional[str] = None,
     ):
         width = frame_width if width is None else width
         height = frame_height if height is None else height
@@ -418,9 +561,11 @@ class FrameEngine:
             mode=mode,
             tiles=None if tile_size is None else TileConfig(size=int(tile_size), min_events=int(min_events)),
             time_surface=TimeSurfaceConfig(decay=decay, tau_us=tau_us),
+            name=name,
         )
         config.validate()
         self.config = config
+        self.name = name
         self.width = config.width
         self.height = config.height
         self.mode = config.mode
@@ -433,8 +578,11 @@ class FrameEngine:
         self.tile_rows = (self.height + size - 1) // size if self.tile_size else 0
 
     @classmethod
-    def from_config(cls, config: FrameConfig, sensor_width: int, sensor_height: int) -> "FrameEngine":
-        """Engine for a FrameConfig; width/height None means the sensor size."""
+    def from_config(
+        cls, config: typing.Union[FrameConfig, dict, str, None], sensor_width: int, sensor_height: int
+    ) -> "FrameEngine":
+        """Engine for a FrameConfig (or dict / JSON); width/height None means the sensor size."""
+        config = as_frame_config(config)
         return cls(
             config.width or sensor_width,
             config.height or sensor_height,
@@ -443,6 +591,7 @@ class FrameEngine:
             min_events=1 if config.tiles is None else config.tiles.min_events,
             decay=config.time_surface.decay,
             tau_us=config.time_surface.tau_us,
+            name=config.name,
         )
 
     # Frames
@@ -492,6 +641,7 @@ class FrameEngine:
             event_y=y.astype(np.uint16),
             _tile_size=self.tile_size,
             _min_events=self.min_events,
+            name=self.name,
         )
 
     def build_window(self, window, mode: typing.Optional[str] = None, decay: typing.Optional[str] = None) -> Frame:

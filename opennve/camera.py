@@ -11,7 +11,7 @@ import numpy as np
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
 from .driver import MODEL_USB_IDS, ensure_driver
 from .filters import EventFilter, FilterConfig
-from .frames import Frame, FrameConfig, FrameEngine
+from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
 from .output import OutputConfig, to_csv, to_rows
 from .window import EventWindow, WindowAccumulator, WindowConfig
 from .models import get_model
@@ -83,7 +83,6 @@ class EventCamera:
         filter: FilterConfig | dict | None = None,
         output: OutputConfig | dict | None = None,
         window: WindowConfig | dict | None = None,
-        frame: FrameConfig | dict | None = None,
         name: str | None = None,
         iterator_timeout: float = 0.02,
     ) -> None:
@@ -97,7 +96,6 @@ class EventCamera:
             filter=filter if filter is not None else FilterConfig(),
             output=output if output is not None else OutputConfig(),
             window=window,
-            frame=frame if frame is not None else FrameConfig(),
         )
 
         # Initialize internal device references
@@ -145,7 +143,6 @@ class EventCamera:
             filter=config.filter,
             output=config.output,
             window=config.window,
-            frame=config.frame,
             name=config.name,
             iterator_timeout=iterator_timeout,
         )
@@ -285,7 +282,6 @@ class EventCamera:
             )
         self._accumulator.camera = self.name
         self._accumulator.output_config = self.config.output
-        self._accumulator.frame_config = self.config.frame
         return self._accumulator
 
     def read_windows(self, duration_ms: float | None = None) -> list[EventWindow]:
@@ -317,36 +313,64 @@ class EventCamera:
 
     # Frames
 
-    def read_frames(self, duration_ms: float | None = None) -> list[Frame]:
-        """Reads one packet and returns the frames of the time windows completed by it (often none)."""
-        return [self._frame_engine().build_window(window) for window in self.read_windows(duration_ms)]
+    def read_frames(
+        self, config: FrameConfig | dict | str | None = None, duration_ms: float | None = None
+    ) -> list[Frame]:
+        """Reads one packet and returns the frames of the time windows completed by it (often none).
 
-    def frames(self, duration_ms: float | None = None) -> Iterator[Frame]:
-        """Continuously yield one frame per time window (40 ms by default), built with the
-        "frame" configuration: frame.data, frame.tiles and frame.events (the events of the window).
+        config: frame configuration (see frames()).
+        """
+        engine = self._frame_engine(config)
+        return [engine.build_window(window) for window in self.read_windows(duration_ms)]
+
+    def frames(
+        self, config: FrameConfig | dict | str | None = None, duration_ms: float | None = None
+    ) -> Iterator[Frame]:
+        """Continuously yield one frame per time window (40 ms by default).
+
+        config: frame configuration, for instance opennve.load_frame_config("frames.json", "tiles80"),
+            a FrameConfig, a dict or a JSON string. Default: sensor size, linear time surface, no tiles.
+        Each frame has frame.data, frame.tiles and frame.events (the events of the window).
 
         Example:
-            for frame in camera.frames():
+            tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+            for frame in camera.frames(tiles80):
                 for tile in frame.tiles:
                     agent.process(tile.id, tile.data)
         """
+        engine = self._frame_engine(config)
         for window in self.windows(duration_ms):
-            yield self._frame_engine().build_window(window)
+            yield engine.build_window(window)
 
-    def _frame_engine(self) -> FrameEngine:
+    def read_frame_sets(self, configs, duration_ms: float | None = None) -> list[dict[str, Frame]]:
+        """Like read_frames with several frame configurations: one {name: Frame} per completed window."""
+        engines = self._frame_engines(configs)
+        return [
+            {name: engine.build_window(window) for name, engine in engines.items()}
+            for window in self.read_windows(duration_ms)
+        ]
+
+    def frame_sets(self, configs, duration_ms: float | None = None) -> Iterator[dict[str, Frame]]:
+        """Continuously yield one frame per frame configuration and time window: {name: Frame}.
+
+        configs: list of frame configurations (for instance opennve.load_frame_configs("frames.json"))
+            or a dict {name: configuration}. All frames of one set come from the same time window.
+
+        Example:
+            for frames in camera.frame_sets(opennve.load_frame_configs("frames.json")):
+                full, tiles = frames["full"], frames["tiles80"]
+        """
+        engines = self._frame_engines(configs)
+        for window in self.windows(duration_ms):
+            yield {name: engine.build_window(window) for name, engine in engines.items()}
+
+    def _frame_engine(self, config) -> FrameEngine:
         width, height = self.resolution
-        key = (self.config.frame.to_dict(), width, height)
-        if getattr(self, "_frame_engine_key", None) != key:
-            self._frame_engine_cache = FrameEngine.from_config(self.config.frame, width, height)
-            self._frame_engine_key = key
-        return self._frame_engine_cache
+        return FrameEngine.from_config(as_frame_config(config), width, height)
 
-    def update_frame(self, frame: FrameConfig | dict) -> None:
-        """Replace the frame settings, for instance {"tiles": {"size": 64}}."""
-        if isinstance(frame, dict):
-            frame = FrameConfig.from_dict(frame)
-        frame.validate()
-        self.config.frame = frame
+    def _frame_engines(self, configs) -> dict[str, FrameEngine]:
+        width, height = self.resolution
+        return {config.name: FrameEngine.from_config(config, width, height) for config in as_frame_configs(configs)}
 
     def update_window(self, window: WindowConfig | dict | None) -> None:
         """Replace the window duration, for instance {"duration_ms": 20} (restarts the current window)."""
@@ -417,7 +441,6 @@ class EventCamera:
         self.update_filter(config.filter)
         self.update_output(config.output)
         self.update_window(config.window)
-        self.update_frame(config.frame)
         self.config.name = config.name
 
     # Lifecycle
