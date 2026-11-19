@@ -39,7 +39,7 @@ from .output import OutputConfig, to_csv, to_rows
 from .raw import RawHeader, RawReader, open_raw, read_header, read_raw
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
-__version__ = "0.13.0"
+__version__ = "0.25.9"
 
 try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
     from ._bundle import NEUROMORPHIC_DRIVERS_VERSION

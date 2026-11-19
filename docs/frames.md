@@ -132,7 +132,7 @@ engine = opennve.FrameEngine(1280, 720, tile_size=80, mode="time_surface", min_e
 frame = engine.build(events, start_t, end_t, camera="left")  # events: fields x, y, t and p (or on)
 ```
 
-`events` can be a numpy structured array, a pandas DataFrame or a dictionary of arrays with the fields `x`, `y`, `t` and `p` (or `on`).
+`events` can be a numpy structured array, a pandas DataFrame or a dictionary of arrays with the fields `x`, `y`, `t` and `p` (or `on`). pandas is optional, install it with the extra `opennve[pandas]` or `pip install pandas`.
 
 ## Migrating from the previous FrameEngine
 

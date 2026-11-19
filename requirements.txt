@@ -1,5 +1,10 @@
-# neuromorphic_drivers 0.19.2 with the SE1-S4 driver: install the wheel from fr3ak2402/neuromorphic-drivers first
+# Runtime dependencies of openNVE (see pyproject.toml).
+# neuromorphic_drivers with the SE1-S4 driver is embedded in the openNVE wheels; for a source
+# checkout, install the neuromorphic_drivers wheel from fr3ak2402/neuromorphic-drivers first.
 neuromorphic_drivers>=0.19.2
+# events, filters, .raw decoding, time windows, frames and tiles
 numpy>=1.26
-opencv-python
-evt3==0.4.1
+# display (frame.to_image, examples)
+opencv-python>=4.10
+# optional: events as pandas DataFrames
+pandas>=2.2

@@ -234,3 +234,12 @@ def test_time_surface_config():
     )
     assert window.frame().data[1, 1, 1] == pytest.approx(np.exp(-0.5))
     assert window.frame(decay="linear").data[1, 1, 1] == pytest.approx(0.75)
+
+
+def test_pandas_dataframe_input():
+    pd = pytest.importorskip("pandas")
+    frame_data = pd.DataFrame({"x": [5, 6, 100], "y": [5, 5, 40], "p": [1, 0, 1], "t": [100, 150, 199]})
+    frame = opennve.FrameEngine(160, 80, tile_size=80).build(frame_data, 100, 200)
+    assert frame.event_count == 3 and [t.id for t in frame.tiles] == [1, 2]
+    tiles = opennve.FrameEngine(frame_width=160, frame_height=80, frame_tile_size=80).generate_frame(frame_data)
+    assert [t["tile_id"] for t in tiles] == [1, 2]
