@@ -322,7 +322,8 @@ The frame engine builds one frame tensor per time window (height × width × 2, 
 | `camera.update_frame(frame)` | Changes the frame settings while running |
 | `window.frame(config=None, mode=None)` | Frame of one `EventWindow` |
 | `FrameEngine(width, height, tile_size=None, mode="time_surface", min_events=1)` | `build(events, start_t, end_t)`, `build_window(window)`, `generate_frame(...)` (previous interface) |
-| `Frame` | `data`, `tiles`, `events`, `event_count`, `start_t`, `end_t`, `tile(id)`, `tile_dicts()`, `to_image()` |
+| `Frame` | `data`, `tiles`, `events`, `event_count`, `start_t`, `end_t`, `split(tile_size, min_events, data)`, `tile(id)`, `tile_dicts()`, `to_image()` |
+| `split_into_tiles(data, tile_size, event_counts=None, min_events=0)` | Splits any array into tiles |
 | `Tile` | `id`, `row`, `col`, `x`, `y`, `width`, `height`, `event_count`, `data` |
 | `FrameConfig`, `TileConfig` | Frame and tile settings |
 
@@ -330,6 +331,12 @@ The frame engine builds one frame tensor per time window (height × width × 2, 
 for frame in camera.frames():
     for tile in frame.tiles:
         print(tile.id, tile.row, tile.col, tile.event_count, tile.data.shape)
+
+# or: whole frame first, tiles later
+for frame in camera.frames():  # "tiles": null
+    frame.data = process(frame.data)
+    for tile in frame.split(80):
+        ...
 ```
 
 ---

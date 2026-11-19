@@ -144,3 +144,53 @@ def test_raw_frames(tmp_path):
     assert [f.start_t for f in frames] == [1_000_000, 1_040_000, 1_080_000]
     assert sum(f.event_count for f in frames) == 2000
     assert all(len(f.tiles) > 0 and f.data.shape == (720, 1280, 2) for f in frames)
+
+
+def test_split_later():
+    # Frame without tiles first, process it, then split it
+    engine = opennve.FrameEngine(160, 100)  # no tiles
+    events = _events([(10, 5, 5, True), (20, 6, 5, True), (30, 150, 90, False)])
+    frame = engine.build(events, 0, 40)
+    assert frame.tiles == []
+    frame.data *= 2.0  # process the frame in place
+    tiles = frame.split(80)  # default min_events: 1 -> empty tiles skipped
+    assert [(t.id, t.row, t.col, t.event_count) for t in tiles] == [(1, 1, 1, 2), (4, 2, 2, 1)]
+    assert frame.tiles is tiles and (frame.tile_rows, frame.tile_cols) == (2, 2)
+    assert tiles[0].data[5, 6, 1] == pytest.approx(2 * 20 / 40)  # the processed values
+    assert (tiles[1].width, tiles[1].height) == (80, 20)  # bottom-right edge tile
+    assert len(frame.split(80, min_events=0)) == 4
+    assert [t.id for t in frame.split(50, min_events=2)] == [1]
+    # split a different array with the event counts of the frame, for instance a one-channel image
+    gray = frame.data.max(axis=2)
+    tiles = frame.split(80, data=gray)
+    assert tiles[0].data.shape == (80, 80) and tiles[0].event_count == 2
+    with pytest.raises(ValueError, match="frame size"):
+        frame.split(80, data=np.zeros((10, 10)))
+
+
+def test_split_uses_configured_tiles():
+    engine = opennve.FrameEngine(160, 100, tile_size=40, min_events=2)
+    frame = engine.build(_events([(1, 1, 1, True), (2, 2, 2, True), (3, 100, 50, True)]), 0, 10)
+    assert [t.id for t in frame.tiles] == [1]
+    assert [t.id for t in frame.split()] == [1]  # same configuration
+    assert [t.id for t in frame.split(min_events=1)] == [1, 7]  # 4 tiles per row: (100, 50) is in row 2, column 3
+
+
+def test_split_into_tiles_without_events():
+    image = np.arange(100 * 160).reshape(100, 160)
+    tiles = opennve.split_into_tiles(image, 80)
+    assert [t.id for t in tiles] == [1, 2, 3, 4] and tiles[0].event_count is None
+    assert tiles[3].data[0, 0] == image[80, 80]
+    assert opennve.tile_grid(1280, 720, 80) == (9, 16)
+    with pytest.raises(ValueError, match="needs event_counts"):
+        opennve.split_into_tiles(image, 80, min_events=1)
+
+
+def test_camera_frames_then_split(monkeypatch):
+    window = opennve.EventWindow(
+        camera="left", start_t=0, end_t=40, width=160, height=80,
+        polarity_events=_events([(5, 1, 1, True), (6, 100, 10, False)]),
+    )
+    frame = window.frame()  # default configuration: no tiles
+    assert frame.tiles == []
+    assert [t.id for t in frame.split(80)] == [1, 2]

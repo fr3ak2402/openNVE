@@ -59,6 +59,28 @@ with opennve.open_camera(path="cameras.json", name="left") as camera:  # or open
 
 `camera.read_frames()` / `raw.read_frames()` return the frames completed by the next packet (often `[]`), for reading several cameras in one loop.
 
+### Frame first, tiles later
+
+Without `tiles` in the configuration (the default), `camera.frames()` returns whole frames. You can process a frame and split it into tiles afterwards:
+
+```python
+for frame in camera.frames():  # "tiles": null -> frame.tiles == []
+    frame.data = denoise(frame.data)  # process the frame (in place or as a new array)
+    tiles = frame.split(80)  # 80 x 80 tiles of the processed frame, empty tiles skipped
+    for tile in tiles:
+        agent.process(tile.id, tile.data)
+```
+
+`frame.split(tile_size=None, min_events=None, data=None)`:
+
+- `tile_size`: tile size in pixels. Default: the `tiles` configuration, else 80.
+- `min_events`: only tiles with at least this many events (`0` = all tiles). Default: the configuration, else 1 (skip empty tiles). The events are those of the frame, so this still works after changing `frame.data`.
+- `data`: split another array instead of `frame.data`, for instance a one-channel image computed from the frame (`frame.split(80, data=gray)`). Its first two dimensions must be the frame size; further dimensions are kept.
+
+The tiles are returned and also stored in `frame.tiles`. A frame can be split several times, for instance with different tile sizes. `frame.tile_event_counts(80)` returns the number of events per tile as a (rows × columns) array.
+
+Any array can be split without a frame, with `opennve.split_into_tiles(array, 80)` (all tiles, `event_count` is `None`), or with event counts: `split_into_tiles(array, 80, event_counts, min_events=1)`.
+
 ### Events and frames side by side
 
 The event blocks are unchanged: `camera.events()` still yields the event packets, and `camera.windows()` the time windows. A frame can be built from any window:
@@ -118,12 +140,14 @@ surface = FrameEngine.create_linear_time_surface(frame_data, 1280, 720, start, e
 | `FrameConfig(width=None, height=None, mode="time_surface", tiles=None)` | Frame settings (`from_dict`, `to_dict`) |
 | `TileConfig(size=80, min_events=1)` | Tile settings |
 | `FrameEngine(width, height, tile_size=None, mode="time_surface", min_events=1)` | Builds frames: `build(events, start_t, end_t, camera="")`, `build_window(window)`, `from_config(config, sensor_width, sensor_height)` |
-| `Frame` | `camera`, `start_t`, `end_t`, `mode`, `data`, `width`, `height`, `event_count`, `tiles`, `tile_rows`, `tile_cols`, `events`, `window`, `tile(id)`, `tile_dicts()`, `to_image()` |
-| `Tile` | `id`, `row`, `col`, `x`, `y`, `width`, `height`, `event_count`, `data`, `to_dict()` |
+| `Frame` | `camera`, `start_t`, `end_t`, `mode`, `data`, `width`, `height`, `event_count`, `tiles`, `tile_rows`, `tile_cols`, `events`, `window`, `split(tile_size, min_events, data)`, `tile_event_counts(tile_size)`, `tile(id)`, `tile_dicts()`, `to_image()` |
+| `split_into_tiles(data, tile_size, event_counts=None, min_events=0)` | Splits any array (height × width × …) into tiles |
+| `tile_grid(width, height, tile_size)` | `(rows, columns)` of the tile grid |
+| `Tile` | `id`, `row`, `col`, `x`, `y`, `width`, `height`, `event_count` (`None` if unknown), `data`, `to_dict()` |
 | `EventCamera.frames()` / `read_frames()` / `update_frame()` | Frames of a live camera |
 | `RawReader.frames()` / `read_frames()` | Frames of a RAW file (`open_raw(..., frame={...})` overrides the configuration) |
 | `EventWindow.frame(config=None, mode=None)` | Frame of one window |
 
 ## Performance
 
-Building a 1280 × 720 time surface with 80 px tiles from 2 million events takes about 80 ms on one CPU core (about 3.5 times faster than the previous implementation). With 40 ms windows, typical event rates leave plenty of time for further processing.
+Building a 1280 × 720 time surface from 2 million events takes about 85 ms on one CPU core, splitting it into 80 px tiles about 15 ms (about 3.5 times faster than the previous implementation). With 40 ms windows, typical event rates leave plenty of time for further processing.

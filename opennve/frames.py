@@ -114,8 +114,9 @@ class Tile:
         row, col: Tile row and column, starting at 1.
         x, y: Position of the top-left pixel of the tile in the frame.
         width, height: Tile size (smaller at the right and bottom edges).
-        event_count: Number of events in the tile.
-        data: Frame data of the tile, shape (height, width, 2), float32.
+        event_count: Number of events in the tile (None if unknown, see split_into_tiles).
+        data: Frame data of the tile, shape (height, width, ...) of the split array
+            (height x width x 2, float32 for an unchanged frame).
     """
 
     id: int
@@ -125,7 +126,7 @@ class Tile:
     y: int
     width: int
     height: int
-    event_count: int
+    event_count: typing.Optional[int]
     data: np.ndarray
 
     def to_dict(self) -> dict[str, typing.Any]:
@@ -158,6 +159,53 @@ class Frame:
     tile_rows: int = 0
     tile_cols: int = 0
     window: typing.Any = dataclasses.field(default=None, repr=False)
+    # positions of the events used for the frame (for split)
+    event_x: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    event_y: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+
+    def tile_event_counts(self, tile_size: int) -> np.ndarray:
+        """Number of events per tile, shape (tile rows, tile columns)."""
+        if self.event_x is None or self.event_y is None:
+            raise ValueError("this frame has no event positions")
+        rows, cols = tile_grid(self.width, self.height, tile_size)
+        counts = np.bincount(
+            (self.event_y.astype(np.int64) // tile_size) * cols + self.event_x.astype(np.int64) // tile_size,
+            minlength=rows * cols,
+        )
+        return counts.reshape(rows, cols)
+
+    def split(
+        self,
+        tile_size: typing.Optional[int] = None,
+        min_events: typing.Optional[int] = None,
+        data: typing.Optional[np.ndarray] = None,
+    ) -> list[Tile]:
+        """Splits the frame into tiles, for instance after processing it.
+
+        tile_size: tile size in pixels (default: the "tiles" configuration, else 80).
+        min_events: only tiles with at least this many events (default: configuration, else 1;
+            0 = all tiles). The events are those of the frame, also if data was changed.
+        data: array to split instead of frame.data, for instance a processed frame. Its first
+            two dimensions must be height x width (any further dimensions are kept).
+
+        The tiles are also stored in frame.tiles (and tile_rows / tile_cols are updated).
+        """
+        if tile_size is None:
+            tile_size = self._tile_size or 80
+        if min_events is None:
+            min_events = self._min_events if self._tile_size else 1
+        TileConfig(size=tile_size, min_events=min_events).validate()
+        data = self.data if data is None else np.asarray(data)
+        if data.shape[:2] != (self.height, self.width):
+            raise ValueError(
+                f"data must have the frame size {self.height} x {self.width}, got {data.shape[0]} x {data.shape[1]}"
+            )
+        self.tiles = split_into_tiles(data, tile_size, self.tile_event_counts(tile_size), min_events)
+        self.tile_rows, self.tile_cols = tile_grid(self.width, self.height, tile_size)
+        return self.tiles
+
+    _tile_size: typing.Optional[int] = dataclasses.field(default=None, repr=False)
+    _min_events: int = dataclasses.field(default=1, repr=False)
 
     @property
     def width(self) -> int:
@@ -202,6 +250,63 @@ class Frame:
                 image[tile.y : tile.y + tile.height, tile.x] = (255, 255, 255)
                 image[tile.y : tile.y + tile.height, tile.x + tile.width - 1] = (255, 255, 255)
         return image
+
+
+# ------------------------------------------------------------------ tiles
+
+
+def tile_grid(width: int, height: int, tile_size: int) -> tuple[int, int]:
+    """(rows, columns) of the tile grid; the tiles at the right and bottom edges may be smaller."""
+    return (height + tile_size - 1) // tile_size, (width + tile_size - 1) // tile_size
+
+
+def split_into_tiles(
+    data: np.ndarray,
+    tile_size: int,
+    event_counts: typing.Optional[np.ndarray] = None,
+    min_events: int = 0,
+) -> list[Tile]:
+    """Splits any array of shape (height, width, ...) into tiles of tile_size x tile_size pixels.
+
+    event_counts: optional events per tile, shape (rows, columns), see Frame.tile_event_counts.
+        With event_counts, only tiles with at least min_events events are returned.
+        Without, all tiles are returned and Tile.event_count is None.
+    Tiles are ordered row by row, ids / rows / columns start at 1.
+    """
+    data = np.asarray(data)
+    if data.ndim < 2:
+        raise ValueError("data must have at least 2 dimensions (height, width, ...)")
+    TileConfig(size=int(tile_size), min_events=int(min_events)).validate()
+    height, width = data.shape[:2]
+    rows, cols = tile_grid(width, height, tile_size)
+    if event_counts is not None:
+        event_counts = np.asarray(event_counts)
+        if event_counts.shape != (rows, cols):
+            raise ValueError(f"event_counts must have the shape ({rows}, {cols})")
+        selected = np.flatnonzero(event_counts.reshape(-1) >= min_events)
+    elif min_events > 0:
+        raise ValueError("min_events needs event_counts (use Frame.split to count the events of a frame)")
+    else:
+        selected = np.arange(rows * cols)
+    tiles = []
+    for index in selected:
+        row, col = divmod(int(index), cols)
+        y_start, x_start = row * tile_size, col * tile_size
+        y_end, x_end = min(y_start + tile_size, height), min(x_start + tile_size, width)
+        tiles.append(
+            Tile(
+                id=int(index) + 1,
+                row=row + 1,
+                col=col + 1,
+                x=x_start,
+                y=y_start,
+                width=x_end - x_start,
+                height=y_end - y_start,
+                event_count=None if event_counts is None else int(event_counts.reshape(-1)[index]),
+                data=data[y_start:y_end, x_start:x_end].copy(),
+            )
+        )
+    return tiles
 
 
 # ------------------------------------------------------------------ engine
@@ -326,6 +431,10 @@ class FrameEngine:
             tile_rows=self.tile_rows,
             tile_cols=self.tile_cols,
             window=window,
+            event_x=x.astype(np.uint16),
+            event_y=y.astype(np.uint16),
+            _tile_size=self.tile_size,
+            _min_events=self.min_events,
         )
 
     def build_window(self, window, mode: typing.Optional[str] = None) -> Frame:
@@ -351,29 +460,12 @@ class FrameEngine:
     def _tiles(self, data: np.ndarray, x: np.ndarray, y: np.ndarray) -> list[Tile]:
         if not self.tile_size:
             return []
-        size = self.tile_size
         counts = np.bincount(
-            (y // size) * self.tile_cols + (x // size), minlength=self.tile_rows * self.tile_cols
+            (y // self.tile_size) * self.tile_cols + (x // self.tile_size), minlength=self.tile_rows * self.tile_cols
         )
-        tiles = []
-        for index in np.flatnonzero(counts >= self.min_events):
-            row, col = divmod(int(index), self.tile_cols)
-            y_start, x_start = row * size, col * size
-            y_end, x_end = min(y_start + size, self.height), min(x_start + size, self.width)
-            tiles.append(
-                Tile(
-                    id=int(index) + 1,
-                    row=row + 1,
-                    col=col + 1,
-                    x=x_start,
-                    y=y_start,
-                    width=x_end - x_start,
-                    height=y_end - y_start,
-                    event_count=int(counts[index]),
-                    data=data[y_start:y_end, x_start:x_end, :].copy(),
-                )
-            )
-        return tiles
+        return split_into_tiles(
+            data, self.tile_size, counts.reshape(self.tile_rows, self.tile_cols), self.min_events
+        )
 
     # Interface of the original FrameEngine (frame_data: pandas DataFrame or array with x, y, p, t)
 

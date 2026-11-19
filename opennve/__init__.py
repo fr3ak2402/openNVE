@@ -21,7 +21,7 @@ from .config import (
 from .devices import EVK3HDDriver, EVK4Driver, SE1S4Driver
 from .discovery import CameraInfo, list_cameras, list_cameras_json
 from .driver import DriverStatus, driver_status, ensure_driver, install_driver
-from .frames import FRAME_MODES, Frame, FrameConfig, FrameEngine, Tile, TileConfig
+from .frames import FRAME_MODES, Frame, FrameConfig, FrameEngine, Tile, TileConfig, split_into_tiles, tile_grid
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
 from .output import OutputConfig, to_csv, to_rows
@@ -49,6 +49,8 @@ __all__ = [
     "FrameEngine",
     "Tile",
     "TileConfig",
+    "split_into_tiles",
+    "tile_grid",
     "RawHeader",
     "RawReader",
     "open_raw",
