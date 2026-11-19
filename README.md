@@ -2,6 +2,8 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
+📖 **Dokumentation (Deutsch): [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Schnellstart](docs/schnellstart.md) · [Konfiguration](docs/konfiguration.md) · [Python-API](docs/api.md) · [Zeitfenster und Frames](docs/zeitfenster.md) · [Mehrere Kameras](docs/mehrere-kameras.md) · [Fehlerbehebung](docs/fehlerbehebung.md)
+
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
 - Open one or several cameras from that configuration (with clock synchronization)
