@@ -119,11 +119,16 @@ def test_example_config_is_valid():
 
 
 def test_output_config():
-    assert opennve.CameraConfig(model="SE1-S4").output.fields == ["c", "x", "y", "p", "t"]
+    assert opennve.CameraConfig(model="SE1-S4").output.fields == ["x", "y", "p", "t"]
     config = opennve.CameraConfig.from_dict({"model": "SE1-S4", "output": {"fields": "t, x, y"}})
     assert config.output.fields == ["t", "x", "y"]
     assert opennve.CameraConfig.from_dict(config.to_dict()) == config
-    for fields, message in ((["x", "z"], "unknown output field"), (["x", "x"], "duplicate"), ([], "non-empty")):
+    for fields, message in (
+        (["c", "x"], "once per packet"),
+        (["x", "z"], "unknown output field"),
+        (["x", "x"], "duplicate"),
+        ([], "non-empty"),
+    ):
         with pytest.raises(ValueError, match=message):
             opennve.CameraConfig.from_dict({"model": "SE1-S4", "output": {"fields": fields}})
     with pytest.raises(ValueError, match="unknown output setting"):
@@ -132,12 +137,13 @@ def test_output_config():
 
 def test_output_format():
     events = _events([(1003, 412, 233, True), (1010, 5, 6, False)])
-    output = opennve.OutputConfig(fields=["c", "x", "y", "p", "t"])
-    formatted = output.format(events, "left")
-    assert formatted.dtype.names == ("c", "x", "y", "p", "t")
-    assert opennve.to_rows(formatted) == [("left", 412, 233, 1, 1003), ("left", 5, 6, 0, 1010)]
-    assert opennve.to_csv(formatted, header=True) == "c,x,y,p,t\nleft,412,233,1,1003\nleft,5,6,0,1010\n"
-    reordered = opennve.OutputConfig(fields=["t", "p"]).format(events, "left")
+    formatted = opennve.OutputConfig().format(events)
+    assert formatted.dtype.names == ("x", "y", "p", "t")
+    assert opennve.to_rows(formatted) == [(412, 233, 1, 1003), (5, 6, 0, 1010)]
+    assert opennve.to_csv(formatted, header=True, camera="left") == (
+        "# camera: left\nx,y,p,t\n412,233,1,1003\n5,6,0,1010\n"
+    )
+    reordered = opennve.OutputConfig(fields=["t", "p"]).format(events)
     assert opennve.to_rows(reordered) == [(1003, 1), (1010, 0)]
 
 
@@ -265,7 +271,8 @@ def test_camera_from_json_config(fake_open):
         assert len(packets) == 1
         assert packets[0].raw_event_count == 3
         assert len(packets[0].polarity_events) == 2  # isolated event removed
-        assert packets[0].rows() == [("left", 5, 5, 1, 0), ("left", 6, 5, 1, 10)]
+        assert packets[0].camera == "left"
+        assert packets[0].rows() == [(5, 5, 1, 0), (6, 5, 1, 10)]
         camera.update_output({"fields": ["t", "x"]})
         assert camera.config.output.fields == ["t", "x"]
         info = camera.info()

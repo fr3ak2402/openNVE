@@ -39,18 +39,22 @@ class CameraPacket:
     @property
     def events(self) -> np.ndarray:
         """Filtered polarity events in the configured output format, for instance with
-        "fields": ["c", "x", "y", "p", "t"] a structured array with fields c, x, y, p, t."""
+        "fields": ["x", "y", "p", "t"] a structured array with fields x, y, p, t.
+        The camera name is not part of the events, it is self.camera (once per packet)."""
         if self.polarity_events is None:
-            return np.empty(0, dtype=self.output_config.dtype(self.camera))
-        return self.output_config.format(self.polarity_events, self.camera)
+            return np.empty(0, dtype=self.output_config.dtype())
+        return self.output_config.format(self.polarity_events)
 
     def rows(self) -> list[tuple]:
-        """Events in the output format as tuples, for instance [("left", 12, 40, 1, 1003), ...]."""
+        """Events in the output format as tuples, for instance [(12, 40, 1, 1003), ...]."""
         return to_rows(self.events)
 
-    def to_csv(self, header: bool = False, delimiter: str = ",") -> str:
-        """Events in the output format as CSV text, for instance "left,12,40,1,1003"."""
-        return to_csv(self.events, header=header, delimiter=delimiter)
+    def to_csv(self, header: bool = False, delimiter: str = ",", camera: bool = False) -> str:
+        """Events in the output format as CSV text, for instance "12,40,1,1003".
+        With camera=True, the first line is "# camera: <name>"."""
+        return to_csv(
+            self.events, header=header, delimiter=delimiter, camera=self.camera if camera else None
+        )
 
 
 class EventCamera:
@@ -290,7 +294,7 @@ class EventCamera:
         self._build_filter()
 
     def update_output(self, output: OutputConfig | dict) -> None:
-        """Replace the output format, for instance {"fields": ["c", "x", "y", "p", "t"]}."""
+        """Replace the output format, for instance {"fields": ["x", "y", "p", "t"]}."""
         if isinstance(output, dict):
             output = OutputConfig.from_dict(output)
         output.validate()

@@ -6,7 +6,7 @@
     config = opennve.CameraConfig.from_json(...) # or opennve.load_configs("cameras.json")
     with opennve.open_camera(config) as camera:
         for packet in camera.events():
-            print(packet.events)  # structured array in the configured output format (c, x, y, p, t)
+            print(packet.events)  # structured array in the configured output format (x, y, p, t)
 """
 
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras

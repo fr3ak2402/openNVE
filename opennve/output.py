@@ -2,15 +2,17 @@
 
 JSON example:
 
-    "output": {"fields": ["c", "x", "y", "p", "t"]}
+    "output": {"fields": ["x", "y", "p", "t"]}
 
 Fields (any order, each at most once):
 
-    c: camera name (from the configuration)
     x: pixel column
     y: pixel row
     p: polarity (1 = ON, brighter / 0 = OFF, darker)
     t: timestamp in microseconds
+
+The camera name is not repeated in every event, it is stored once per packet
+(CameraPacket.camera).
 """
 
 from __future__ import annotations
@@ -21,13 +23,12 @@ import typing
 import numpy as np
 
 FIELDS = {
-    "c": "camera name",
     "x": "pixel column",
     "y": "pixel row",
     "p": "polarity (1 = ON, 0 = OFF)",
     "t": "timestamp in microseconds",
 }
-DEFAULT_FIELDS = ("c", "x", "y", "p", "t")
+DEFAULT_FIELDS = ("x", "y", "p", "t")
 
 _NUMERIC_DTYPES = {"x": np.uint16, "y": np.uint16, "p": np.uint8, "t": np.uint64}
 
@@ -40,7 +41,11 @@ class OutputConfig:
 
     def validate(self):
         if not isinstance(self.fields, list) or len(self.fields) == 0:
-            raise ValueError("output.fields must be a non-empty list, for instance [\"c\", \"x\", \"y\", \"p\", \"t\"]")
+            raise ValueError("output.fields must be a non-empty list, for instance [\"x\", \"y\", \"p\", \"t\"]")
+        if "c" in self.fields:
+            raise ValueError(
+                "output field c is not supported: the camera name is stored once per packet (packet.camera)"
+            )
         unknown = [field for field in self.fields if field not in FIELDS]
         if unknown:
             raise ValueError(
@@ -68,21 +73,14 @@ class OutputConfig:
         result.validate()
         return result
 
-    def dtype(self, camera_name: str) -> np.dtype:
-        return np.dtype(
-            [
-                (field, f"<U{max(1, len(camera_name))}" if field == "c" else _NUMERIC_DTYPES[field])
-                for field in self.fields
-            ]
-        )
+    def dtype(self) -> np.dtype:
+        return np.dtype([(field, _NUMERIC_DTYPES[field]) for field in self.fields])
 
-    def format(self, events: np.ndarray, camera_name: str) -> np.ndarray:
+    def format(self, events: np.ndarray) -> np.ndarray:
         """Polarity events (t, x, y, on) -> structured array with the configured fields, in order."""
-        result = np.empty(len(events), dtype=self.dtype(camera_name))
+        result = np.empty(len(events), dtype=self.dtype())
         for field in self.fields:
-            if field == "c":
-                result["c"] = camera_name
-            elif field == "p":
+            if field == "p":
                 result["p"] = events["on"]
             else:
                 result[field] = events[field]
@@ -90,13 +88,20 @@ class OutputConfig:
 
 
 def to_rows(events: np.ndarray) -> list[tuple]:
-    """Structured output array -> list of tuples with Python values, for instance [("left", 12, 40, 1, 1003)]."""
+    """Structured output array -> list of tuples with Python values, for instance [(12, 40, 1, 1003)]."""
     return events.tolist()
 
 
-def to_csv(events: np.ndarray, header: bool = False, delimiter: str = ",") -> str:
-    """Structured output array -> CSV text (one event per line)."""
+def to_csv(
+    events: np.ndarray, header: bool = False, delimiter: str = ",", camera: str | None = None
+) -> str:
+    """Structured output array -> CSV text (one event per line).
+
+    If camera is given, the first line is "# camera: <name>" (the name appears once).
+    """
     lines = []
+    if camera is not None:
+        lines.append(f"# camera: {camera}")
     if header:
         lines.append(delimiter.join(events.dtype.names))
     lines.extend(delimiter.join(str(value) for value in row) for row in events.tolist())

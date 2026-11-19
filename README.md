@@ -61,7 +61,7 @@ opennve models
         "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
     },
     "output": {
-        "fields": ["c", "x", "y", "p", "t"]
+        "fields": ["x", "y", "p", "t"]
     }
 }
 ```
@@ -73,7 +73,7 @@ opennve models
 | `serial` | Serial number, or `null` for the first camera of this model (`opennve list`) |
 | `settings` | Hardware settings, passed to the camera. Omitted fields keep their default value. `opennve template <model>` shows all fields of a model |
 | `filter.polarity` | `both`, `on` or `off` |
-| `output.fields` | Fields of the output events, in this order (any subset): `c` = camera name, `x`, `y`, `p` = polarity (1 = ON, 0 = OFF), `t` = timestamp in µs. Default `["c", "x", "y", "p", "t"]` |
+| `output.fields` | Fields of the output events, in this order (any subset): `x`, `y`, `p` = polarity (1 = ON, 0 = OFF), `t` = timestamp in µs. Default `["x", "y", "p", "t"]`. The camera name is stored once per packet (`packet.camera`), not in every event |
 | `filter.background_activity` | Removes isolated events (noise, hot pixels): an event is kept if `min_neighbors` of its 8 neighbors fired within `time_us` µs |
 
 SE1-S4 / EVK4 settings: `biases` (offsets from the factory values, `camera.biases_bounds()` gives the allowed range), `clock` (`internal`, `internal_with_output_enabled` = synchronization primary, `external` = synchronization secondary), `rate_limiter` (`{"reference_period_us": 200, "maximum_events_per_period": 4000}` or `null`), `enable_external_trigger`, `enable_output`, and the bit masks `x_mask`, `y_mask`, `pixel_mask`.
@@ -99,10 +99,11 @@ opennve.save_configs("cameras.json", configs)
 with opennve.open_camera(path="examples/cameras.json", name="left") as camera:
     print(camera.info())  # configuration, resolution, bias bounds
     for packet in camera.events():  # filtered events
-        events = packet.events  # numpy array in the output format, fields c, x, y, p, t
+        print(packet.camera)  # camera name, once per packet: "left"
+        events = packet.events  # numpy array in the output format, fields x, y, p, t
         print(events["x"], events["t"])
-        print(packet.rows()[:3])  # [("left", 412, 233, 1, 1003), ...]
-        print(packet.to_csv(header=True), end="")  # c,x,y,p,t / left,412,233,1,1003
+        print(packet.rows()[:3])  # [(412, 233, 1, 1003), ...]
+        print(packet.to_csv(header=True, camera=True), end="")  # # camera: left / x,y,p,t / 412,233,1,1003
         # packet.polarity_events: original filtered events (fields t, x, y, on)
 
         # Change settings while running (only the given fields change)

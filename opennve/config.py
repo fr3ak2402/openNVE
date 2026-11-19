@@ -16,7 +16,7 @@ A camera configuration describes one camera:
             "polarity": "both",
             "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
         },
-        "output": {"fields": ["c", "x", "y", "p", "t"]}
+        "output": {"fields": ["x", "y", "p", "t"]}
     }
 
 - name: free name of the camera in your setup
@@ -26,7 +26,8 @@ A camera configuration describes one camera:
   neuromorphic_drivers Configuration; omitted fields keep their default value)
 - filter: software filters applied to the events (see opennve.filters)
 - output: fields of the output events, in order (see opennve.output):
-  c = camera name, x, y, p = polarity (1 ON / 0 OFF), t = timestamp in µs
+  x, y, p = polarity (1 ON / 0 OFF), t = timestamp in µs
+  (the camera name is stored once per packet, not per event)
 
 A configuration file contains either one camera object, a list of camera objects,
 or {"cameras": [...]}.
