@@ -1,20 +1,20 @@
-# openNVE – Dokumentation
+# openNVE documentation
 
-openNVE (Open Neuromorphic Vision Engine) ist eine Python-Bibliothek für Eventkameras. Sie findet angeschlossene Kameras, konfiguriert sie über JSON, liest gefilterte Events und fasst sie zu Zeitfenstern und Frames zusammen.
+openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras. It finds connected cameras, configures them with JSON, reads filtered events and groups them into time windows and frames.
 
-| Seite | Inhalt |
+| Page | Contents |
 |---|---|
-| [Installation](installation.md) | Wheel installieren, Kameratreiber unter Windows und Linux |
-| [Schnellstart](schnellstart.md) | In fünf Minuten von der angeschlossenen Kamera zum ersten Frame |
-| [Konfiguration (JSON)](konfiguration.md) | Alle Felder der Kamera-Konfiguration: Hardware, Filter, Ausgabeformat, Zeitfenster |
-| [Python-API](api.md) | Referenz aller Funktionen, Klassen und Methoden |
-| [Zeitfenster und Frames](zeitfenster.md) | Events in Fenstern sammeln (Standard 40 ms) und Bilder erzeugen |
-| [Mehrere Kameras](mehrere-kameras.md) | Mehrere Kameras gleichzeitig lesen und synchronisieren |
-| [Kommandozeile](kommandozeile.md) | `opennve list`, `template`, `check`, `models` |
-| [Fehlerbehebung](fehlerbehebung.md) | Kamera wird nicht gefunden, Rauschen, hohe Event-Raten |
-| [Entwicklung](entwicklung.md) | Tests, Wheel-Build, Releases, eingebetteter Treiber |
+| [Installation](installation.md) | Installing the wheel, camera drivers on Windows and Linux |
+| [Quick start](quickstart.md) | From a connected camera to the first frame in five minutes |
+| [Configuration (JSON)](configuration.md) | All fields of the camera configuration: hardware, filters, output format, time windows |
+| [Python API](api.md) | Reference of all functions, classes and methods |
+| [Time windows and frames](time-windows.md) | Collecting events in windows (40 ms by default) and building images |
+| [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
+| [Command line](cli.md) | `opennve list`, `template`, `check`, `models` |
+| [Troubleshooting](troubleshooting.md) | Camera not found, noise, high event rates |
+| [Development](development.md) | Tests, wheel builds, releases, embedded driver |
 
-## Überblick
+## Overview
 
 ```text
            ┌────────────────────────────────────────────────────────────┐
@@ -22,18 +22,18 @@ JSON  ───► │ CameraConfig: name, model, serial, settings, filter,     
            │               output, window                               │
            └──────────────────────────┬─────────────────────────────────┘
                                       ▼
-Kamera ──► EventCamera ──► Filter ──► CameraPacket  (events im Format x, y, p, t)
+Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in the format x, y, p, t)
  (USB)     (neuromorphic_drivers)     └──► EventWindow (40 ms) ──► to_frame()
 ```
 
-- **Kameras finden:** `opennve.list_cameras()`
-- **Konfigurieren:** eine JSON-Datei pro Aufbau, mit einem Eintrag je Kamera
-- **Lesen:** `camera.events()` liefert Pakete mit gefilterten Events, `camera.windows()` liefert Zeitfenster
+- **Find cameras:** `opennve.list_cameras()`
+- **Configure:** one JSON file per setup, with one entry per camera
+- **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
 - **Frames:** `window.to_frame("count" | "polarity" | "binary" | "color")`
 
-## Unterstützte Kameras
+## Supported cameras
 
-| Modell (`model`) | Gerät |
+| Model (`model`) | Device |
 |---|---|
 | `SE1-S4` | SENSING SE1-S4-USB (Sony IMX646, 1280 × 720) |
 | `EVK4` | Prophesee EVK4 (Sony IMX636, 1280 × 720) |
@@ -44,4 +44,4 @@ Kamera ──► EventCamera ──► Filter ──► CameraPacket  (events im
 | `CENTURYARKS-VGA` | CenturyArks VGA |
 | `TRITON` | Lucid Triton |
 
-Die Hardware-Anbindung übernimmt [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (Fork mit SE1-S4-Treiber). Er ist in den openNVE-Wheels bereits enthalten.
+The hardware access is provided by [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (fork with the SE1-S4 driver), which is already included in the openNVE wheels.

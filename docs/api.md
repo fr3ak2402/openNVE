@@ -1,39 +1,39 @@
-# Python-API
+# Python API
 
 ```python
 import opennve
 ```
 
-Alle hier beschriebenen Namen sind direkt unter `opennve.` erreichbar.
+All names described here are available directly as `opennve.<name>`.
 
-- [Kameras finden](#kameras-finden)
-- [Konfiguration](#konfiguration)
-- [Kameras öffnen](#kameras-öffnen)
+- [Finding cameras](#finding-cameras)
+- [Configuration](#configuration)
+- [Opening cameras](#opening-cameras)
 - [EventCamera](#eventcamera)
 - [CameraPacket](#camerapacket)
 - [EventWindow](#eventwindow)
-- [Filter, Ausgabe, Fenster](#filter-ausgabe-fenster)
-- [Modelle](#modelle)
-- [Hilfsfunktionen](#hilfsfunktionen)
+- [Filter, output, window](#filter-output-window)
+- [Models](#models)
+- [Helper functions](#helper-functions)
 
 ---
 
-## Kameras finden
+## Finding cameras
 
 ### `list_cameras(configs=()) -> list[CameraInfo]`
 
-Listet die angeschlossenen Kameras, sortiert nach Modell und Seriennummer. Werden Konfigurationen übergeben, bekommt jede Kamera den Namen der Konfiguration mit gleichem Modell und gleicher Seriennummer.
+Lists the connected cameras, sorted by model and serial number. If configurations are passed, each camera gets the name of the configuration with the same model and serial number.
 
 ```python
 for camera in opennve.list_cameras(opennve.load_configs("cameras.json")):
     print(camera.name, camera.model, camera.serial, camera.available, camera.error)
 ```
 
-Wirft `RuntimeError`, wenn das System keinen USB-Zugriff erlaubt.
+Raises `RuntimeError` if the system does not allow USB access.
 
 ### `list_cameras_json(configs=(), indent=4) -> str`
 
-Wie `list_cameras`, als JSON-Array:
+Same as `list_cameras`, as a JSON array:
 
 ```json
 [
@@ -52,24 +52,24 @@ Wie `list_cameras`, als JSON-Array:
 
 ### `CameraInfo`
 
-| Attribut / Methode | Bedeutung |
+| Attribute / method | Description |
 |---|---|
-| `model` | Modell, z. B. `"SE1-S4"` |
-| `device_name` | Gerätename, z. B. `"SENSING SE1-S4-USB"` |
-| `serial` | Seriennummer oder `None`, wenn die Kamera nicht gelesen werden konnte |
-| `connection` | USB-Verbindung, z. B. `"USB 3.0 SuperSpeed (5.0 Gb/s)"` |
-| `address` | Bus-Adresse |
-| `error` | Fehlermeldung (z. B. fehlende Rechte) oder `None` |
-| `name` | Name aus der passenden Konfiguration oder `None` |
-| `available` | `True`, wenn die Kamera benutzt werden kann |
-| `to_dict()` | Als Dictionary (JSON-kompatibel) |
-| `default_config()` | `CameraConfig` mit Standardwerten für diese Kamera |
+| `model` | Model, for instance `"SE1-S4"` |
+| `device_name` | Device name, for instance `"SENSING SE1-S4-USB"` |
+| `serial` | Serial number, or `None` if the camera could not be read |
+| `connection` | USB connection, for instance `"USB 3.0 SuperSpeed (5.0 Gb/s)"` |
+| `address` | Bus address |
+| `error` | Error message (for instance missing permissions) or `None` |
+| `name` | Name from the matching configuration, or `None` |
+| `available` | `True` if the camera can be used |
+| `to_dict()` | As a dictionary (JSON-compatible) |
+| `default_config()` | `CameraConfig` with default values for this camera |
 
 ---
 
-## Konfiguration
+## Configuration
 
-Das JSON-Format beschreibt [Konfiguration](konfiguration.md) im Detail.
+The JSON format is described in [Configuration](configuration.md).
 
 ### `CameraConfig`
 
@@ -79,51 +79,51 @@ config = opennve.CameraConfig.from_dict({...})
 config = opennve.CameraConfig.from_json('{"model": "SE1-S4"}')
 ```
 
-| Attribut | Typ | Bedeutung |
+| Attribute | Type | Description |
 |---|---|---|
-| `name` | `str` | Name der Kamera |
-| `model` | `CameraModel` | Modell (`config.model.id` = `"SE1-S4"`) |
-| `serial` | `str \| None` | Seriennummer |
-| `settings` | `neuromorphic_drivers`-`Configuration` | Hardware-Einstellungen (Dataclass des Modells) |
-| `filter` | `FilterConfig` | Software-Filter |
-| `output` | `OutputConfig` | Ausgabeformat |
-| `window` | `WindowConfig \| None` | Zeitfenster (Standard 40 ms) |
+| `name` | `str` | Camera name |
+| `model` | `CameraModel` | Model (`config.model.id` = `"SE1-S4"`) |
+| `serial` | `str \| None` | Serial number |
+| `settings` | `neuromorphic_drivers` `Configuration` | Hardware settings (dataclass of the model) |
+| `filter` | `FilterConfig` | Software filters |
+| `output` | `OutputConfig` | Output format |
+| `window` | `WindowConfig \| None` | Time windows (40 ms by default) |
 
-| Methode | Bedeutung |
+| Method | Description |
 |---|---|
-| `from_dict(data)` / `from_json(text)` | Aus Dictionary / JSON-Text, mit Prüfung aller Werte (`ValueError`) |
-| `to_dict()` / `to_json(indent=4)` | Als Dictionary / JSON-Text |
-| `copy(**changes)` | Kopie mit Änderungen, z. B. `config.copy(name="right", serial="05110636")` |
+| `from_dict(data)` / `from_json(text)` | From a dictionary / JSON text, all values are validated (`ValueError`) |
+| `to_dict()` / `to_json(indent=4)` | As a dictionary / JSON text |
+| `copy(**changes)` | Copy with changes, for instance `config.copy(name="right", serial="05110636")` |
 
-### Dateien
+### Files
 
-| Funktion | Bedeutung |
+| Function | Description |
 |---|---|
-| `load_configs(path) -> list[CameraConfig]` | Datei mit einer Kamera, einer Liste oder `{"cameras": [...]}` laden |
-| `load_config(path, name=None) -> CameraConfig` | Eine Kamera laden, bei mehreren über `name` |
-| `save_configs(path, configs)` | Eine `CameraConfig` (als Objekt) oder mehrere (als `{"cameras": [...]}`) speichern |
+| `load_configs(path) -> list[CameraConfig]` | Loads a file with one camera, a list or `{"cameras": [...]}` |
+| `load_config(path, name=None) -> CameraConfig` | Loads one camera, selected by `name` if the file has several |
+| `save_configs(path, configs)` | Saves one `CameraConfig` (as an object) or several (as `{"cameras": [...]}`) |
 
 ---
 
-## Kameras öffnen
+## Opening cameras
 
 ### `open_camera(config=None, *, path=None, name=None, iterator_timeout=0.02) -> EventCamera`
 
-Öffnet eine Kamera aus einer `CameraConfig`, einem Dictionary, einem JSON-Text oder einer Datei.
+Opens a camera from a `CameraConfig`, a dictionary, a JSON string or a file.
 
 ```python
 camera = opennve.open_camera({"model": "SE1-S4", "serial": "05110634"})
 camera = opennve.open_camera(path="cameras.json", name="left")
 
 with opennve.open_camera(path="cameras.json", name="left") as camera:
-    ...  # wird am Ende automatisch geschlossen
+    ...  # closed automatically at the end
 ```
 
-`iterator_timeout` (Sekunden) ist die maximale Wartezeit beim Lesen. Danach liefert `read()` `None`, statt zu blockieren.
+`iterator_timeout` (seconds) is the maximum waiting time when reading. After that, `read()` returns `None` instead of blocking.
 
 ### `open_cameras(configs, *, iterator_timeout=0.02, secondary_start_delay=1.0) -> dict[str, EventCamera]`
 
-Öffnet mehrere Kameras und gibt `{name: camera}` zurück. Kameras mit `"clock": "external"` werden zuerst geöffnet, dann nach `secondary_start_delay` Sekunden die übrigen. Schlägt eine Kamera fehl, werden die bereits geöffneten wieder geschlossen. Siehe [Mehrere Kameras](mehrere-kameras.md).
+Opens several cameras and returns `{name: camera}`. Cameras with `"clock": "external"` are opened first, the others after `secondary_start_delay` seconds. If one camera fails, the cameras opened so far are closed. See [Multiple cameras](multiple-cameras.md).
 
 ---
 
@@ -136,76 +136,76 @@ camera = opennve.EventCamera(model="SE1-S4", serial="05110634", name="left",
 camera = opennve.EventCamera.from_config(config)
 ```
 
-Die Kamera wird beim Erzeugen geöffnet. Eine Kamera darf nur von **einem** Thread gleichzeitig gelesen werden.
+The camera is opened when the object is created. A camera must only be read by **one** thread at a time.
 
-Kurzformen mit festem Modell: `SE1S4Driver(serial=None, **kwargs)`, `EVK4Driver(...)`, `EVK3HDDriver(...)`.
+Shortcuts with a fixed model: `SE1S4Driver(serial=None, **kwargs)`, `EVK4Driver(...)`, `EVK3HDDriver(...)`.
 
-### Eigenschaften
+### Properties
 
-| Eigenschaft | Bedeutung |
+| Property | Description |
 |---|---|
-| `name` | Name aus der Konfiguration |
-| `model` | Modell, z. B. `"SE1-S4"` |
-| `serial` | Seriennummer der geöffneten Kamera |
-| `resolution` | `(Breite, Höhe)`, z. B. `(1280, 720)` |
-| `config` | Aktuelle `CameraConfig`. Die Seriennummer wird beim Öffnen eingetragen |
-| `configuration` | Aktuelle Hardware-Einstellungen (`config.settings`) |
-| `is_open` | `True`, solange die Kamera geöffnet ist |
-| `device` | Das zugrunde liegende `neuromorphic_drivers`-Gerät (für Spezialfälle) |
+| `name` | Name from the configuration |
+| `model` | Model, for instance `"SE1-S4"` |
+| `serial` | Serial number of the open camera |
+| `resolution` | `(width, height)`, for instance `(1280, 720)` |
+| `config` | Current `CameraConfig` (the serial number is filled in when the camera is opened) |
+| `configuration` | Current hardware settings (`config.settings`) |
+| `is_open` | `True` while the camera is open |
+| `device` | The underlying `neuromorphic_drivers` device (for special cases) |
 
-### Lesen
+### Reading
 
-| Methode | Bedeutung |
+| Method | Description |
 |---|---|
-| `events()` | Generator: liefert fortlaufend `CameraPacket` (gefiltert). Zeitüberschreitungen werden übersprungen |
-| `read()` | Ein Paket lesen: `CameraPacket` oder `None` bei Zeitüberschreitung |
-| `windows(duration_ms=None)` | Generator: liefert fortlaufend fertige `EventWindow` (Standard aus `window`, sonst 40 ms) |
-| `read_windows(duration_ms=None)` | Ein Paket lesen, die dadurch fertig gewordenen Fenster zurückgeben (oft `[]`) |
-| `packets()` / `read_packet()` | Ungefilterte Rohdaten `(status, packet)` von `neuromorphic_drivers` |
+| `events()` | Generator: yields `CameraPacket` objects (filtered). Timeouts are skipped |
+| `read()` | Reads one packet: `CameraPacket`, or `None` on timeout |
+| `windows(duration_ms=None)` | Generator: yields complete `EventWindow` objects (duration from `window`, 40 ms by default) |
+| `read_windows(duration_ms=None)` | Reads one packet and returns the windows it completed (often `[]`) |
+| `packets()` / `read_packet()` | Unfiltered raw data `(status, packet)` from `neuromorphic_drivers` |
 
 ### Information
 
-| Methode | Bedeutung |
+| Method | Description |
 |---|---|
-| `info()` | Konfiguration, Auflösung und erlaubte Bias-Bereiche als Dictionary |
-| `biases_bounds()` | `{"diff_on": {"minimum": -80, "maximum": 145}, ...}` oder `None` |
+| `info()` | Configuration, resolution and allowed bias ranges as a dictionary |
+| `biases_bounds()` | `{"diff_on": {"minimum": -80, "maximum": 145}, ...}` or `None` |
 
-### Ändern im laufenden Betrieb
+### Changing settings while running
 
-| Methode | Bedeutung |
+| Method | Description |
 |---|---|
-| `update_configuration(settings)` | Hardware-Einstellungen ändern. Dictionary (nur die angegebenen Felder ändern sich) oder `Configuration` des Modells |
-| `update_filter(filter)` | Software-Filter ersetzen (`FilterConfig` oder Dictionary) |
-| `update_output(output)` | Ausgabeformat ersetzen, z. B. `{"fields": ["t", "x", "y"]}` |
-| `update_window(window)` | Fensterlänge ändern, z. B. `{"duration_ms": 20}`, oder `None`. Das laufende Fenster beginnt neu |
-| `apply_config(config)` | Alles auf einmal (Einstellungen, Filter, Ausgabe, Fenster, Name). Modell und Seriennummer müssen passen |
+| `update_configuration(settings)` | Changes the hardware settings. A dictionary (only the given fields change) or the model's `Configuration` |
+| `update_filter(filter)` | Replaces the software filters (`FilterConfig` or dictionary) |
+| `update_output(output)` | Replaces the output format, for instance `{"fields": ["t", "x", "y"]}` |
+| `update_window(window)` | Changes the window duration, for instance `{"duration_ms": 20}`, or `None`. The current window restarts |
+| `apply_config(config)` | Everything at once (settings, filter, output, window, name). Model and serial number must match |
 
 ```python
 camera.update_configuration({"biases": {"diff_on": 30, "diff_off": 30}})
 camera.update_filter({"background_activity": {"enabled": True, "time_us": 2000}})
 ```
 
-### Schließen
+### Closing
 
-`close()` oder `with`-Block. Danach ist `is_open` `False`.
+`close()` or a `with` block. Afterwards, `is_open` is `False`.
 
 ---
 
 ## CameraPacket
 
-Ein Paket gefilterter Events einer Kamera, von `camera.events()` oder `camera.read()`.
+A packet of filtered events from one camera, returned by `camera.events()` or `camera.read()`.
 
-| Attribut / Methode | Bedeutung |
+| Attribute / method | Description |
 |---|---|
-| `camera` | Kameraname (einmal pro Paket) |
-| `events` | Events im eingestellten Ausgabeformat: NumPy-Array mit den Feldern aus `output.fields`, z. B. `x, y, p, t` |
-| `rows()` | Events als Liste von Tupeln: `[(412, 233, 1, 1003), ...]` |
-| `to_csv(header=False, delimiter=",", camera=False)` | Events als CSV-Text. `camera=True` schreibt `# camera: <name>` als erste Zeile |
-| `polarity_events` | Gefilterte Events im Originalformat (`t, x, y, on`) oder `None` |
-| `trigger_events` | Trigger-Events (externer Eingang) oder `None` |
-| `raw_event_count` | Anzahl Events **vor** dem Filter |
-| `status` | Status von `neuromorphic_drivers`, z. B. `status.ring.backlog` (Rückstand) und `status.ring.current_t` (Kamerazeit) |
-| `packet` | Das ursprüngliche Paket von `neuromorphic_drivers` |
+| `camera` | Camera name (once per packet) |
+| `events` | Events in the configured output format: NumPy array with the fields of `output.fields`, for instance `x, y, p, t` |
+| `rows()` | Events as a list of tuples: `[(412, 233, 1, 1003), ...]` |
+| `to_csv(header=False, delimiter=",", camera=False)` | Events as CSV text. `camera=True` writes `# camera: <name>` as the first line |
+| `polarity_events` | Filtered events in the original format (`t, x, y, on`), or `None` |
+| `trigger_events` | Trigger events (external input), or `None` |
+| `raw_event_count` | Number of events **before** the filter |
+| `status` | `neuromorphic_drivers` status, for instance `status.ring.backlog` (backlog) and `status.ring.current_t` (camera time) |
+| `packet` | The original `neuromorphic_drivers` packet |
 
 ```python
 for packet in camera.events():
@@ -214,44 +214,44 @@ for packet in camera.events():
     print(packet.camera, len(events), events["t"][-1] if len(events) else None)
 ```
 
-`rows()` und `to_csv()` erzeugen ein Python-Objekt pro Event. Für hohe Event-Raten besser direkt mit dem NumPy-Array `events` arbeiten.
+`rows()` and `to_csv()` create one Python object per event. For high event rates, work directly with the NumPy array `events`.
 
 ---
 
 ## EventWindow
 
-Die Events eines Zeitfensters, von `camera.windows()` oder `camera.read_windows()`. Siehe [Zeitfenster und Frames](zeitfenster.md).
+The events of one time window, returned by `camera.windows()` or `camera.read_windows()`. See [Time windows and frames](time-windows.md).
 
-| Attribut / Methode | Bedeutung |
+| Attribute / method | Description |
 |---|---|
-| `camera` | Kameraname |
-| `start_t`, `end_t` | Fenstergrenzen in µs Kamerazeit (`start_t` gehört dazu, `end_t` nicht) |
-| `duration_ms` | Fensterlänge in ms |
-| `width`, `height` | Sensorgröße |
-| `len(window)` | Anzahl Events |
-| `events` | Events im Ausgabeformat (wie `CameraPacket.events`) |
-| `polarity_events` | Events im Originalformat (`t, x, y, on`) |
-| `rows()`, `to_csv(...)` | Wie bei `CameraPacket` |
-| `to_frame(mode="count")` | Bild (Höhe × Breite) aus den Events: `count`, `polarity`, `binary` oder `color` |
+| `camera` | Camera name |
+| `start_t`, `end_t` | Window boundaries in µs of camera time (`start_t` included, `end_t` excluded) |
+| `duration_ms` | Window duration in ms |
+| `width`, `height` | Sensor size |
+| `len(window)` | Number of events |
+| `events` | Events in the output format (as `CameraPacket.events`) |
+| `polarity_events` | Events in the original format (`t, x, y, on`) |
+| `rows()`, `to_csv(...)` | As for `CameraPacket` |
+| `to_frame(mode="count")` | Image (height × width) built from the events: `count`, `polarity`, `binary` or `color` |
 
 ---
 
-## Filter, Ausgabe, Fenster
+## Filter, output, window
 
-| Klasse | Felder | Bedeutung |
+| Class | Fields | Description |
 |---|---|---|
-| `FilterConfig` | `polarity`, `background_activity` | Software-Filter. `from_dict`, `to_dict`, `is_active` |
-| `BackgroundActivityConfig` | `enabled`, `time_us`, `min_neighbors` | Rauschfilter-Einstellungen |
-| `OutputConfig` | `fields` | Ausgabeformat. `format(events)` wandelt `t, x, y, on` in das Ausgabeformat um, `dtype()` liefert den NumPy-Typ |
-| `WindowConfig` | `duration_ms` | Fensterlänge (Standard 40). `duration_us` in Mikrosekunden |
+| `FilterConfig` | `polarity`, `background_activity` | Software filters. `from_dict`, `to_dict`, `is_active` |
+| `BackgroundActivityConfig` | `enabled`, `time_us`, `min_neighbors` | Noise filter settings |
+| `OutputConfig` | `fields` | Output format. `format(events)` converts `t, x, y, on` to the output format, `dtype()` returns the NumPy type |
+| `WindowConfig` | `duration_ms` | Window duration (40 by default). `duration_us` in microseconds |
 
-Für eigene Verarbeitungsketten ohne `EventCamera`:
+For custom processing pipelines without `EventCamera`:
 
-| Klasse | Bedeutung |
+| Class | Description |
 |---|---|
-| `EventFilter(config, width, height)` | Wendet eine `FilterConfig` an: `filtered = event_filter(events)` |
-| `BackgroundActivityFilter(width, height, time_us, min_neighbors=1)` | Nur der Rauschfilter |
-| `WindowAccumulator(duration_us, camera, width, height, output_config=None)` | Teilt Events in Fenster: `push(events, current_t=None) -> list[EventWindow]`, `reset()` |
+| `EventFilter(config, width, height)` | Applies a `FilterConfig`: `filtered = event_filter(events)` |
+| `BackgroundActivityFilter(width, height, time_us, min_neighbors=1)` | Only the noise filter |
+| `WindowAccumulator(duration_us, camera, width, height, output_config=None)` | Splits events into windows: `push(events, current_t=None) -> list[EventWindow]`, `reset()` |
 
 ```python
 accumulator = opennve.WindowAccumulator(40_000, "left", 1280, 720)
@@ -262,34 +262,34 @@ for packet in camera.events():
 
 ---
 
-## Modelle
+## Models
 
-| Name | Bedeutung |
+| Name | Description |
 |---|---|
-| `MODELS` | Alle unterstützten Modelle (`CameraModel`) |
-| `get_model(name) -> CameraModel` | Modell aus Kurzname (`"SE1-S4"`), Gerätename oder Modulname. `ValueError`, wenn unbekannt |
-| `CameraModel.id` | Kurzname, z. B. `"SE1-S4"` |
-| `CameraModel.name` | Gerätename, z. B. `"SENSING SE1-S4-USB"` |
-| `CameraModel.module` | `neuromorphic_drivers`-Modul, z. B. `nd.sensing_se1_s4` |
-| `CameraModel.configuration_type` | Dataclass der Hardware-Einstellungen |
+| `MODELS` | All supported models (`CameraModel`) |
+| `get_model(name) -> CameraModel` | Model from a short name (`"SE1-S4"`), device name or module name. `ValueError` if unknown |
+| `CameraModel.id` | Short name, for instance `"SE1-S4"` |
+| `CameraModel.name` | Device name, for instance `"SENSING SE1-S4-USB"` |
+| `CameraModel.module` | `neuromorphic_drivers` module, for instance `nd.sensing_se1_s4` |
+| `CameraModel.configuration_type` | Dataclass of the hardware settings |
 
 ---
 
-## Hilfsfunktionen
+## Helper functions
 
-| Funktion | Bedeutung |
+| Function | Description |
 |---|---|
-| `to_rows(events)` | Strukturiertes NumPy-Array → Liste von Tupeln |
-| `to_csv(events, header=False, delimiter=",", camera=None)` | Strukturiertes NumPy-Array → CSV-Text |
-| `settings_from_dict(model, data)` | JSON-Einstellungen → `Configuration` des Modells |
-| `settings_to_dict(settings)` | `Configuration` → JSON-Einstellungen |
-| `__version__` | openNVE-Version |
-| `NEUROMORPHIC_DRIVERS_VERSION` | Version des eingebetteten Treibers, z. B. `"0.19.2"` |
+| `to_rows(events)` | Structured NumPy array → list of tuples |
+| `to_csv(events, header=False, delimiter=",", camera=None)` | Structured NumPy array → CSV text |
+| `settings_from_dict(model, data)` | JSON settings → the model's `Configuration` |
+| `settings_to_dict(settings)` | `Configuration` → JSON settings |
+| `__version__` | openNVE version |
+| `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded driver, for instance `"0.19.2"` |
 
-## Fehler
+## Errors
 
-| Ausnahme | Wann |
+| Exception | When |
 |---|---|
-| `ValueError` | Ungültige Konfiguration (die Meldung nennt das Feld), unbekanntes Modell, Konfiguration passt nicht zur Kamera |
-| `TypeError` | `Configuration` eines anderen Modells übergeben |
-| `RuntimeError` | Kamera geschlossen, nicht gefunden oder USB-Fehler (von `neuromorphic_drivers`) |
+| `ValueError` | Invalid configuration (the message names the field), unknown model, configuration does not match the camera |
+| `TypeError` | `Configuration` of another model passed |
+| `RuntimeError` | Camera closed, not found, or USB error (from `neuromorphic_drivers`) |
