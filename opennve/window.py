@@ -19,6 +19,7 @@ import typing
 
 import numpy as np
 
+from .frames import Frame, FrameConfig, FrameEngine
 from .output import OutputConfig, to_csv, to_rows
 
 FRAME_MODES = ("count", "polarity", "binary", "color")
@@ -82,6 +83,20 @@ class EventWindow:
     height: int
     polarity_events: np.ndarray
     output_config: OutputConfig = dataclasses.field(default_factory=OutputConfig, repr=False)
+    frame_config: FrameConfig = dataclasses.field(default_factory=FrameConfig, repr=False)
+
+    def frame(self, config: typing.Union[FrameConfig, dict, None] = None, mode: typing.Optional[str] = None) -> Frame:
+        """Builds the frame (and tiles) of this window with the frame engine.
+
+        config: FrameConfig or dict, default: the "frame" section of the camera configuration.
+        mode: overrides the mode ("time_surface", "binary" or "count").
+        Returns a Frame: frame.data (height x width x 2, float32), frame.tiles, frame.events.
+        """
+        if config is None:
+            config = self.frame_config
+        elif isinstance(config, dict):
+            config = FrameConfig.from_dict(config)
+        return FrameEngine.from_config(config, self.width, self.height).build_window(self, mode=mode)
 
     @property
     def duration_ms(self) -> float:
@@ -144,8 +159,10 @@ class WindowAccumulator:
         width: int,
         height: int,
         output_config: typing.Optional[OutputConfig] = None,
+        frame_config: typing.Optional[FrameConfig] = None,
     ):
         self.duration_us = duration_us
+        self.frame_config = frame_config or FrameConfig()
         self.camera = camera
         self.width = width
         self.height = height
@@ -172,6 +189,7 @@ class WindowAccumulator:
             height=self.height,
             polarity_events=events,
             output_config=self.output_config,
+            frame_config=self.frame_config,
         )
         self._chunks = []
         self._start_t += self.duration_us

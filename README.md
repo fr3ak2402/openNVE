@@ -2,12 +2,13 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [Troubleshooting](docs/troubleshooting.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [Troubleshooting](docs/troubleshooting.md)
 
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
 - Open one or several cameras from that configuration (with clock synchronization)
 - Read filtered events, or collect them in time windows (default 40 ms) to build frames
+- Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px)
 - Read `.raw` recordings (EVT 2.0, 2.1, 3.0) with the same interface as a live camera
 
 Supported models: SENSING SE1-S4-USB, Prophesee EVK4, EVK3 HD, EVK1 Gen4, iniVation DAVIS 346, DVXplorer, CenturyArks VGA, Lucid Triton (all devices of [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers)).
@@ -141,6 +142,7 @@ python examples/list_cameras.py
 python examples/viewer.py examples/cameras.json   # Q: exit, F: filter on/off
 python examples/frames.py examples/cameras.json left   # one frame per time window, M: frame mode
 python examples/raw_player.py recording.raw             # play a .raw recording as frames
+python examples/tiles.py examples/cameras.json left    # frames and tiles from the frame engine
 ```
 
 ## Wheels

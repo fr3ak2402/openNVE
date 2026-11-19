@@ -31,6 +31,15 @@
             },
             "window": {
                 "duration_ms": 40
+            },
+            "frame": {
+                "width": 1280,
+                "height": 720,
+                "mode": "time_surface",
+                "tiles": {
+                    "size": 80,
+                    "min_events": 1
+                }
             }
         },
         {

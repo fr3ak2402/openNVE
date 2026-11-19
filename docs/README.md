@@ -9,6 +9,7 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Configuration (JSON)](configuration.md) | All fields of the camera configuration: hardware, filters, output format, time windows |
 | [Python API](api.md) | Reference of all functions, classes and methods |
 | [Time windows and frames](time-windows.md) | Collecting events in windows (40 ms by default) and building images |
+| [Frames and tiles](frames.md) | Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px) |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
 | [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |
 | [Command line](cli.md) | `opennve list`, `template`, `check`, `models` |
@@ -20,18 +21,19 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 ```text
            ┌────────────────────────────────────────────────────────────┐
 JSON  ───► │ CameraConfig: name, model, serial, settings, filter,       │
-           │               output, window                               │
+           │               output, window, frame                        │
            └──────────────────────────┬─────────────────────────────────┘
                                       ▼
 Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in the format x, y, p, t)
- (USB)     (neuromorphic_drivers)     └──► EventWindow (40 ms) ──► to_frame()
+ (USB)     (neuromorphic_drivers)     └──► EventWindow (40 ms) ──► Frame (tensor) ──► Tiles (80 × 80)
+.raw  ───► RawReader ─────┘
 ```
 
 - **Find cameras:** `opennve.list_cameras()`
 - **Configure:** one JSON file per setup, with one entry per camera
 - **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
 - **Recordings:** `opennve.open_raw("recording.raw")` reads `.raw` files with the same interface
-- **Frames:** `window.to_frame("count" | "polarity" | "binary" | "color")`
+- **Frames:** `camera.frames()` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
 
 ## Supported cameras
 

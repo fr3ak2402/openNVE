@@ -72,6 +72,7 @@ python examples/list_cameras.py                         # cameras and ready-to-u
 python examples/viewer.py examples/cameras.json          # live view of all cameras, F = filter on/off
 python examples/frames.py examples/cameras.json left     # one frame per time window, M = frame mode
 python examples/raw_player.py recording.raw              # play a .raw recording as frames
+python examples/tiles.py examples/cameras.json left      # frames and 80 x 80 tiles from the frame engine
 ```
 
 Continue with the [configuration](configuration.md) or the [Python API](api.md).

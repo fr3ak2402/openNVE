@@ -1,0 +1,146 @@
+"""Tests for the frame engine (frames and tiles)."""
+
+import numpy as np
+import pytest
+
+import opennve
+
+EVENT_DTYPE = np.dtype([("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("on", "?")])
+
+
+def _events(points):
+    events = np.zeros(len(points), dtype=EVENT_DTYPE)
+    for index, point in enumerate(points):
+        events[index] = point
+    return events
+
+
+def test_frame_config():
+    config = opennve.CameraConfig.from_dict(
+        {"model": "SE1-S4", "frame": {"width": 1280, "height": 720, "mode": "binary", "tiles": {"size": 80}}}
+    )
+    assert config.frame.tiles.size == 80 and config.frame.tiles.min_events == 1
+    assert opennve.CameraConfig.from_dict(config.to_dict()) == config
+    assert opennve.CameraConfig(model="SE1-S4").frame == opennve.FrameConfig()  # sensor size, time surface, no tiles
+    assert opennve.FrameConfig.from_dict({"tiles": 64}).tiles.size == 64
+    for frame, message in (
+        ({"mode": "gray"}, "frame.mode"),
+        ({"width": 0}, "frame.width"),
+        ({"tiles": {"size": -1}}, "frame.tiles.size"),
+        ({"tiles": {"size": 80, "min_events": -1}}, "min_events"),
+        ({"tiles": {"width": 80}}, "unknown frame.tiles"),
+        ({"resolution": "1280x720"}, "unknown frame setting"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            opennve.CameraConfig.from_dict({"model": "SE1-S4", "frame": frame})
+
+
+def test_time_surface():
+    engine = opennve.FrameEngine(4, 3)
+    events = _events([(1000, 1, 2, True), (1500, 1, 2, True), (1250, 1, 2, False), (1000, 3, 0, False), (2000, 0, 0, True)])
+    frame = engine.build(events, 1000, 2000, camera="left")
+    assert frame.data.shape == (3, 4, 2) and frame.data.dtype == np.float32
+    assert frame.data[2, 1, 1] == pytest.approx(0.5)  # latest ON event at 1500
+    assert frame.data[2, 1, 0] == pytest.approx(0.25)  # OFF event at 1250
+    assert frame.data[0, 3, 0] == 0.0  # event at start_t: value 0
+    assert frame.event_count == 4  # the event at end_t is outside the window
+    assert frame.tiles == [] and (frame.width, frame.height) == (4, 3)
+
+
+def test_binary_and_count():
+    events = _events([(0, 1, 1, True), (1, 1, 1, True), (2, 0, 0, False)])
+    binary = opennve.FrameEngine(2, 2, mode="binary").build(events, 0, 10).data
+    count = opennve.FrameEngine(2, 2, mode="count").build(events, 0, 10).data
+    assert binary[1, 1, 1] == 1.0 and binary[0, 0, 0] == 1.0 and binary.sum() == 2
+    assert count[1, 1, 1] == 2.0 and count.sum() == 3
+
+
+def test_tiles():
+    engine = opennve.FrameEngine(1280, 720, tile_size=64, min_events=2)
+    assert (engine.tile_rows, engine.tile_cols) == (12, 20)  # 720 / 64 = 11.25 -> 12 rows
+    events = _events([(0, 0, 0, True), (1, 63, 63, True), (2, 1279, 719, False), (3, 1270, 710, True), (4, 700, 300, True)])
+    frame = engine.build(events, 0, 10)
+    assert [(t.id, t.row, t.col, t.event_count) for t in frame.tiles] == [(1, 1, 1, 2), (240, 12, 20, 2)]
+    edge = frame.tile(240)
+    assert (edge.x, edge.y, edge.width, edge.height) == (1216, 704, 64, 16)
+    assert edge.data.shape == (16, 64, 2)
+    assert frame.tile(5) is None
+    assert frame.tile_dicts()[0].keys() == {"tile_id", "row", "col", "tile_data"}
+    all_tiles = opennve.FrameEngine(1280, 720, tile_size=80, min_events=0).build(events, 0, 10).tiles
+    assert len(all_tiles) == 16 * 9 and all_tiles[-1].id == 144
+
+
+def test_events_outside_the_frame_are_ignored():
+    engine = opennve.FrameEngine(10, 10, tile_size=5)
+    frame = engine.build(_events([(0, 9, 9, True), (0, 10, 2, True), (0, 2, 12, False)]), 0, 1)
+    assert frame.event_count == 1 and [t.id for t in frame.tiles] == [4]
+
+
+def test_original_interface():
+    # Same calls as the original FrameEngine (frame_data with columns x, y, p, t)
+    engine = opennve.FrameEngine(frame_width=160, frame_height=80, frame_tile_size=80)
+    frame_data = {
+        "x": np.array([5, 6, 100]),
+        "y": np.array([5, 5, 40]),
+        "p": np.array([1, 0, 1]),
+        "t": np.array([100, 150, 199]),
+    }
+    tiles = engine.generate_frame(frame_data, threshold=2)
+    assert [(t["tile_id"], t["row"], t["col"]) for t in tiles] == [(1, 1, 1)]  # tile 2 has only 1 event
+    assert tiles[0]["tile_data"][5, 5, 1] == pytest.approx(0.0)  # frame_start = min(t) = 100
+    tiles = engine.generate_frame(frame_data, threshold=2, select_insects_points=False, use_time_surface=False)
+    assert [t["tile_id"] for t in tiles] == [1, 2] and tiles[1]["tile_data"][40, 20, 1] == 1.0
+    surface = opennve.FrameEngine.create_linear_time_surface(frame_data, 160, 80, 100, 200)
+    assert surface.shape == (80, 160, 2) and surface[40, 100, 1] == pytest.approx(0.99)
+    assert engine.generate_frame({"x": [], "y": [], "p": [], "t": []}) == []
+
+
+def test_window_frame_and_image():
+    window = opennve.EventWindow(
+        camera="left",
+        start_t=0,
+        end_t=40_000,
+        width=160,
+        height=80,
+        polarity_events=_events([(20_000, 10, 10, True), (30_000, 90, 50, False)]),
+        frame_config=opennve.FrameConfig(tiles=opennve.TileConfig(size=80)),
+    )
+    frame = window.frame()
+    assert frame.camera == "left" and [t.id for t in frame.tiles] == [1, 2]
+    assert frame.events.dtype.names == ("x", "y", "p", "t") and len(frame.events) == 2
+    assert window.frame({"mode": "binary"}).data[10, 10, 1] == 1.0
+    image = frame.to_image()
+    assert image.shape == (80, 160, 3) and image[10, 10, 1] == 127 and image[50, 90, 2] == 191
+    assert tuple(image[0, 0]) == (255, 255, 255)  # tile border
+
+
+def test_camera_frames(monkeypatch):
+    from test_opennve import FakeDevice  # simulated camera
+    from opennve import camera as camera_module
+
+    monkeypatch.setattr(camera_module.nd, "open", lambda configuration, serial=None, iterator_timeout=None: FakeDevice("05110634", configuration))
+    config = {
+        "name": "left",
+        "model": "SE1-S4",
+        "window": {"duration_ms": 0.01},
+        "frame": {"mode": "binary", "tiles": {"size": 50}},
+    }
+    with opennve.open_camera(config) as camera:
+        frames = list(camera.frames())
+        assert [(f.start_t, f.end_t) for f in frames] == [(0, 10), (10, 20)]
+        assert frames[0].data.shape == (100, 100, 2) and [t.id for t in frames[0].tiles] == [1]
+        camera.update_frame({"width": 50, "height": 50})
+        assert camera.config.frame.width == 50
+
+
+def test_raw_frames(tmp_path):
+    from test_raw import _header, _random_events, encode_evt3
+
+    events = _random_events(10, count=2000, span=120_000)
+    path = tmp_path / "a.raw"
+    path.write_bytes(_header("EVT3;height=720;width=1280") + encode_evt3(events))
+    with opennve.open_raw(path, frame={"tiles": {"size": 80}}) as raw:
+        frames = list(raw.frames())
+    assert [f.start_t for f in frames] == [1_000_000, 1_040_000, 1_080_000]
+    assert sum(f.event_count for f in frames) == 2000
+    assert all(len(f.tiles) > 0 and f.data.shape == (720, 1280, 2) for f in frames)

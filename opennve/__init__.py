@@ -21,6 +21,7 @@ from .config import (
 from .devices import EVK3HDDriver, EVK4Driver, SE1S4Driver
 from .discovery import CameraInfo, list_cameras, list_cameras_json
 from .driver import DriverStatus, driver_status, ensure_driver, install_driver
+from .frames import FRAME_MODES, Frame, FrameConfig, FrameEngine, Tile, TileConfig
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
 from .output import OutputConfig, to_csv, to_rows
@@ -42,6 +43,12 @@ except ImportError:
 __all__ = [
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
+    "FRAME_MODES",
+    "Frame",
+    "FrameConfig",
+    "FrameEngine",
+    "Tile",
+    "TileConfig",
     "RawHeader",
     "RawReader",
     "open_raw",

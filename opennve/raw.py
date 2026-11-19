@@ -26,6 +26,7 @@ import numpy as np
 from .camera import CameraPacket
 from .config import CameraConfig, PathLike, load_config
 from .filters import EventFilter, FilterConfig
+from .frames import Frame, FrameConfig, FrameEngine
 from .output import OutputConfig
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
@@ -436,6 +437,7 @@ class RawReader:
         filter: typing.Union[FilterConfig, dict, None] = None,
         output: typing.Union[OutputConfig, dict, None] = None,
         window: typing.Union[WindowConfig, dict, None, str] = "config",
+        frame: typing.Union[FrameConfig, dict, None] = None,
         format: typing.Optional[str] = None,
         width: typing.Optional[int] = None,
         height: typing.Optional[int] = None,
@@ -448,6 +450,10 @@ class RawReader:
         self.name = name or (config.name if config is not None else None) or self.path.stem
         self.filter_config = _as_filter(filter if filter is not None else (config.filter if config else None))
         self.output_config = _as_output(output if output is not None else (config.output if config else None))
+        if frame is None:
+            frame = config.frame if config is not None else FrameConfig()
+        self.frame_config = FrameConfig.from_dict(frame) if isinstance(frame, dict) else frame
+        self.frame_config.validate()
         if isinstance(window, str) and window == "config":
             self.window_config = config.window if config is not None else WindowConfig()
         else:
@@ -514,6 +520,7 @@ class RawReader:
             "filter": self.filter_config.to_dict(),
             "output": self.output_config.to_dict(),
             "window": None if self.window_config is None else self.window_config.to_dict(),
+            "frame": self.frame_config.to_dict(),
         }
 
     # Reading
@@ -614,9 +621,24 @@ class RawReader:
             duration_us = window.duration_us
         if self._accumulator is None or self._accumulator.duration_us != duration_us:
             self._accumulator = WindowAccumulator(
-                duration_us, self.name, self.header.width, self.header.height, self.output_config
+                duration_us, self.name, self.header.width, self.header.height, self.output_config, self.frame_config
             )
+        self._accumulator.frame_config = self.frame_config
         return self._accumulator
+
+    def read_frames(self, duration_ms: typing.Optional[float] = None) -> typing.Optional[list[Frame]]:
+        """Frames of the windows completed by the next chunk (often []), None at the end of the file."""
+        windows = self.read_windows(duration_ms)
+        if windows is None:
+            return None
+        engine = FrameEngine.from_config(self.frame_config, self.header.width, self.header.height)
+        return [engine.build_window(window) for window in windows]
+
+    def frames(self, duration_ms: typing.Optional[float] = None) -> typing.Iterator[Frame]:
+        """Yields one frame per time window of the file (frame.data, frame.tiles, frame.events)."""
+        engine = FrameEngine.from_config(self.frame_config, self.header.width, self.header.height)
+        for window in self.windows(duration_ms):
+            yield engine.build_window(window)
 
     def read_all(self) -> tuple[np.ndarray, np.ndarray]:
         """Reads the rest of the file at once: (polarity events, trigger events), filtered.
@@ -688,7 +710,7 @@ def open_raw(
     with name) provides the name, filter, output format and window duration, so that the
     file is processed exactly like the live camera.
 
-    Keyword arguments: filter, output, window, format/width/height (for files without
+    Keyword arguments: filter, output, window, frame, format/width/height (for files without
     header), chunk_bytes, speed (1.0 = real-time playback, None = as fast as possible),
     zero_time (timestamps start at 0).
 

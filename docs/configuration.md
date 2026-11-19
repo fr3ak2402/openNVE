@@ -23,6 +23,12 @@ Each camera is described by a JSON object:
     },
     "window": {
         "duration_ms": 40
+    },
+    "frame": {
+        "width": 1280,
+        "height": 720,
+        "mode": "time_surface",
+        "tiles": {"size": 80, "min_events": 1}
     }
 }
 ```
@@ -151,6 +157,16 @@ The **camera name** is not an event field. It is stored once per packet or windo
 - `"window": null` disables time windows. `camera.windows()` then requires `duration_ms` as an argument.
 
 See [Time windows and frames](time-windows.md) for details.
+
+## `frame` – frames and tiles
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `width`, `height` | number or `null` | `null` (sensor size) | Frame size in pixels; events outside are ignored |
+| `mode` | string | `"time_surface"` | `time_surface`, `binary` or `count` |
+| `tiles` | object or `null` | `null` | `{"size": 80, "min_events": 1}`: split each frame into 80 × 80 tiles, skip tiles with fewer than `min_events` events (`0` = all tiles) |
+
+The frames are built from the time windows (`window`) by `camera.frames()`. Details in [Frames and tiles](frames.md).
 
 ## Example: two synchronized cameras
 
