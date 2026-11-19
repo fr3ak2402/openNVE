@@ -54,9 +54,22 @@ with opennve.open_raw("recording.raw") as raw:
 
 Windows work as described in [Time windows and frames](time-windows.md). At the end of the file, the last window is returned as well, even if the recording ends before its end time.
 
+### Frames and tiles
+
+```python
+tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+
+with opennve.open_raw("recording.raw", config_path="cameras.json", name="left") as raw:
+    for frame in raw.frames(tiles80):  # frame configuration, see Frames and tiles
+        for tile in frame.tiles:
+            ...
+```
+
+`raw.frame_sets(opennve.load_frame_configs("frames.json"))` yields one frame per frame configuration and window (`{name: Frame}`). See [Frames and tiles](frames.md).
+
 ### Same settings as the live camera
 
-Pass the camera configuration to process the file with the same name, filter, output format and window duration as the live camera. Hardware settings (`settings`) are ignored, since the events are already recorded.
+Pass the camera configuration to process the file with the same name, filter, output format and window duration as the live camera. Frames are configured separately, so the same frame configuration can be used for both. Hardware settings (`settings`) are ignored, since the events are already recorded.
 
 ```python
 raw = opennve.open_raw("recording.raw", config_path="cameras.json", name="left")
@@ -102,7 +115,7 @@ raw = opennve.open_raw("camera_data.bin", format="EVT3", width=1280, height=720)
 |---|---|---|
 | `config` | `None` | `CameraConfig`, dictionary or JSON string: name, filter, output format and window |
 | `config_path`, `name` | `None` | Load the configuration from a file (by camera name if it has several) |
-| `filter`, `output`, `window` | from `config` | Override single sections (`window=None` disables windows) |
+| `filter`, `output`, `window`, `frame` | from `config` | Override single sections (`window=None` disables windows) |
 | `format`, `width`, `height` | from the header | For files without header (`"EVT3"`, `"EVT2"`, `"EVT21"`) |
 | `speed` | `None` | Playback speed (1.0 = real time), `None` = as fast as possible |
 | `zero_time` | `False` | Shift timestamps so that the recording starts at 0 |
@@ -116,6 +129,8 @@ raw = opennve.open_raw("camera_data.bin", format="EVT3", width=1280, height=720)
 | `read()` | Next packet, or `None` at the end of the file |
 | `windows(duration_ms=None)` | Generator: yields `EventWindow` objects, including the last one |
 | `read_windows(duration_ms=None)` | Windows completed by the next packet (often `[]`), `None` at the end of the file |
+| `frames(config=None, duration_ms=None)` / `read_frames(...)` | Frames and tiles of the windows ([Frames and tiles](frames.md)) |
+| `frame_sets(configs, duration_ms=None)` / `read_frame_sets(...)` | `{name: Frame}` per window, one frame per frame configuration |
 | `read_all()` | Rest of the file at once: `(polarity events, trigger events)` |
 | `info()` | Path, format, resolution, serial number, size, header, settings |
 | `header` | `RawHeader`: `fields`, `format`, `width`, `height`, `endianness`, `data_offset`, `serial` |

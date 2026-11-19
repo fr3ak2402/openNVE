@@ -26,6 +26,7 @@ import numpy as np
 from .camera import CameraPacket
 from .config import CameraConfig, PathLike, load_config
 from .filters import EventFilter, FilterConfig
+from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
 from .output import OutputConfig
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
@@ -617,6 +618,59 @@ class RawReader:
                 duration_us, self.name, self.header.width, self.header.height, self.output_config
             )
         return self._accumulator
+
+    def read_frames(
+        self,
+        config: typing.Union[FrameConfig, dict, str, None] = None,
+        duration_ms: typing.Optional[float] = None,
+    ) -> typing.Optional[list[Frame]]:
+        """Frames of the windows completed by the next chunk (often []), None at the end of the file.
+        config: frame configuration (see frames())."""
+        engine = self._frame_engine(config)
+        windows = self.read_windows(duration_ms)
+        if windows is None:
+            return None
+        return [engine.build_window(window) for window in windows]
+
+    def frames(
+        self,
+        config: typing.Union[FrameConfig, dict, str, None] = None,
+        duration_ms: typing.Optional[float] = None,
+    ) -> typing.Iterator[Frame]:
+        """Yields one frame per time window of the file (frame.data, frame.tiles, frame.events).
+
+        config: frame configuration, for instance opennve.load_frame_config("frames.json", "tiles80"),
+            a FrameConfig, a dict or a JSON string. Default: sensor size, linear time surface, no tiles.
+        """
+        engine = self._frame_engine(config)
+        for window in self.windows(duration_ms):
+            yield engine.build_window(window)
+
+    def read_frame_sets(
+        self, configs, duration_ms: typing.Optional[float] = None
+    ) -> typing.Optional[list[dict[str, Frame]]]:
+        """Like read_frames with several frame configurations: one {name: Frame} per completed window."""
+        engines = self._frame_engines(configs)
+        windows = self.read_windows(duration_ms)
+        if windows is None:
+            return None
+        return [{name: engine.build_window(window) for name, engine in engines.items()} for window in windows]
+
+    def frame_sets(self, configs, duration_ms: typing.Optional[float] = None) -> typing.Iterator[dict[str, Frame]]:
+        """Yields one frame per frame configuration and time window: {name: Frame}.
+        configs: list of frame configurations (for instance load_frame_configs("frames.json"))."""
+        engines = self._frame_engines(configs)
+        for window in self.windows(duration_ms):
+            yield {name: engine.build_window(window) for name, engine in engines.items()}
+
+    def _frame_engine(self, config) -> FrameEngine:
+        return FrameEngine.from_config(as_frame_config(config), self.header.width, self.header.height)
+
+    def _frame_engines(self, configs) -> dict[str, FrameEngine]:
+        return {
+            config.name: FrameEngine.from_config(config, self.header.width, self.header.height)
+            for config in as_frame_configs(configs)
+        }
 
     def read_all(self) -> tuple[np.ndarray, np.ndarray]:
         """Reads the rest of the file at once: (polarity events, trigger events), filtered.

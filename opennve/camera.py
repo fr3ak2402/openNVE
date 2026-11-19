@@ -11,6 +11,7 @@ import numpy as np
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
 from .driver import MODEL_USB_IDS, ensure_driver
 from .filters import EventFilter, FilterConfig
+from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
 from .output import OutputConfig, to_csv, to_rows
 from .window import EventWindow, WindowAccumulator, WindowConfig
 from .models import get_model
@@ -309,6 +310,67 @@ class EventCamera:
             except StopIteration:
                 return
             yield from windows
+
+    # Frames
+
+    def read_frames(
+        self, config: FrameConfig | dict | str | None = None, duration_ms: float | None = None
+    ) -> list[Frame]:
+        """Reads one packet and returns the frames of the time windows completed by it (often none).
+
+        config: frame configuration (see frames()).
+        """
+        engine = self._frame_engine(config)
+        return [engine.build_window(window) for window in self.read_windows(duration_ms)]
+
+    def frames(
+        self, config: FrameConfig | dict | str | None = None, duration_ms: float | None = None
+    ) -> Iterator[Frame]:
+        """Continuously yield one frame per time window (40 ms by default).
+
+        config: frame configuration, for instance opennve.load_frame_config("frames.json", "tiles80"),
+            a FrameConfig, a dict or a JSON string. Default: sensor size, linear time surface, no tiles.
+        Each frame has frame.data, frame.tiles and frame.events (the events of the window).
+
+        Example:
+            tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+            for frame in camera.frames(tiles80):
+                for tile in frame.tiles:
+                    agent.process(tile.id, tile.data)
+        """
+        engine = self._frame_engine(config)
+        for window in self.windows(duration_ms):
+            yield engine.build_window(window)
+
+    def read_frame_sets(self, configs, duration_ms: float | None = None) -> list[dict[str, Frame]]:
+        """Like read_frames with several frame configurations: one {name: Frame} per completed window."""
+        engines = self._frame_engines(configs)
+        return [
+            {name: engine.build_window(window) for name, engine in engines.items()}
+            for window in self.read_windows(duration_ms)
+        ]
+
+    def frame_sets(self, configs, duration_ms: float | None = None) -> Iterator[dict[str, Frame]]:
+        """Continuously yield one frame per frame configuration and time window: {name: Frame}.
+
+        configs: list of frame configurations (for instance opennve.load_frame_configs("frames.json"))
+            or a dict {name: configuration}. All frames of one set come from the same time window.
+
+        Example:
+            for frames in camera.frame_sets(opennve.load_frame_configs("frames.json")):
+                full, tiles = frames["full"], frames["tiles80"]
+        """
+        engines = self._frame_engines(configs)
+        for window in self.windows(duration_ms):
+            yield {name: engine.build_window(window) for name, engine in engines.items()}
+
+    def _frame_engine(self, config) -> FrameEngine:
+        width, height = self.resolution
+        return FrameEngine.from_config(as_frame_config(config), width, height)
+
+    def _frame_engines(self, configs) -> dict[str, FrameEngine]:
+        width, height = self.resolution
+        return {config.name: FrameEngine.from_config(config, width, height) for config in as_frame_configs(configs)}
 
     def update_window(self, window: WindowConfig | dict | None) -> None:
         """Replace the window duration, for instance {"duration_ms": 20} (restarts the current window)."""

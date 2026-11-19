@@ -35,6 +35,11 @@ with opennve.open_camera(path="cameras.json", name="left") as camera:
 
 ## Building frames
 
+There are two ways to build frames from a window:
+
+- `window.to_frame(mode)`: simple images, mainly for display (below).
+- `window.frame()` / `camera.frames()`: the **frame engine**, with time surface, binary and count tensors (two polarity channels) and tiles, configured with separate, named frame configurations (`frames.json`). See [Frames and tiles](frames.md).
+
 `window.to_frame(mode)` returns a NumPy array of size height × width:
 
 | Mode | Data type | Contents |

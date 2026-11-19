@@ -22,10 +22,14 @@ Download the wheel for your platform from the [releases](https://github.com/fr3a
 
 ```sh
 pip uninstall -y neuromorphic_drivers     # only if installed separately (see below)
-pip install opennve-0.13.0-cp314-cp314-win_amd64.whl
+pip install opennve-0.25.9-cp314-cp314-win_amd64.whl
 ```
 
-pip installs numpy and OpenCV automatically.
+pip installs numpy and OpenCV automatically. Reading `.raw` files and building frames only needs numpy. To pass events as pandas DataFrames (for instance to `FrameEngine.generate_frame`), install the optional extra:
+
+```sh
+pip install "opennve-0.25.9-cp314-cp314-win_amd64.whl[pandas]"
+```
 
 > **Important:** The wheel contains `neuromorphic_drivers` 0.19.2 with the SE1-S4 driver. A separately installed `neuromorphic_drivers` would overwrite it (and vice versa), so uninstall it first.
 

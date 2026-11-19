@@ -7,6 +7,11 @@
     with opennve.open_camera(config) as camera:
         for packet in camera.events():
             print(packet.events)  # structured array in the configured output format (x, y, p, t)
+
+    frame_configs = opennve.load_frame_configs("frames.json")  # named frame configurations
+    with opennve.open_camera(config) as camera:
+        for frame in camera.frames(frame_configs[0]):  # one frame per time window (40 ms)
+            print(frame.name, frame.data.shape, len(frame.tiles))
 """
 
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
@@ -21,13 +26,30 @@ from .config import (
 from .devices import EVK3HDDriver, EVK4Driver, SE1S4Driver
 from .discovery import CameraInfo, list_cameras, list_cameras_json
 from .driver import DriverStatus, driver_status, ensure_driver, install_driver
+from .frames import (
+    FRAME_MODES,
+    TIME_SURFACE_DECAYS,
+    Frame,
+    FrameConfig,
+    FrameEngine,
+    Tile,
+    TileConfig,
+    TimeSurfaceConfig,
+    as_frame_config,
+    as_frame_configs,
+    load_frame_config,
+    load_frame_configs,
+    save_frame_configs,
+    split_into_tiles,
+    tile_grid,
+)
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
 from .output import OutputConfig, to_csv, to_rows
 from .raw import RawHeader, RawReader, open_raw, read_header, read_raw
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
-__version__ = "0.13.0"
+__version__ = "0.25.9"
 
 try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
     from ._bundle import NEUROMORPHIC_DRIVERS_VERSION
@@ -42,6 +64,21 @@ except ImportError:
 __all__ = [
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
+    "FRAME_MODES",
+    "Frame",
+    "FrameConfig",
+    "FrameEngine",
+    "Tile",
+    "TileConfig",
+    "TimeSurfaceConfig",
+    "TIME_SURFACE_DECAYS",
+    "as_frame_config",
+    "as_frame_configs",
+    "load_frame_config",
+    "load_frame_configs",
+    "save_frame_configs",
+    "split_into_tiles",
+    "tile_grid",
     "RawHeader",
     "RawReader",
     "open_raw",

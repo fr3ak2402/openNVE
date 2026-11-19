@@ -152,6 +152,18 @@ The **camera name** is not an event field. It is stored once per packet or windo
 
 See [Time windows and frames](time-windows.md) for details.
 
+## Frame settings
+
+Frame settings (size, mode, time surface, tiles) are **not** part of the camera configuration. They are kept in separate, named frame configurations, usually in their own file (`frames.json`), so that several frame configurations can be defined and combined with any camera or RAW file:
+
+```python
+tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+for frame in camera.frames(tiles80):
+    ...
+```
+
+See [Frames and tiles](frames.md) for the format. A camera configuration with a `frame` section is rejected with a message pointing there.
+
 ## Example: two synchronized cameras
 
 ```json

@@ -32,8 +32,12 @@ A camera configuration describes one camera:
 - window: duration of the time windows used by EventCamera.windows(), for instance to
   build frames (see opennve.window). Default {"duration_ms": 40}, null disables windows
 
+Frame settings are not part of the camera configuration: they are separate, named frame
+configurations (see opennve.frames and load_frame_configs), passed to camera.frames(config).
+
 A configuration file contains either one camera object, a list of camera objects,
-or {"cameras": [...]}.
+or {"cameras": [...]}. A file with {"cameras": [...], "frames": [...]} is accepted as well,
+the frames are read with load_frame_configs.
 """
 
 from __future__ import annotations
@@ -251,6 +255,12 @@ class CameraConfig:
     def from_dict(cls, data: dict[str, typing.Any]) -> "CameraConfig":
         if not isinstance(data, dict):
             raise ValueError("a camera configuration must be an object")
+        if "frame" in data:
+            raise ValueError(
+                "\"frame\" is not part of the camera configuration: put the frame settings in a frame "
+                "configuration file ({\"frames\": [...]}, see opennve.load_frame_configs) and pass them "
+                "to camera.frames(config)"
+            )
         unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output", "window"}
         if unknown:
             raise ValueError(f"unknown camera setting(s): {', '.join(sorted(unknown))}")

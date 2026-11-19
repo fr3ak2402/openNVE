@@ -19,6 +19,7 @@ import typing
 
 import numpy as np
 
+from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
 from .output import OutputConfig, to_csv, to_rows
 
 FRAME_MODES = ("count", "polarity", "binary", "color")
@@ -82,6 +83,34 @@ class EventWindow:
     height: int
     polarity_events: np.ndarray
     output_config: OutputConfig = dataclasses.field(default_factory=OutputConfig, repr=False)
+
+    def frame(
+        self,
+        config: typing.Union[FrameConfig, dict, str, None] = None,
+        mode: typing.Optional[str] = None,
+        decay: typing.Optional[str] = None,
+    ) -> Frame:
+        """Builds the frame (and tiles) of this window with the frame engine.
+
+        config: frame configuration (FrameConfig, dict or JSON string, for instance from
+            load_frame_config). Default: sensor size, linear time surface, no tiles.
+        mode: overrides the mode ("time_surface", "binary" or "count").
+        decay: overrides the time surface decay ("linear" or "exponential").
+        Returns a Frame: frame.data (height x width x 2, float32), frame.tiles, frame.events.
+        """
+        engine = FrameEngine.from_config(as_frame_config(config), self.width, self.height)
+        return engine.build_window(self, mode=mode, decay=decay)
+
+    def frames(self, configs) -> dict[str, Frame]:
+        """Builds one frame per frame configuration: {name: Frame}.
+
+        configs: list of frame configurations (for instance load_frame_configs("frames.json"))
+            or a dict {name: configuration}.
+        """
+        return {
+            config.name: FrameEngine.from_config(config, self.width, self.height).build_window(self)
+            for config in as_frame_configs(configs)
+        }
 
     @property
     def duration_ms(self) -> float:

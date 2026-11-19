@@ -1,0 +1,48 @@
+{
+    "frames": [
+        {
+            "name": "full",
+            "width": 1280,
+            "height": 720,
+            "mode": "time_surface",
+            "time_surface": {
+                "decay": "linear",
+                "tau_us": 100000
+            },
+            "tiles": null
+        },
+        {
+            "name": "tiles80",
+            "width": 1280,
+            "height": 720,
+            "mode": "time_surface",
+            "time_surface": {
+                "decay": "linear",
+                "tau_us": 100000
+            },
+            "tiles": {
+                "size": 80,
+                "min_events": 1
+            }
+        },
+        {
+            "name": "exponential",
+            "mode": "time_surface",
+            "time_surface": {
+                "decay": "exponential",
+                "tau_us": 20000
+            },
+            "tiles": {
+                "size": 64,
+                "min_events": 5
+            }
+        },
+        {
+            "name": "binary",
+            "width": 640,
+            "height": 360,
+            "mode": "binary",
+            "tiles": null
+        }
+    ]
+}

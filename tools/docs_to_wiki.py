@@ -30,6 +30,7 @@ PAGES = {
     "configuration.md": ("Configuration", "Configuration (JSON)"),
     "api.md": ("Python-API", "Python API"),
     "time-windows.md": ("Time-windows-and-frames", "Time windows and frames"),
+    "frames.md": ("Frames-and-tiles", "Frames and tiles"),
     "multiple-cameras.md": ("Multiple-cameras", "Multiple cameras"),
     "raw-files.md": ("RAW-files", "RAW files"),
     "cli.md": ("Command-line", "Command line"),

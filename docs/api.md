@@ -14,6 +14,7 @@ All names described here are available directly as `opennve.<name>`.
 - [CameraPacket](#camerapacket)
 - [EventWindow](#eventwindow)
 - [Filter, output, window](#filter-output-window)
+- [Frames and tiles](#frames-and-tiles)
 - [RAW files](#raw-files)
 - [Models](#models)
 - [Helper functions](#helper-functions)
@@ -90,6 +91,7 @@ config = opennve.CameraConfig.from_json('{"model": "SE1-S4"}')
 | `filter` | `FilterConfig` | Software filters |
 | `output` | `OutputConfig` | Output format |
 | `window` | `WindowConfig \| None` | Time windows (40 ms by default) |
+| `frame` | `FrameConfig` | Frames and tiles |
 
 | Method | Description |
 |---|---|
@@ -204,6 +206,10 @@ Shortcuts with a fixed model: `SE1S4Driver(serial=None, **kwargs)`, `EVK4Driver(
 | `read()` | Reads one packet: `CameraPacket`, or `None` on timeout |
 | `windows(duration_ms=None)` | Generator: yields complete `EventWindow` objects (duration from `window`, 40 ms by default) |
 | `read_windows(duration_ms=None)` | Reads one packet and returns the windows it completed (often `[]`) |
+| `frames(config=None, duration_ms=None)` | Generator: one `Frame` per time window, built with a frame configuration ([Frames and tiles](frames.md)) |
+| `read_frames(config=None, duration_ms=None)` | Frames completed by the next packet (often `[]`) |
+| `frame_sets(configs, duration_ms=None)` | Generator: `{name: Frame}` per time window, one frame per frame configuration |
+| `read_frame_sets(configs, duration_ms=None)` | Frame sets completed by the next packet (often `[]`) |
 | `packets()` / `read_packet()` | Unfiltered raw data `(status, packet)` from `neuromorphic_drivers` |
 
 ### Information
@@ -276,6 +282,7 @@ The events of one time window, returned by `camera.windows()` or `camera.read_wi
 | `polarity_events` | Events in the original format (`t, x, y, on`) |
 | `rows()`, `to_csv(...)` | As for `CameraPacket` |
 | `to_frame(mode="count")` | Image (height × width) built from the events: `count`, `polarity`, `binary` or `color` |
+| `frame(config=None, mode=None)` | Frame tensor and tiles with the frame engine ([Frames and tiles](frames.md)) |
 
 ---
 
@@ -305,6 +312,46 @@ for packet in camera.events():
 
 ---
 
+## Frames and tiles
+
+The frame engine builds one frame tensor per time window (height × width × 2, float32) and splits it into tiles. Frame configurations are separate from the camera configurations and have names. See [Frames and tiles](frames.md) for the file format, modes, tile layout and the migration from the previous `FrameEngine`.
+
+| Name | Description |
+|---|---|
+| `load_frame_configs(path)` / `load_frame_config(path, name=None)` | Frame configurations from a file (`{"frames": [...]}`) |
+| `save_frame_configs(path, configs)` | Writes frame configurations |
+| `camera.frames(config=None, duration_ms=None)` | Generator: one `Frame` per time window, built with the frame configuration |
+| `camera.read_frames(config=None, duration_ms=None)` | Frames completed by the next packet (often `[]`) |
+| `camera.frame_sets(configs, duration_ms=None)` | Generator: `{name: Frame}` per time window |
+| `window.frame(config=None, mode=None, decay=None)` | Frame of one `EventWindow` |
+| `window.frames(configs)` | `{name: Frame}` of one `EventWindow` |
+| `FrameEngine(width, height, tile_size=None, mode="time_surface", min_events=1)` | `build(events, start_t, end_t)`, `build_window(window)`, `generate_frame(...)` (previous interface) |
+| `Frame` | `name`, `data`, `tiles`, `events`, `event_count`, `start_t`, `end_t`, `split(tile_size, min_events, data)`, `tile(id)`, `tile_dicts()`, `to_image()` |
+| `split_into_tiles(data, tile_size, event_counts=None, min_events=0)` | Splits any array into tiles |
+| `Tile` | `id`, `row`, `col`, `x`, `y`, `width`, `height`, `event_count`, `data` |
+| `FrameConfig`, `TileConfig`, `TimeSurfaceConfig` | Frame (with `name`), tile and time surface settings (`decay`: `linear` / `exponential`, `tau_us`) |
+
+```python
+frame_configs = opennve.load_frame_configs("frames.json")
+tiles80 = opennve.load_frame_config("frames.json", "tiles80")
+
+for frame in camera.frames(tiles80):
+    for tile in frame.tiles:
+        print(tile.id, tile.row, tile.col, tile.event_count, tile.data.shape)
+
+# several frame configurations from the same window
+for frames in camera.frame_sets(frame_configs):
+    print({name: frame.data.shape for name, frame in frames.items()})
+
+# or: whole frame first, tiles later
+for frame in camera.frames(frame_configs[0]):  # "tiles": null
+    frame.data = process(frame.data)
+    for tile in frame.split(80):
+        ...
+```
+
+---
+
 ## RAW files
 
 `.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.
@@ -312,7 +359,7 @@ for packet in camera.events():
 | Function / class | Description |
 |---|---|
 | `open_raw(path, config=None, *, config_path=None, name=None, **options) -> RawReader` | Opens a RAW file. The configuration provides name, filter, output format and window |
-| `RawReader` | `events()`, `read()`, `windows()`, `read_windows()`, `read_all()`, `info()`, `speed`, `close()` |
+| `RawReader` | `events()`, `read()`, `windows()`, `read_windows()`, `frames(config)`, `read_frames(config)`, `frame_sets(configs)`, `read_frame_sets(configs)`, `read_all()`, `info()`, `speed`, `close()` |
 | `read_raw(path, **options) -> (events, triggers)` | Reads a whole file into memory |
 | `read_header(path) -> RawHeader` | Header only: `format`, `width`, `height`, `fields`, `serial` |
 
