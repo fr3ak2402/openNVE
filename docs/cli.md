@@ -44,6 +44,23 @@ right: SE1-S4 05110636
 
 Errors name the camera and the field, for instance `cameras.json: camera 1: settings.clock must be one of internal, internal_with_output_enabled, external`. The exit code is then `1`.
 
+## `opennve driver`
+
+Shows or installs the USB driver of the connected cameras (WinUSB on Windows).
+
+```sh
+opennve driver                              # state of all cameras
+opennve driver --install                    # install WinUSB where no driver is installed
+opennve driver --install --model SE1-S4     # only SE1-S4 cameras
+opennve driver --install --force            # also replace another (vendor) driver
+```
+
+```text
+SENSING SE1-S4-USB (04B4:00C4) driver: WinUSB | ready
+```
+
+The exit code is `1` if a camera is not ready.
+
 ## `opennve models`
 
 Lists the supported models.

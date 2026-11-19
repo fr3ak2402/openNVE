@@ -4,6 +4,7 @@
     python -m opennve template SE1-S4 [--serial 05110634] [--name left]
     python -m opennve check cameras.json
     python -m opennve models
+    python -m opennve driver [--install] [--model SE1-S4] [--force]
 """
 
 from __future__ import annotations
@@ -47,6 +48,22 @@ def _check(args) -> int:
     return 0
 
 
+def _driver(args) -> int:
+    from .driver import driver_status, install_driver
+
+    if args.install:
+        return 0 if install_driver(args.model, force=args.force) else 1
+    statuses = driver_status(args.model)
+    if not statuses:
+        print("No camera found")
+    for status in statuses:
+        state = "ready" if status.ready else f"not ready: {status.message}"
+        usb_id = f" ({status.usb_id})" if status.usb_id else ""
+        driver = f" driver: {status.driver or '(none)'}" if status.usb_id else ""
+        print(f"{status.device}{usb_id}{driver} | {state}")
+    return 0 if all(status.ready for status in statuses) else 1
+
+
 def _models(args) -> int:
     for model in MODELS:
         print(f"{model.id:<16} {model.name}")
@@ -71,6 +88,12 @@ def main(argv=None) -> int:
     command = commands.add_parser("check", help="validate a configuration file")
     command.add_argument("path")
     command.set_defaults(function=_check)
+
+    command = commands.add_parser("driver", help="show or install the USB driver of the cameras (WinUSB on Windows)")
+    command.add_argument("--install", action="store_true", help="install the driver where it is missing")
+    command.add_argument("--model", help="only cameras of this model, for instance SE1-S4")
+    command.add_argument("--force", action="store_true", help="also replace another (vendor) driver")
+    command.set_defaults(function=_driver)
 
     command = commands.add_parser("models", help="list supported camera models")
     command.set_defaults(function=_models)

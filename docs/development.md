@@ -10,6 +10,7 @@ opennve/
 ├── config.py        CameraConfig, loading/saving JSON, validation of the hardware settings
 ├── devices.py       SE1S4Driver, EVK4Driver, EVK3HDDriver
 ├── discovery.py     list_cameras, CameraInfo
+├── driver.py        driver_status, install_driver, ensure_driver (WinUSB)
 ├── filters.py       FilterConfig, noise filter, polarity filter
 ├── models.py        supported models (from neuromorphic_drivers)
 ├── output.py        OutputConfig (fields x, y, p, t), CSV

@@ -9,6 +9,7 @@ import neuromorphic_drivers as nd
 import numpy as np
 
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
+from .driver import MODEL_USB_IDS, ensure_driver
 from .filters import EventFilter, FilterConfig
 from .output import OutputConfig, to_csv, to_rows
 from .window import EventWindow, WindowAccumulator, WindowConfig
@@ -412,18 +413,36 @@ def open_camera(
     path: PathLike | None = None,
     name: str | None = None,
     iterator_timeout: float = 0.02,
+    install_driver: bool = False,
 ) -> EventCamera:
     """Opens a camera from a configuration (object, dict or JSON string) or from a file.
 
+    With install_driver=True, the USB driver is installed first if the camera needs it
+    (Windows: WinUSB, one administrator prompt, see opennve.ensure_driver).
+
     Examples:
         open_camera({"model": "SE1-S4", "serial": "05110634"})
-        open_camera(path="cameras.json", name="left")
+        open_camera(path="cameras.json", name="left", install_driver=True)
     """
     if path is not None:
         config = load_config(path, name)
     if config is None:
         raise ValueError("config or path is required")
+    if isinstance(config, str):
+        config = CameraConfig.from_json(config)
+    elif isinstance(config, dict):
+        config = CameraConfig.from_dict(config)
+    if install_driver:
+        _ensure_drivers([config])
     return EventCamera.from_config(config, iterator_timeout=iterator_timeout)
+
+
+def _ensure_drivers(configs: typing.Sequence[CameraConfig]) -> None:
+    for model in sorted({config.model.id for config in configs}):
+        if model in MODEL_USB_IDS and not ensure_driver(model):
+            raise RuntimeError(
+                f"the driver for {model} is not ready, see opennve.driver_status(\"{model}\")"
+            )
 
 
 def _is_clock_secondary(config: CameraConfig) -> bool:
@@ -436,13 +455,17 @@ def open_cameras(
     *,
     iterator_timeout: float = 0.02,
     secondary_start_delay: float = 1.0,
+    install_driver: bool = False,
 ) -> dict[str, EventCamera]:
     """Opens several cameras, returns {name: camera}.
 
     Cameras with "clock": "external" (synchronization secondaries) are opened first,
     so that they listen before the primary ("internal_with_output_enabled") starts its clock.
     If opening one camera fails, the cameras opened so far are closed.
+    With install_driver=True, missing USB drivers are installed first (see open_camera).
     """
+    if install_driver:
+        _ensure_drivers(configs)
     order = sorted(configs, key=lambda config: not _is_clock_secondary(config))
     cameras: dict[str, EventCamera] = {}
     try:

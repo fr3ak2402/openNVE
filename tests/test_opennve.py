@@ -423,3 +423,112 @@ def test_cli(capsys, tmp_path):
     assert main(["check", str(path)]) == 0
     path.write_text('{"model": "SE1-S4", "settings": {"clock": "fast"}}')
     assert main(["check", str(path)]) == 1
+
+
+# ------------------------------------------------------------------ driver
+
+
+class FakeWindowsDriver:
+    """Simulates neuromorphic_drivers.windows_driver on Windows."""
+
+    def __init__(self, devices):
+        self.devices = devices  # list of (vendor_id, product_id, service)
+        self.installs = []
+
+    def list_windows_devices(self):
+        from neuromorphic_drivers import windows_driver
+
+        result = []
+        for vendor_id, product_id, service in self.devices:
+            supported = next(d for d in windows_driver.SUPPORTED_DEVICES if d.matches(vendor_id, product_id))
+            result.append(
+                windows_driver.WindowsUsbDevice(
+                    instance_id=f"USB\\VID_{vendor_id:04X}&PID_{product_id:04X}\\1",
+                    name="camera",
+                    status="OK",
+                    service=service,
+                    vendor_id=vendor_id,
+                    product_id=product_id,
+                    supported_device=supported,
+                )
+            )
+        return result
+
+    def install_windows_driver(self, usb_ids=None, force=False):
+        self.installs.append((usb_ids, force))
+        self.devices = [
+            (v, p, "WinUSB" if (usb_ids is None or (v, p) in usb_ids) and (s is None or force) else s)
+            for v, p, s in self.devices
+        ]
+        return True
+
+
+@pytest.fixture
+def windows(monkeypatch):
+    from opennve import driver as driver_module
+
+    fake = FakeWindowsDriver([(0x04B4, 0x00C4, None), (0x04B4, 0x00F5, "CYUSB3")])
+    monkeypatch.setattr(driver_module.sys, "platform", "win32")
+    monkeypatch.setattr(driver_module, "_windows_driver", lambda: fake)
+    return fake
+
+
+def test_driver_status_windows(windows):
+    statuses = opennve.driver_status()
+    assert [(s.usb_id, s.driver, s.ready) for s in statuses] == [("04B4:00C4", None, False), ("04B4:00F5", "CYUSB3", False)]
+    assert "install_driver()" in statuses[0].message and "force=True" in statuses[1].message
+    assert [s.usb_id for s in opennve.driver_status("SE1-S4")] == ["04B4:00C4"]
+    with pytest.raises(ValueError, match="needs no driver"):
+        opennve.driver_status("TRITON")
+
+
+def test_ensure_driver_installs_only_when_needed(windows):
+    assert opennve.ensure_driver("SE1-S4") is True
+    assert windows.installs == [([(0x04B4, 0x00C4)], False)]
+    assert opennve.driver_status("SE1-S4")[0].driver == "WinUSB"
+    assert opennve.ensure_driver("SE1-S4") is True
+    assert len(windows.installs) == 1  # already installed: nothing to do
+    # EVK4 uses a vendor driver: not replaced without force
+    assert opennve.ensure_driver("EVK4") is False
+    assert len(windows.installs) == 1
+    assert opennve.install_driver("EVK4", force=True) is True
+    assert opennve.driver_status("EVK4")[0].ready
+
+
+def test_open_camera_installs_driver(windows, fake_open):
+    with opennve.open_camera({"model": "SE1-S4", "serial": "05110634"}, install_driver=True) as camera:
+        assert camera.config.serial == "05110634"
+    assert windows.installs == [([(0x04B4, 0x00C4)], False)]
+
+
+def test_open_camera_driver_not_ready(windows, fake_open, monkeypatch):
+    monkeypatch.setattr(windows, "install_windows_driver", lambda usb_ids=None, force=False: False)
+    with pytest.raises(RuntimeError, match="driver for SE1-S4 is not ready"):
+        opennve.open_camera({"model": "SE1-S4"}, install_driver=True)
+    assert fake_open == []  # the camera was not opened
+
+
+def test_driver_status_linux(monkeypatch):
+    from opennve import driver as driver_module
+
+    listed = [
+        types.SimpleNamespace(name=nd.Name.SENSING_SE1_S4, error="permission denied"),
+        types.SimpleNamespace(name=nd.Name.PROPHESEE_EVK4, error=None),
+    ]
+    monkeypatch.setattr(driver_module.sys, "platform", "linux")
+    monkeypatch.setattr(driver_module.nd, "list_devices", lambda: listed)
+    statuses = opennve.driver_status()
+    assert [s.ready for s in statuses] == [False, True]
+    assert "udev" in statuses[0].message
+    assert opennve.ensure_driver("EVK4") is True
+    assert opennve.ensure_driver("SE1-S4") is False
+
+
+def test_cli_driver(windows, capsys):
+    from opennve.__main__ import main
+
+    assert main(["driver"]) == 1
+    assert "not ready" in capsys.readouterr().out
+    assert main(["driver", "--install", "--model", "SE1-S4"]) == 0
+    assert main(["driver", "--model", "SE1-S4"]) == 0
+    assert "ready" in capsys.readouterr().out

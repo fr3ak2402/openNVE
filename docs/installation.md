@@ -57,17 +57,18 @@ neuromorphic-drivers-install-windows-driver --force  # replace an existing (vend
 
 Cameras with another driver (for instance Metavision's) are not changed without `--force`. With WinUSB, the vendor's software may stop working. To revert, use *Driver → Roll Back Driver* in the Device Manager.
 
-Automatically when your program starts:
+From Python, for instance when your program starts (only installs if needed):
 
 ```python
-import sys
+import opennve
 
-if sys.platform == "win32":
-    from neuromorphic_drivers.windows_driver import install_windows_driver, list_windows_devices
+opennve.ensure_driver("SE1-S4")  # WinUSB for connected SE1-S4 cameras without a driver
 
-    if any(not device.has_driver for device in list_windows_devices()):
-        install_windows_driver()
+# or directly when opening a camera
+camera = opennve.open_camera(path="cameras.json", name="left", install_driver=True)
 ```
+
+From the command line: `opennve driver` shows the state, `opennve driver --install --model SE1-S4` installs. See [Python API](api.md#usb-driver).
 
 ### Linux
 

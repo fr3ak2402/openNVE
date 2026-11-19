@@ -8,6 +8,7 @@ All names described here are available directly as `opennve.<name>`.
 
 - [Finding cameras](#finding-cameras)
 - [Configuration](#configuration)
+- [USB driver](#usb-driver)
 - [Opening cameras](#opening-cameras)
 - [EventCamera](#eventcamera)
 - [CameraPacket](#camerapacket)
@@ -105,9 +106,50 @@ config = opennve.CameraConfig.from_json('{"model": "SE1-S4"}')
 
 ---
 
+## USB driver
+
+On Windows, a camera can only be used once it has the WinUSB driver. These functions install it from your program (same as Zadig, one administrator prompt, can take a few minutes). See also [Installation](installation.md#windows).
+
+### `ensure_driver(model=None) -> bool`
+
+Installs the driver only if a connected camera needs it. Returns `True` if all connected cameras (of `model`, for instance `"SE1-S4"`) can be used, also if none is connected. Call it once when your program starts:
+
+```python
+if not opennve.ensure_driver("SE1-S4"):
+    print(opennve.driver_status("SE1-S4"))
+```
+
+Cameras that use another driver (for instance the vendor's driver) are not changed, `ensure_driver` then returns `False`.
+
+### `install_driver(model=None, force=False) -> bool`
+
+Installs WinUSB for the connected cameras without a driver. With `force=True`, an existing driver (for instance Metavision's) is replaced as well, which may break the vendor's software. Returns `True` if the cameras can be used afterwards.
+
+### `driver_status(model=None) -> list[DriverStatus]`
+
+Driver state of the connected cameras, without changing anything.
+
+| Attribute | Description |
+|---|---|
+| `device` | Device type, for instance `"SENSING SE1-S4-USB"` |
+| `usb_id` | USB ID, for instance `"04B4:00C4"` (Windows) |
+| `driver` | Current Windows driver, for instance `"WinUSB"`, or `None` |
+| `ready` | `True` if the camera can be used |
+| `message` | What to do if the camera is not ready |
+
+### Linux and macOS
+
+On Linux, access is granted by udev rules, which require `sudo`: `install_driver` and `ensure_driver` print the command (`neuromorphic-drivers-install-udev-rules`) and return `False` if a camera is not accessible. On macOS, no driver is required and both return `True`.
+
+### When opening cameras
+
+`open_camera(..., install_driver=True)` and `open_cameras(..., install_driver=True)` call `ensure_driver` for the models in the configuration before opening, and raise `RuntimeError` if the driver is still not ready.
+
+---
+
 ## Opening cameras
 
-### `open_camera(config=None, *, path=None, name=None, iterator_timeout=0.02) -> EventCamera`
+### `open_camera(config=None, *, path=None, name=None, iterator_timeout=0.02, install_driver=False) -> EventCamera`
 
 Opens a camera from a `CameraConfig`, a dictionary, a JSON string or a file.
 
@@ -119,9 +161,9 @@ with opennve.open_camera(path="cameras.json", name="left") as camera:
     ...  # closed automatically at the end
 ```
 
-`iterator_timeout` (seconds) is the maximum waiting time when reading. After that, `read()` returns `None` instead of blocking.
+`iterator_timeout` (seconds) is the maximum waiting time when reading. After that, `read()` returns `None` instead of blocking. With `install_driver=True`, a missing USB driver is installed first ([USB driver](#usb-driver)).
 
-### `open_cameras(configs, *, iterator_timeout=0.02, secondary_start_delay=1.0) -> dict[str, EventCamera]`
+### `open_cameras(configs, *, iterator_timeout=0.02, secondary_start_delay=1.0, install_driver=False) -> dict[str, EventCamera]`
 
 Opens several cameras and returns `{name: camera}`. Cameras with `"clock": "external"` are opened first, the others after `secondary_start_delay` seconds. If one camera fails, the cameras opened so far are closed. See [Multiple cameras](multiple-cameras.md).
 

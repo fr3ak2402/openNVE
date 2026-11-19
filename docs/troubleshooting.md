@@ -12,7 +12,7 @@
    ```powershell
    neuromorphic-drivers-install-windows-driver --list
    ```
-   If it shows `driver: (none)` or a driver other than `WinUSB`, install WinUSB with `neuromorphic-drivers-install-windows-driver`. Without a driver, the camera is invisible to programs.
+   If it shows `driver: (none)` or a driver other than `WinUSB`, install WinUSB with `opennve driver --install` (or `opennve.ensure_driver()` in Python). Without a driver, the camera is invisible to programs.
 3. **Is Python running in WSL, Docker or a virtual machine?** USB is not passed through by default there (on WSL, for instance, use `usbipd attach`).
 
 ## Camera found, but with an error

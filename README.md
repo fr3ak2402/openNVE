@@ -30,7 +30,7 @@ pip install opennve-0.12.1-cp314-cp314-win_amd64.whl
 
 `cp314` = Python 3.14, `cp315` = Python 3.15.
 
-On Windows, install the camera driver once per computer: `neuromorphic-drivers-install-windows-driver`.
+On Windows, install the camera driver once per computer: `opennve driver --install` (or `opennve.ensure_driver("SE1-S4")` in Python).
 On Linux: `neuromorphic-drivers-install-udev-rules`.
 
 For development (source checkout), install neuromorphic_drivers from the fork first, then `pip install -e ".[test]"`.
