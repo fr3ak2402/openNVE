@@ -17,6 +17,7 @@ opennve/
 examples/            cameras.json, viewer.py, frames.py, list_cameras.py
 tests/               pytest, without hardware (the camera is simulated)
 tools/bundle_wheel.py  embeds neuromorphic_drivers into the wheels
+tools/docs_to_wiki.py  publishes docs/ to the GitHub wiki
 docs/                this documentation
 ```
 
@@ -50,16 +51,24 @@ Bundling locally:
 python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 ```
 
+## Wiki
+
+`.github/workflows/wiki.yml` publishes `docs/` to the [GitHub wiki](https://github.com/fr3ak2402/openNVE/wiki) whenever `docs/` changes on `main` (or manually: *Actions → Wiki → Run workflow*). `tools/docs_to_wiki.py` turns `docs/README.md` into the wiki home page, gives the other pages readable names, rewrites the links and generates the sidebar.
+
+- Edit the documentation in `docs/` only. Generated wiki pages are overwritten on the next run; pages created directly in the wiki are kept.
+- Before the first run, the wiki must exist: open the *Wiki* tab of the repository and create the first page (any content).
+- New pages in `docs/` appear in the wiki automatically. For a nicer title and position in the sidebar, add them to `PAGES` in `tools/docs_to_wiki.py`.
+
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.1.1"`).
+1. Increase the version in `pyproject.toml` (`version = "0.12.2"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.1.1
+   git tag v0.12.2
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.1.1`.
+4. The action builds all wheels and attaches them to the release `v0.12.2`.
 
 ## New Python version
 

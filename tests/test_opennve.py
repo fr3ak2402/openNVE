@@ -17,6 +17,14 @@ EVENT_DTYPE = np.dtype([("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("on", "?")])
 # ------------------------------------------------------------------ models
 
 
+def test_version_matches_pyproject():
+    import pathlib
+    import tomllib
+
+    pyproject = tomllib.loads((pathlib.Path(__file__).parent.parent / "pyproject.toml").read_text())
+    assert opennve.__version__ == pyproject["project"]["version"]
+
+
 def test_model_aliases():
     for name in ("SE1-S4", "se1_s4", "SENSING SE1-S4-USB", "sensing_se1_s4"):
         assert opennve.get_model(name).id == "SE1-S4"

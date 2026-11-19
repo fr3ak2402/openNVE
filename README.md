@@ -2,7 +2,7 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Multiple cameras](docs/multiple-cameras.md) · [Troubleshooting](docs/troubleshooting.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Multiple cameras](docs/multiple-cameras.md) · [Troubleshooting](docs/troubleshooting.md)
 
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
@@ -17,7 +17,7 @@ Download the wheel for your platform and Python version from the [releases](http
 
 ```sh
 pip uninstall -y neuromorphic_drivers   # if a separate neuromorphic_drivers is installed
-pip install opennve-0.1.0-cp314-cp314-win_amd64.whl
+pip install opennve-0.12.1-cp314-cp314-win_amd64.whl
 ```
 
 | File name contains | Platform |
@@ -142,7 +142,7 @@ python examples/frames.py examples/cameras.json left   # one frame per time wind
 
 ## Wheels
 
-GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v0.1.0 && git push --tags`) they are attached to a GitHub release.
+GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v0.12.1 && git push --tags`) they are attached to a GitHub release.
 
 neuromorphic_drivers is distributed under the MIT License, its license is included in the wheels (`opennve-*.dist-info/licenses/neuromorphic_drivers/LICENSE`).
 
