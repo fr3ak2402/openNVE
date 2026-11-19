@@ -14,6 +14,7 @@ All names described here are available directly as `opennve.<name>`.
 - [CameraPacket](#camerapacket)
 - [EventWindow](#eventwindow)
 - [Filter, output, window](#filter-output-window)
+- [RAW files](#raw-files)
 - [Models](#models)
 - [Helper functions](#helper-functions)
 
@@ -300,6 +301,25 @@ accumulator = opennve.WindowAccumulator(40_000, "left", 1280, 720)
 for packet in camera.events():
     for window in accumulator.push(packet.polarity_events, packet.status.ring.current_t):
         ...
+```
+
+---
+
+## RAW files
+
+`.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.
+
+| Function / class | Description |
+|---|---|
+| `open_raw(path, config=None, *, config_path=None, name=None, **options) -> RawReader` | Opens a RAW file. The configuration provides name, filter, output format and window |
+| `RawReader` | `events()`, `read()`, `windows()`, `read_windows()`, `read_all()`, `info()`, `speed`, `close()` |
+| `read_raw(path, **options) -> (events, triggers)` | Reads a whole file into memory |
+| `read_header(path) -> RawHeader` | Header only: `format`, `width`, `height`, `fields`, `serial` |
+
+```python
+with opennve.open_raw("recording.raw", config_path="cameras.json", name="left") as raw:
+    for window in raw.windows():
+        frame = window.to_frame("count")
 ```
 
 ---

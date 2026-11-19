@@ -1,6 +1,6 @@
 # openNVE documentation
 
-openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras. It finds connected cameras, configures them with JSON, reads filtered events and groups them into time windows and frames.
+openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras. It finds connected cameras, configures them with JSON, reads filtered events from cameras or `.raw` recordings and groups them into time windows and frames.
 
 | Page | Contents |
 |---|---|
@@ -10,6 +10,7 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Python API](api.md) | Reference of all functions, classes and methods |
 | [Time windows and frames](time-windows.md) | Collecting events in windows (40 ms by default) and building images |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
+| [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |
 | [Command line](cli.md) | `opennve list`, `template`, `check`, `models` |
 | [Troubleshooting](troubleshooting.md) | Camera not found, noise, high event rates |
 | [Development](development.md) | Tests, wheel builds, releases, embedded driver |
@@ -29,6 +30,7 @@ Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in
 - **Find cameras:** `opennve.list_cameras()`
 - **Configure:** one JSON file per setup, with one entry per camera
 - **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
+- **Recordings:** `opennve.open_raw("recording.raw")` reads `.raw` files with the same interface
 - **Frames:** `window.to_frame("count" | "polarity" | "binary" | "color")`
 
 ## Supported cameras

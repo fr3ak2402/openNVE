@@ -24,6 +24,7 @@ from .driver import DriverStatus, driver_status, ensure_driver, install_driver
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
 from .output import OutputConfig, to_csv, to_rows
+from .raw import RawHeader, RawReader, open_raw, read_header, read_raw
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
 __version__ = "0.12.1"
@@ -41,6 +42,11 @@ except ImportError:
 __all__ = [
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
+    "RawHeader",
+    "RawReader",
+    "open_raw",
+    "read_header",
+    "read_raw",
     "DriverStatus",
     "driver_status",
     "ensure_driver",
