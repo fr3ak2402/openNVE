@@ -23,6 +23,7 @@ from .discovery import CameraInfo, list_cameras, list_cameras_json
 from .filters import BackgroundActivityConfig, BackgroundActivityFilter, EventFilter, FilterConfig
 from .models import MODELS, CameraModel, get_model
 from .output import OutputConfig, to_csv, to_rows
+from .window import EventWindow, WindowAccumulator, WindowConfig
 
 __version__ = "0.1.0"
 
@@ -40,6 +41,9 @@ __all__ = [
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
     "OutputConfig",
+    "EventWindow",
+    "WindowAccumulator",
+    "WindowConfig",
     "to_csv",
     "to_rows",
     "BackgroundActivityConfig",

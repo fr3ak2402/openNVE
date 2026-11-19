@@ -16,7 +16,8 @@ A camera configuration describes one camera:
             "polarity": "both",
             "background_activity": {"enabled": true, "time_us": 5000, "min_neighbors": 1}
         },
-        "output": {"fields": ["x", "y", "p", "t"]}
+        "output": {"fields": ["x", "y", "p", "t"]},
+        "window": {"duration_ms": 10}
     }
 
 - name: free name of the camera in your setup
@@ -28,6 +29,8 @@ A camera configuration describes one camera:
 - output: fields of the output events, in order (see opennve.output):
   x, y, p = polarity (1 ON / 0 OFF), t = timestamp in µs
   (the camera name is stored once per packet, not per event)
+- window: duration of the time windows used by EventCamera.windows(), for instance to
+  build frames (see opennve.window), or null
 
 A configuration file contains either one camera object, a list of camera objects,
 or {"cameras": [...]}.
@@ -46,6 +49,7 @@ import numpy as np
 
 from .filters import FilterConfig
 from .output import OutputConfig
+from .window import WindowConfig
 from .models import CameraModel, get_model
 
 PathLike = typing.Union[str, pathlib.Path]
@@ -205,6 +209,7 @@ class CameraConfig:
     settings: typing.Any = None
     filter: FilterConfig = dataclasses.field(default_factory=FilterConfig)
     output: OutputConfig = dataclasses.field(default_factory=OutputConfig)
+    window: typing.Optional[WindowConfig] = None
 
     def __post_init__(self):
         if isinstance(self.model, str):
@@ -221,6 +226,8 @@ class CameraConfig:
             self.filter = FilterConfig.from_dict(self.filter)
         if isinstance(self.output, dict):
             self.output = OutputConfig.from_dict(self.output)
+        if isinstance(self.window, dict):
+            self.window = WindowConfig.from_dict(self.window)
         if self.name is None:
             self.name = self.model.id if self.serial is None else f"{self.model.id}-{self.serial}"
 
@@ -234,6 +241,7 @@ class CameraConfig:
             "settings": settings_to_dict(self.settings),
             "filter": self.filter.to_dict(),
             "output": self.output.to_dict(),
+            "window": None if self.window is None else self.window.to_dict(),
         }
 
     def to_json(self, indent: typing.Optional[int] = 4) -> str:
@@ -243,7 +251,7 @@ class CameraConfig:
     def from_dict(cls, data: dict[str, typing.Any]) -> "CameraConfig":
         if not isinstance(data, dict):
             raise ValueError("a camera configuration must be an object")
-        unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output"}
+        unknown = set(data) - {"name", "model", "serial", "settings", "filter", "output", "window"}
         if unknown:
             raise ValueError(f"unknown camera setting(s): {', '.join(sorted(unknown))}")
         if "model" not in data:
@@ -259,6 +267,7 @@ class CameraConfig:
             settings=settings_from_dict(model, data.get("settings")),
             filter=FilterConfig.from_dict(data.get("filter")),
             output=OutputConfig.from_dict(data.get("output")),
+            window=WindowConfig.from_dict(data.get("window")),
         )
 
     @classmethod

@@ -147,6 +147,71 @@ def test_output_format():
     assert opennve.to_rows(reordered) == [(1003, 1), (1010, 0)]
 
 
+# ------------------------------------------------------------------ windows
+
+
+def test_window_config():
+    config = opennve.CameraConfig.from_dict({"model": "SE1-S4", "window": {"duration_ms": 2.5}})
+    assert config.window.duration_us == 2500
+    assert opennve.CameraConfig.from_dict(config.to_dict()) == config
+    assert opennve.CameraConfig(model="SE1-S4").window is None
+    for window, message in (
+        ({"duration_ms": 0}, "must be in"),
+        ({"duration_ms": "10"}, "must be a number"),
+        ({"duration": 10}, "unknown window setting"),
+        (10, "must be an object"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            opennve.CameraConfig.from_dict({"model": "SE1-S4", "window": window})
+
+
+def test_window_accumulator_boundaries():
+    accumulator = opennve.WindowAccumulator(1000, "left", 100, 100)
+    windows = accumulator.push(_events([(100, 1, 1, True), (900, 2, 2, False), (1100, 3, 3, True), (2500, 4, 4, True)]))
+    assert [(w.start_t, w.end_t, len(w)) for w in windows] == [(0, 1000, 2), (1000, 2000, 1)]
+    assert windows[0].camera == "left" and windows[0].duration_ms == 1.0
+    assert windows[0].rows() == [(1, 1, 1, 100), (2, 2, 0, 900)]
+    # Camera time passes the end of the open window without new events
+    windows = accumulator.push(_events([]), current_t=4200)
+    assert [(w.start_t, len(w)) for w in windows] == [(2000, 1), (3000, 0)]
+    windows = accumulator.push(_events([(4300, 5, 5, True)]), current_t=5000)
+    assert [(w.start_t, len(w)) for w in windows] == [(4000, 1)]
+
+
+def test_window_accumulator_split_packets_and_gaps():
+    accumulator = opennve.WindowAccumulator(10, "left", 10, 10)
+    windows = []
+    for t in range(0, 100, 3):  # one event per packet
+        windows += accumulator.push(_events([(t, 0, 0, True)]), current_t=t)
+    assert [w.start_t for w in windows] == list(range(0, 90, 10))
+    assert sum(len(w) for w in windows) == len(range(0, 90, 3))
+    # Very long gap: no millions of empty windows
+    windows = accumulator.push(_events([(10_000_000, 0, 0, True)]))
+    assert len(windows) == 1 and windows[0].start_t == 90
+    windows = accumulator.push(_events([]), current_t=10_000_010)
+    assert [w.start_t for w in windows] == [10_000_000]
+
+
+def test_window_frames():
+    window = opennve.EventWindow(
+        camera="left",
+        start_t=0,
+        end_t=10,
+        width=4,
+        height=3,
+        polarity_events=_events([(0, 1, 2, True), (1, 1, 2, True), (2, 1, 2, False), (3, 3, 0, False)]),
+    )
+    count = window.to_frame("count")
+    assert count.shape == (3, 4) and count[2, 1] == 3 and count[0, 3] == 1 and count.sum() == 4
+    polarity = window.to_frame("polarity")
+    assert polarity[2, 1] == 1 and polarity[0, 3] == -1
+    assert window.to_frame("binary")[2, 1] == 255
+    color = window.to_frame("color")
+    assert color.shape == (3, 4, 3) and tuple(color[0, 3]) == (0, 0, 255)
+    with pytest.raises(ValueError, match="unknown frame mode"):
+        window.to_frame("gray")
+
+
 # ------------------------------------------------------------------ filters
 
 
@@ -214,7 +279,7 @@ class FakeDevice:
         self._packets = [
             (types.SimpleNamespace(ring=None), None),
             (
-                types.SimpleNamespace(ring=types.SimpleNamespace(backlog=0)),
+                types.SimpleNamespace(ring=types.SimpleNamespace(backlog=0, current_t=25)),
                 types.SimpleNamespace(
                     polarity_events=_events([(0, 5, 5, True), (10, 6, 5, True), (20, 90, 90, False)]),
                     trigger_events=None,
@@ -279,6 +344,23 @@ def test_camera_from_json_config(fake_open):
         assert info["resolution"] == {"width": 100, "height": 100}
         assert "diff_on" in info["biases_bounds"]
     assert not camera.is_open
+
+
+def test_camera_windows(fake_open):
+    config = {
+        "name": "left",
+        "model": "SE1-S4",
+        "filter": {"background_activity": {"enabled": True, "time_us": 1000}},
+        "window": {"duration_ms": 0.01},
+    }
+    with opennve.open_camera(config) as camera:
+        windows = list(camera.windows())
+        # events at 0 and 10 µs (the isolated event at 20 µs is filtered), camera time 25 µs
+        assert [(w.start_t, w.end_t, len(w)) for w in windows] == [(0, 10, 1), (10, 20, 1)]
+        assert windows[0].to_frame("count").shape == (100, 100)
+        camera.update_window(None)
+        with pytest.raises(ValueError, match="no window duration"):
+            camera.read_windows()
 
 
 def test_camera_apply_config(fake_open):

@@ -11,6 +11,7 @@ import numpy as np
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
 from .filters import EventFilter, FilterConfig
 from .output import OutputConfig, to_csv, to_rows
+from .window import EventWindow, WindowAccumulator, WindowConfig
 from .models import get_model
 
 
@@ -79,6 +80,7 @@ class EventCamera:
         configuration: Any = None,
         filter: FilterConfig | dict | None = None,
         output: OutputConfig | dict | None = None,
+        window: WindowConfig | dict | None = None,
         name: str | None = None,
         iterator_timeout: float = 0.02,
     ) -> None:
@@ -91,6 +93,7 @@ class EventCamera:
             settings=configuration,
             filter=filter if filter is not None else FilterConfig(),
             output=output if output is not None else OutputConfig(),
+            window=window,
         )
 
         # Initialize internal device references
@@ -98,6 +101,7 @@ class EventCamera:
         self._device = None
         self._iterator = None
         self._filter: EventFilter | None = None
+        self._accumulator: WindowAccumulator | None = None
 
         # Open the selected camera
         context = nd.open(
@@ -136,6 +140,7 @@ class EventCamera:
             configuration=config.settings,
             filter=config.filter,
             output=config.output,
+            window=config.window,
             name=config.name,
             iterator_timeout=iterator_timeout,
         )
@@ -254,6 +259,65 @@ class EventCamera:
             if camera_packet is not None:
                 yield camera_packet
 
+    # Time windows
+
+    def _window_accumulator(self, duration_ms: float | None) -> WindowAccumulator:
+        if duration_ms is None:
+            if self.config.window is None:
+                raise ValueError(
+                    "no window duration: set \"window\": {\"duration_ms\": ...} in the configuration "
+                    "or pass duration_ms"
+                )
+            duration_us = self.config.window.duration_us
+        else:
+            window = WindowConfig(duration_ms=duration_ms)
+            window.validate()
+            duration_us = window.duration_us
+        if self._accumulator is None or self._accumulator.duration_us != duration_us:
+            width, height = self.resolution
+            self._accumulator = WindowAccumulator(
+                duration_us, self.name, width, height, self.config.output
+            )
+        self._accumulator.camera = self.name
+        self._accumulator.output_config = self.config.output
+        return self._accumulator
+
+    def read_windows(self, duration_ms: float | None = None) -> list[EventWindow]:
+        """Reads one packet and returns the time windows completed by it (often none).
+
+        Use this to read several cameras in one loop. duration_ms overrides the
+        "window" section of the configuration.
+        """
+        accumulator = self._window_accumulator(duration_ms)
+        packet = self.read()
+        if packet is None:
+            return []
+        current_t = packet.status.ring.current_t if packet.status.ring is not None else None
+        return accumulator.push(packet.polarity_events, current_t)
+
+    def windows(self, duration_ms: float | None = None) -> Iterator[EventWindow]:
+        """Continuously yield complete time windows (events of duration_ms each, filtered).
+
+        Example:
+            for window in camera.windows():          # duration from the configuration
+                frame = window.to_frame("color")     # or "count", "polarity", "binary"
+        """
+        while self.is_open:
+            try:
+                windows = self.read_windows(duration_ms)
+            except StopIteration:
+                return
+            yield from windows
+
+    def update_window(self, window: WindowConfig | dict | None) -> None:
+        """Replace the window duration, for instance {"duration_ms": 20} (restarts the current window)."""
+        if isinstance(window, dict):
+            window = WindowConfig.from_dict(window)
+        if window is not None:
+            window.validate()
+        self.config.window = window
+        self._accumulator = None
+
     # Configuration
 
     def _build_filter(self) -> None:
@@ -313,6 +377,7 @@ class EventCamera:
         self.update_configuration(config.settings)
         self.update_filter(config.filter)
         self.update_output(config.output)
+        self.update_window(config.window)
         self.config.name = config.name
 
     # Lifecycle

@@ -5,7 +5,7 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
 - Open one or several cameras from that configuration (with clock synchronization)
-- Read filtered events
+- Read filtered events, or collect them in time windows (for instance 10 ms) to build frames
 
 Supported models: SENSING SE1-S4-USB, Prophesee EVK4, EVK3 HD, EVK1 Gen4, iniVation DAVIS 346, DVXplorer, CenturyArks VGA, Lucid Triton (all devices of [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers)).
 
@@ -62,6 +62,9 @@ opennve models
     },
     "output": {
         "fields": ["x", "y", "p", "t"]
+    },
+    "window": {
+        "duration_ms": 10
     }
 }
 ```
@@ -74,6 +77,7 @@ opennve models
 | `settings` | Hardware settings, passed to the camera. Omitted fields keep their default value. `opennve template <model>` shows all fields of a model |
 | `filter.polarity` | `both`, `on` or `off` |
 | `output.fields` | Fields of the output events, in this order (any subset): `x`, `y`, `p` = polarity (1 = ON, 0 = OFF), `t` = timestamp in µs. Default `["x", "y", "p", "t"]`. The camera name is stored once per packet (`packet.camera`), not in every event |
+| `window.duration_ms` | Duration of the time windows used by `camera.windows()`, in ms (0.01 to 60000), or `null`. Windows are aligned to the camera clock ([0, 10) ms, [10, 20) ms, ...), so synchronized cameras produce windows with the same boundaries |
 | `filter.background_activity` | Removes isolated events (noise, hot pixels): an event is kept if `min_neighbors` of its 8 neighbors fired within `time_us` µs |
 
 SE1-S4 / EVK4 settings: `biases` (offsets from the factory values, `camera.biases_bounds()` gives the allowed range), `clock` (`internal`, `internal_with_output_enabled` = synchronization primary, `external` = synchronization secondary), `rate_limiter` (`{"reference_period_us": 200, "maximum_events_per_period": 4000}` or `null`), `enable_external_trigger`, `enable_output`, and the bit masks `x_mask`, `y_mask`, `pixel_mask`.
@@ -112,6 +116,14 @@ with opennve.open_camera(path="examples/cameras.json", name="left") as camera:
         camera.update_output({"fields": ["t", "x", "y", "p"]})
         break
 
+# Time windows, for instance to build frames
+with opennve.open_camera(path="examples/cameras.json", name="left") as camera:
+    for window in camera.windows():  # duration from "window", or camera.windows(duration_ms=20)
+        print(window.camera, window.start_t, window.end_t, len(window))
+        events = window.events  # all events of the window, output format (x, y, p, t)
+        frame = window.to_frame("count")  # "count", "polarity", "binary" or "color"
+        break
+
 # Several cameras (synchronization secondaries are started first)
 cameras = opennve.open_cameras(configs)
 ```
@@ -123,6 +135,7 @@ cameras = opennve.open_cameras(configs)
 ```sh
 python examples/list_cameras.py
 python examples/viewer.py examples/cameras.json   # Q: exit, F: filter on/off
+python examples/frames.py examples/cameras.json left   # one frame per time window, M: frame mode
 ```
 
 ## Wheels
