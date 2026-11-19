@@ -180,6 +180,12 @@ class WindowAccumulator:
     def _align(self, t: int) -> int:
         return (t // self.duration_us) * self.duration_us
 
+    def flush(self) -> list[EventWindow]:
+        """Returns the current window if it has events (for instance at the end of a file)."""
+        if self._start_t is None or not self._chunks:
+            return []
+        return [self._close()]
+
     def push(
         self, events: typing.Optional[np.ndarray], current_t: typing.Optional[int] = None
     ) -> list[EventWindow]:

@@ -31,6 +31,7 @@ PAGES = {
     "api.md": ("Python-API", "Python API"),
     "time-windows.md": ("Time-windows-and-frames", "Time windows and frames"),
     "multiple-cameras.md": ("Multiple-cameras", "Multiple cameras"),
+    "raw-files.md": ("RAW-files", "RAW files"),
     "cli.md": ("Command-line", "Command line"),
     "troubleshooting.md": ("Troubleshooting", "Troubleshooting"),
     "development.md": ("Development", "Development"),

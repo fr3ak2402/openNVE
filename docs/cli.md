@@ -61,6 +61,16 @@ SENSING SE1-S4-USB (04B4:00C4) driver: WinUSB | ready
 
 The exit code is `1` if a camera is not ready.
 
+## `opennve raw <file>`
+
+Shows the header and statistics of a RAW file: format, sensor size, serial number, number of events, time span and event rate.
+
+```sh
+opennve raw recording.raw
+opennve raw recording.raw --json
+opennve raw camera_data.bin --format EVT3 --width 1280 --height 720   # file without header
+```
+
 ## `opennve models`
 
 Lists the supported models.

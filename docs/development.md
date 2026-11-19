@@ -14,9 +14,11 @@ opennve/
 ├── filters.py       FilterConfig, noise filter, polarity filter
 ├── models.py        supported models (from neuromorphic_drivers)
 ├── output.py        OutputConfig (fields x, y, p, t), CSV
+├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
 └── window.py        WindowConfig, WindowAccumulator, EventWindow, frames
-examples/            cameras.json, viewer.py, frames.py, list_cameras.py
+examples/            cameras.json, viewer.py, frames.py, list_cameras.py, raw_player.py
 tests/               pytest, without hardware (the camera is simulated)
+tests/data/          RAW reference files written by faery (independent encoder)
 tools/bundle_wheel.py  embeds neuromorphic_drivers into the wheels
 tools/docs_to_wiki.py  publishes docs/ to the GitHub wiki
 docs/                this documentation
@@ -62,14 +64,14 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.12.2"`).
+1. Increase the version in `pyproject.toml` (`version = "0.13.1"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.12.2
+   git tag v0.13.1
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.12.2`.
+4. The action builds all wheels and attaches them to the release `v0.13.1`.
 
 ## New Python version
 

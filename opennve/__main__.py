@@ -5,6 +5,7 @@
     python -m opennve check cameras.json
     python -m opennve models
     python -m opennve driver [--install] [--model SE1-S4] [--force]
+    python -m opennve raw recording.raw [--json]
 """
 
 from __future__ import annotations
@@ -64,6 +65,54 @@ def _driver(args) -> int:
     return 0 if all(status.ready for status in statuses) else 1
 
 
+def _raw(args) -> int:
+    import numpy as np
+
+    from .raw import open_raw
+
+    with open_raw(args.path, format=args.format, width=args.width, height=args.height) as raw:
+        info = raw.info()
+        count = on = 0
+        triggers = 0
+        first_t = last_t = None
+        for packet in raw.events():
+            events = packet.polarity_events
+            if len(events) > 0:
+                count += len(events)
+                on += int(np.count_nonzero(events["on"]))
+                first_t = int(events["t"][0]) if first_t is None else first_t
+                last_t = int(events["t"][-1])
+            if packet.trigger_events is not None:
+                triggers += len(packet.trigger_events)
+    duration_s = 0.0 if first_t is None else (last_t - first_t) / 1e6
+    info.update(
+        {
+            "events": count,
+            "on_events": on,
+            "off_events": count - on,
+            "trigger_events": triggers,
+            "first_t": first_t,
+            "last_t": last_t,
+            "duration_s": duration_s,
+            "event_rate": count / duration_s if duration_s > 0 else None,
+        }
+    )
+    for key in ("filter", "output", "window"):
+        info.pop(key)
+    if args.json:
+        print(json.dumps(info, indent=4))
+        return 0
+    print(f"{info['path']}")
+    print(f"  format:     {info['format']}, {info['resolution']['width']} x {info['resolution']['height']}")
+    print(f"  serial:     {info['serial'] or '-'}")
+    print(f"  size:       {info['size_bytes'] / 1e6:.1f} MB")
+    print(f"  events:     {count} ({on} ON, {count - on} OFF), {triggers} trigger events")
+    if first_t is not None:
+        rate = f", {info['event_rate'] / 1e6:.2f} Mev/s" if info["event_rate"] else ""
+        print(f"  time:       {first_t / 1e6:.6f} s to {last_t / 1e6:.6f} s ({duration_s:.3f} s{rate})")
+    return 0
+
+
 def _models(args) -> int:
     for model in MODELS:
         print(f"{model.id:<16} {model.name}")
@@ -94,6 +143,14 @@ def main(argv=None) -> int:
     command.add_argument("--model", help="only cameras of this model, for instance SE1-S4")
     command.add_argument("--force", action="store_true", help="also replace another (vendor) driver")
     command.set_defaults(function=_driver)
+
+    command = commands.add_parser("raw", help="show the header and statistics of a RAW file")
+    command.add_argument("path")
+    command.add_argument("--json", action="store_true", help="output JSON")
+    command.add_argument("--format", help="event format for files without header (EVT3, EVT2, EVT21)")
+    command.add_argument("--width", type=int)
+    command.add_argument("--height", type=int)
+    command.set_defaults(function=_raw)
 
     command = commands.add_parser("models", help="list supported camera models")
     command.set_defaults(function=_models)
