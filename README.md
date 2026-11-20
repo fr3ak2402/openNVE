@@ -17,11 +17,11 @@ Supported models: SENSING SE1-S4-USB, Prophesee EVK4, EVK3 HD, EVK1 Gen4, iniVat
 
 ## Installation
 
-Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver; pip installs the other dependencies (numpy, OpenCV) automatically. Python 3.14 or newer is required.
+Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver; pip installs the other dependencies (numpy, OpenCV, LiteRT for TensorFlow Lite models) automatically. Python 3.14 or newer is required. TensorFlow for the neural networks is an optional extra: `pip install "opennve-...whl[tensorflow]"` (see [Installation](docs/installation.md)).
 
 ```sh
 pip uninstall -y neuromorphic_drivers   # if a separate neuromorphic_drivers is installed
-pip install opennve-0.6.1-cp314-cp314-win_amd64.whl
+pip install opennve-0.6.2-cp314-cp314-win_amd64.whl
 ```
 
 | File name contains | Platform |
@@ -158,7 +158,7 @@ python examples/networks.py recording.raw --out models                         #
 
 ## Wheels
 
-GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v0.6.1 && git push --tags`) they are attached to a GitHub release.
+GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v0.6.2 && git push --tags`) they are attached to a GitHub release.
 
 neuromorphic_drivers is distributed under the MIT License, its license is included in the wheels (`opennve-*.dist-info/licenses/neuromorphic_drivers/LICENSE`).
 

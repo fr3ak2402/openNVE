@@ -43,7 +43,7 @@ pytest
 
 The tests do not need a camera: `neuromorphic_drivers.open` and `list_devices` are replaced by fakes. They cover configuration and validation, filters, output format, time windows, frames, agents, networks, the camera class and the command line.
 
-The agent tests run the models in `tests/data` with LiteRT and TensorFlow and compare the outputs with values computed in numpy. Tests for a runtime that is not installed are skipped: `pip install ai-edge-litert` for TensorFlow Lite, `pip install tf-nightly` (Python 3.14) or `tensorflow` (Python ≤ 3.13) for TensorFlow. The CI installs LiteRT where wheels exist; TensorFlow (several hundred MB) is not installed in the CI.
+The agent tests run the models in `tests/data` with LiteRT and TensorFlow and compare the outputs with values computed in numpy. Tests for a runtime that is not installed are skipped: `pip install ai-edge-litert` for TensorFlow Lite, `pip install tf-nightly` (Python 3.14) or `tensorflow` (Python ≤ 3.13) for TensorFlow. LiteRT is a dependency of openNVE and is installed in the CI where wheels exist; TensorFlow (extra `tensorflow`, about 600 MB) is not installed in the CI.
 
 ## Hardware settings of new models
 
@@ -76,14 +76,14 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.6.2"`).
+1. Increase the version in `pyproject.toml` (`version = "0.6.3"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.6.2
+   git tag v0.6.3
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.6.2`.
+4. The action builds all wheels and attaches them to the release `v0.6.3`.
 
 ## New Python version
 

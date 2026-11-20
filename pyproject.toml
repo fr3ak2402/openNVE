@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennve"
-version = "0.6.1"
+version = "0.6.2"
 description = "Open Neuromorphic Vision Engine: event cameras and .raw recordings, JSON configuration, filters, time windows, frames and tiles"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -14,18 +14,25 @@ dependencies = [
     "neuromorphic_drivers>=0.19.2",
     # Events, filters, .raw decoding (EVT 2.0 / 2.1 / 3.0), time windows, frames and tiles
     "numpy>=1.26",
-    # Display (frame.to_image, examples)
+    # Display (frame.to_image, examples), resizing of agent inputs
     "opencv-python>=4.10",
+    # Agents: TensorFlow Lite models (.tflite) with LiteRT. LiteRT has wheels for Windows x64,
+    # Linux x64 / ARM64 and macOS ARM64 (Python 3.14); elsewhere it is skipped and .tflite models
+    # run with TensorFlow (extra "tensorflow")
+    "ai-edge-litert>=2.3; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')",
 ]
 
 [project.optional-dependencies]
 # Events as pandas DataFrames (FrameEngine.generate_frame / build accept DataFrames with x, y, p, t)
 pandas = ["pandas>=2.2"]
-# Agents: TensorFlow Lite models (.tflite) with LiteRT. TensorFlow models (.keras, .h5, SavedModel)
-# need TensorFlow, which is installed separately (Python 3.14: tf-nightly, see docs/agents.md)
+# TensorFlow (about 600 MB): neural networks (building, training, TensorFlow Lite export) and agents
+# with Keras / SavedModel models. Stable TensorFlow has no Python 3.14 wheels yet, so this installs
+# the nightly build (tf-nightly, includes Keras 3); see docs/agents.md
+tensorflow = ["tf-nightly"]
+# LiteRT on its own (already a dependency where wheels exist)
 tflite = ["ai-edge-litert>=2.3"]
 test = ["pytest"]
-all = ["pandas>=2.2", "ai-edge-litert>=2.3", "pytest"]
+all = ["pandas>=2.2", "tf-nightly", "pytest"]
 
 [project.scripts]
 opennve = "opennve.__main__:main"

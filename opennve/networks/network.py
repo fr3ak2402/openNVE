@@ -35,8 +35,8 @@ def _keras():
         import keras  # type: ignore
     except ImportError as error:
         raise ImportError(
-            "networks need TensorFlow (Keras 3): pip install tensorflow "
-            "(for Python 3.14: pip install tf-nightly, see the openNVE documentation)"
+            "networks need TensorFlow (Keras 3): pip install \"opennve[tensorflow]\" "
+            "(installs tf-nightly, see the openNVE documentation)"
         ) from error
     return keras
 

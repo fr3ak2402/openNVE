@@ -26,7 +26,7 @@ Backends (backend "auto" chooses by the model path):
     tflite:     .tflite files, run with LiteRT (pip install ai-edge-litert), tflite_runtime
                 or tf.lite (TensorFlow)
     tensorflow: Keras models (.keras, .h5) run with model.predict(...), and SavedModel
-                directories run with their serving signature (pip install tensorflow)
+                directories run with their serving signature (pip install "opennve[tensorflow]")
 
 Use:
 
@@ -475,7 +475,7 @@ def _tflite_interpreter_class():
         errors.append(str(error))
     raise ImportError(
         "TensorFlow Lite models need LiteRT: pip install ai-edge-litert "
-        "(or pip install \"opennve[tflite]\"), or TensorFlow"
+        "(installed with openNVE where wheels exist), or TensorFlow: pip install \"opennve[tensorflow]\""
     )
 
 
@@ -561,8 +561,8 @@ def _import_tensorflow():
         import tensorflow as tf  # type: ignore
     except ImportError as error:
         raise ImportError(
-            "TensorFlow models need TensorFlow: pip install tensorflow "
-            "(for Python 3.14: pip install tf-nightly, see the openNVE documentation), "
+            "TensorFlow models need TensorFlow: pip install \"opennve[tensorflow]\" "
+            "(installs tf-nightly, see the openNVE documentation), "
             "or convert the model to TensorFlow Lite (.tflite) and use LiteRT"
         ) from error
     return tf

@@ -10,12 +10,10 @@ agents.json   ──►  agent "insects" (model.tflite) ──► predict(tiles)
 
 ## Installation
 
-The model runtimes are optional, install the one you need:
-
 | Model | Runtime | Install |
 |---|---|---|
-| TensorFlow Lite (`.tflite`) | [LiteRT](https://ai.google.dev/edge/litert) (TensorFlow Lite runtime) | `pip install ai-edge-litert` or the extra `opennve[tflite]` |
-| TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | `pip install tf-nightly` (Python 3.14, see below) |
+| TensorFlow Lite (`.tflite`) | [LiteRT](https://ai.google.dev/edge/litert) (TensorFlow Lite runtime) | Installed with openNVE (dependency `ai-edge-litert`) |
+| TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | Extra `opennve[tensorflow]` (installs `tf-nightly`, see below) |
 
 LiteRT is small (about 15 MB) and has wheels for Python 3.14 on Windows x64, Linux x64 and ARM64 (Raspberry Pi 5) and macOS Apple Silicon. It is the recommended runtime for live cameras.
 

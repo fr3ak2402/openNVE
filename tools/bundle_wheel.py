@@ -110,7 +110,10 @@ def bundle(nd_wheel: pathlib.Path, out: pathlib.Path) -> pathlib.Path:
     lines += [f"Requires-Dist: {requirement}" for requirement in requirements]
     for extra, extra_requirements in project.get("optional-dependencies", {}).items():
         lines.append(f"Provides-Extra: {extra}")
-        lines += [f'Requires-Dist: {requirement}; extra == "{extra}"' for requirement in extra_requirements]
+        for requirement in extra_requirements:
+            requirement, _, marker = requirement.partition(";")
+            marker = f'({marker.strip()}) and extra == "{extra}"' if marker.strip() else f'extra == "{extra}"'
+            lines.append(f"Requires-Dist: {requirement.strip()}; {marker}")
     lines += [
         "Description-Content-Type: text/markdown",
         "",
