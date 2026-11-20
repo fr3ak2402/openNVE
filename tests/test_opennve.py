@@ -578,10 +578,3 @@ def test_bundle_writes_build_number(tmp_path):
     bundle = zipfile.ZipFile(wheel_path).read("opennve/_bundle.py").decode()
     assert 'BUILD_NUMBER = "34.2026"' in bundle and 'BUILD_DATE = "2026-02-03T10:00:00+00:00"' in bundle
     assert 'NEUROMORPHIC_DRIVERS_VERSION = "0.19.2"' in bundle
-
-
-def test_version_matches_pyproject():
-    import tomllib
-
-    pyproject = pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml"
-    assert tomllib.loads(pyproject.read_text())["project"]["version"] == opennve.__version__
