@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennve"
-version = "0.6.2"
+version = "0.8.2"
 description = "Open Neuromorphic Vision Engine: event cameras and .raw recordings, JSON configuration, filters, time windows, frames and tiles"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -35,7 +35,7 @@ test = ["pytest"]
 all = ["pandas>=2.2", "tf-nightly", "pytest"]
 
 [project.scripts]
-opennve = "opennve.__main__:main"
+opennve = "opennve.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["opennve*"]

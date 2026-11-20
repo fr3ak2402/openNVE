@@ -19,7 +19,7 @@ import typing
 
 import numpy as np
 
-from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
+from ..frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
 from .output import OutputConfig, to_csv, to_rows
 
 FRAME_MODES = ("count", "polarity", "binary", "color")

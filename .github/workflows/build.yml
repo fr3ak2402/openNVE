@@ -1,6 +1,6 @@
 # Builds openNVE wheels with neuromorphic_drivers (fr3ak2402 fork, SE1-S4 driver) embedded,
 # for Python 3.14 and newer on Linux, macOS and Windows, and tests them.
-# For tags starting with "v" (for instance v0.6.2), the wheels are attached to a GitHub release.
+# For tags starting with "v" (for instance v0.8.2), the wheels are attached to a GitHub release.
 name: Build
 
 on:

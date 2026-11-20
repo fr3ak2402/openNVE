@@ -40,6 +40,24 @@ opennve frame-template --name binary --mode binary
 
 Without `--width` / `--height` the sensor size is used, without `--tiles` the frame is not split.
 
+## `opennve version`
+
+Shows the version, the build number and the versions of the dependencies (`--json` as JSON). `opennve --version` prints only the first line.
+
+```text
+openNVE 0.8.2 (build 324.2026)
+  build date            2026-11-20T13:43:21+00:00
+  neuromorphic_drivers  0.19.2
+  Python                3.14.1
+  platform              win32 AMD64
+  numpy                 2.5.5
+  OpenCV                5.1.0.95
+  LiteRT                2.3.0
+  TensorFlow            -
+```
+
+The build number is `<day of year>.<year>` of the day the wheel was built (UTC), for instance `324.2026` for 20 November 2026.
+
 ## `opennve workflow run|list <file>`
 
 Runs or lists the [workflows](workflows.md) of a workflow configuration file.

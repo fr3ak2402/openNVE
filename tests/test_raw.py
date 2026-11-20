@@ -231,7 +231,7 @@ def test_unsupported_format(tmp_path):
 
 
 def test_evt2_time_loop():
-    decoder = opennve.raw._Evt2Decoder(1280, 720, vectorized=False)
+    decoder = opennve.recordings.raw._Evt2Decoder(1280, 720, vectorized=False)
     near_end = (1 << 34) - 64
     words = np.array(
         [
@@ -309,7 +309,7 @@ def test_reader_from_config_file(tmp_path):
 
 
 def test_cli_raw(capsys):
-    from opennve.__main__ import main
+    from opennve.cli import main
 
     assert main(["raw", str(DATA / "faery_evt3.raw")]) == 0
     output = capsys.readouterr().out
@@ -322,7 +322,7 @@ def test_cli_raw(capsys):
 
 
 def test_realtime_playback(tmp_path, monkeypatch):
-    from opennve import raw as raw_module
+    from opennve.recordings import raw as raw_module
 
     events = _random_events(9, count=200, start=1_000_000, span=2_000_000)
     path = tmp_path / "a.raw"

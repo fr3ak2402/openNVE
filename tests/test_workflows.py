@@ -247,7 +247,7 @@ def test_custom_step_and_cli(raw_file, tmp_path, capsys):
         {"type": "log", "timings": False},
         {"type": "write", "format": "jsonl", "path": "{workflow}.jsonl"},
     ]}]}))
-    from opennve.__main__ import main
+    from opennve.cli import main
 
     assert main(["check", str(path)]) == 0
     assert "workflow custom (default)" in capsys.readouterr().out

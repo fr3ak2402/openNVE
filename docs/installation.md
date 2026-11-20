@@ -22,7 +22,7 @@ Download the wheel for your platform from the [releases](https://github.com/fr3a
 
 ```sh
 pip uninstall -y neuromorphic_drivers     # only if installed separately (see below)
-pip install opennve-0.6.2-cp314-cp314-win_amd64.whl
+pip install opennve-0.8.2-cp314-cp314-win_amd64.whl
 ```
 
 pip installs the dependencies automatically:
@@ -42,8 +42,8 @@ Optional extras:
 | `all` | tensorflow, pandas, pytest | Everything |
 
 ```sh
-pip install "opennve-0.6.2-cp314-cp314-win_amd64.whl[tensorflow]"
-pip install "opennve-0.6.2-cp314-cp314-win_amd64.whl[all]"
+pip install "opennve-0.8.2-cp314-cp314-win_amd64.whl[tensorflow]"
+pip install "opennve-0.8.2-cp314-cp314-win_amd64.whl[all]"
 ```
 
 Stable TensorFlow has no wheels for Python 3.14 yet, so the `tensorflow` extra installs the nightly build `tf-nightly`. Do not install `tensorflow` and `tf-nightly` together. Without TensorFlow, everything except the neural networks and Keras models works.
@@ -55,7 +55,7 @@ Stable TensorFlow has no wheels for Python 3.14 yet, so the `tensorflow` extra i
 Check the installation:
 
 ```sh
-python -c "import opennve; print(opennve.__version__, opennve.NEUROMORPHIC_DRIVERS_VERSION)"
+opennve version                    # version, build number (<day of year>.<year>) and dependencies
 opennve models
 ```
 

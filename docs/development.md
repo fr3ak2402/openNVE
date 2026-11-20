@@ -4,26 +4,43 @@
 
 ```text
 opennve/
-├── __init__.py      public API
-├── __main__.py      command line (opennve ...)
-├── agents.py        AgentConfig, Agent, run_agents, tasks (classification, segmentation), backends
-├── workflows/       workflows: engine.py (Workflow, threads, queues), steps.py (built-in steps), item.py
-├── networks/        neural networks (need TensorFlow when used)
-│   ├── registry.py  NetworkParameters, register_network, custom objects
-│   ├── network.py   Network, TensorFlow Lite export, representative_dataset, weight comparison
-│   ├── engine.py    NeuralEngine
-│   └── unet.py      UNet layers and builder, transfer_unet_weights
-├── camera.py        EventCamera, CameraPacket, open_camera, open_cameras
-├── config.py        CameraConfig, loading/saving JSON, validation of the hardware settings
-├── devices.py       SE1S4Driver, EVK4Driver, EVK3HDDriver
-├── discovery.py     list_cameras, CameraInfo
-├── driver.py        driver_status, install_driver, ensure_driver (WinUSB)
-├── filters.py       FilterConfig, noise filter, polarity filter
-├── frames.py        FrameConfig, FrameEngine, Frame, Tile (time surface, binary, count, tiles)
-├── models.py        supported models (from neuromorphic_drivers)
-├── output.py        OutputConfig (fields x, y, p, t), CSV
-├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
-└── window.py        WindowConfig, WindowAccumulator, EventWindow, frames
+├── __init__.py          public API (everything is available as opennve.<name>)
+├── __main__.py          python -m opennve
+├── cli.py               command line (opennve ...)
+├── cameras/             event cameras
+│   ├── camera.py        EventCamera, CameraPacket, open_camera, open_cameras
+│   ├── config.py        CameraConfig, camera configuration files, validation of the hardware settings
+│   ├── devices.py       SE1S4Driver, EVK4Driver, EVK3HDDriver
+│   ├── discovery.py     list_cameras, CameraInfo
+│   ├── driver.py        driver_status, install_driver, ensure_driver (WinUSB)
+│   └── models.py        supported camera models (from neuromorphic_drivers)
+├── events/              event processing
+│   ├── filters.py       FilterConfig, noise filter, polarity filter
+│   ├── output.py        OutputConfig (fields x, y, p, t), CSV
+│   └── window.py        WindowConfig, WindowAccumulator, EventWindow
+├── recordings/          recordings
+│   └── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
+├── frames/              frames and tiles
+│   ├── config.py        FrameConfig, TileConfig, TimeSurfaceConfig, frame configuration files
+│   ├── frame.py         Frame, Tile, split_into_tiles, tile_grid
+│   └── engine.py        FrameEngine (time surface, binary, count)
+├── agents/              agents (TensorFlow / TensorFlow Lite models on frames and tiles)
+│   ├── config.py        AgentConfig, PreprocessConfig, PredictionConfig, agent configuration files
+│   ├── registry.py      register_backend, register_task
+│   ├── backends.py      TFLiteBackend, TensorFlowBackend, ModelBackend
+│   ├── tasks.py         classification, segmentation
+│   ├── results.py       Prediction, AgentResult
+│   ├── agent.py         Agent, load_agents
+│   └── runner.py        run_agents, process_window
+├── networks/            neural networks (need TensorFlow when used)
+│   ├── registry.py      NetworkParameters, register_network, custom objects
+│   ├── network.py       Network, TensorFlow Lite export, representative_dataset, weight comparison
+│   ├── engine.py        NeuralEngine
+│   └── unet.py          UNet layers and builder, transfer_unet_weights
+└── workflows/           workflows
+    ├── engine.py        Workflow, WorkflowConfig, threads and queues
+    ├── item.py          WorkItem
+    └── steps/           base.py (Step, register_step), sources.py, processing.py, sinks.py
 examples/            cameras.json, frames.json, agents.json, workflows.json, viewer.py, frames.py, tiles.py, agents.py,
                      networks.py, list_cameras.py, raw_player.py
 tests/               pytest, without hardware (the camera is simulated)
@@ -34,6 +51,8 @@ tools/bundle_wheel.py  embeds neuromorphic_drivers into the wheels
 tools/docs_to_wiki.py  publishes docs/ to the GitHub wiki
 docs/                this documentation
 ```
+
+Each subpackage exports its classes and functions (`opennve.frames.FrameEngine`, `opennve.agents.Agent`, …), and the most important ones are also available directly as `opennve.<name>`. New features belong in the subpackage of their topic; registries (`register_step`, `register_task`, `register_backend`, `register_network`) add steps, tasks, runtimes and architectures without changing openNVE.
 
 ## Tests
 
@@ -48,7 +67,7 @@ The agent tests run the models in `tests/data` with LiteRT and TensorFlow and co
 
 ## Hardware settings of new models
 
-`settings` is not maintained by hand. `config.py` reads the fields and types directly from the `Configuration` dataclasses of `neuromorphic_drivers` (nested dataclasses, enums, `Optional`, integer types with value ranges). New models or fields in the driver are therefore available automatically.
+`settings` is not maintained by hand. `cameras/config.py` reads the fields and types directly from the `Configuration` dataclasses of `neuromorphic_drivers` (nested dataclasses, enums, `Optional`, integer types with value ranges). New models or fields in the driver are therefore available automatically.
 
 ## Building wheels (GitHub Actions)
 
@@ -67,6 +86,10 @@ Bundling locally:
 python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 ```
 
+## Build number
+
+Every wheel contains a build number `<day of year>.<year>` of the build date in UTC (for instance `324.2026` for 20 November 2026), available as `opennve.BUILD_NUMBER` and with `opennve version`. `tools/bundle_wheel.py` writes it into `opennve/_bundle.py`; the build date can be fixed with the environment variable `OPENNVE_BUILD_DATE` (ISO date / time) or `SOURCE_DATE_EPOCH` (reproducible builds).
+
 ## Wiki
 
 `.github/workflows/wiki.yml` publishes `docs/` to the [GitHub wiki](https://github.com/fr3ak2402/openNVE/wiki) whenever `docs/` changes on `main` (or manually: *Actions → Wiki → Run workflow*). `tools/docs_to_wiki.py` turns `docs/README.md` into the wiki home page, gives the other pages readable names, rewrites the links and generates the sidebar.
@@ -77,14 +100,14 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.6.3"`).
+1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "0.8.3"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.6.3
+   git tag v0.8.3
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.6.3`.
+4. The action builds all wheels and attaches them to the release `v0.8.3`.
 
 ## New Python version
 

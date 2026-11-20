@@ -80,7 +80,7 @@ def test_frame_config_files(tmp_path):
 
 
 def test_cli_frame_config(tmp_path, capsys):
-    from opennve.__main__ import main
+    from opennve.cli import main
 
     assert main(["frame-template", "--name", "t", "--tiles", "80", "--width", "1280", "--height", "720"]) == 0
     path = tmp_path / "frames.json"
@@ -176,7 +176,7 @@ def test_window_frame_and_image():
 
 def test_camera_frames(monkeypatch):
     from test_opennve import FakeDevice  # simulated camera
-    from opennve import camera as camera_module
+    from opennve.cameras import camera as camera_module
 
     monkeypatch.setattr(camera_module.nd, "open", lambda configuration, serial=None, iterator_timeout=None: FakeDevice("05110634", configuration))
     config = {
