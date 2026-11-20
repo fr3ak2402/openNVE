@@ -32,6 +32,22 @@ TAG_PATTERN = re.compile(r"^cp(\d)(\d+)$")
 
 
 
+
+def _normalize_version(version: str) -> str:
+    """PEP 440 form of the version, as used in wheel file names (1.0.0-alpha -> 1.0.0a0)."""
+    try:
+        from packaging.version import Version
+
+        return str(Version(version))
+    except ImportError:
+        import re
+
+        match = re.fullmatch(r"(\d+(?:\.\d+)*)[-_.]?(alpha|a|beta|b|rc|c)[-_.]?(\d*)", version.strip().lower())
+        if match is None:
+            return version
+        kind = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc", "c": "rc"}[match.group(2)]
+        return f"{match.group(1)}{kind}{match.group(3) or 0}"
+
 def _build_date() -> datetime.datetime:
     """Build date (UTC): OPENNVE_BUILD_DATE (ISO date / time) or SOURCE_DATE_EPOCH if set, else now.
     The build number is <day of year>.<year> of this date."""
@@ -67,7 +83,7 @@ def read_project() -> dict:
 def bundle(nd_wheel: pathlib.Path, out: pathlib.Path) -> pathlib.Path:
     project = read_project()
     name = project["name"]
-    version = project["version"]
+    version = _normalize_version(project["version"])
     python_tag, abi_tag, platform_tag = wheel_tags(nd_wheel)
     dist_info = f"{name}-{version}.dist-info"
     files: dict[str, bytes] = {}

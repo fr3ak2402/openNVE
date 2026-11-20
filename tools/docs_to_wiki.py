@@ -31,6 +31,7 @@ PAGES = {
     "api.md": ("Python-API", "Python API"),
     "time-windows.md": ("Time-windows-and-frames", "Time windows and frames"),
     "frames.md": ("Frames-and-tiles", "Frames and tiles"),
+    "hdf5-files.md": ("HDF5-files", "HDF5 files"),
     "networks.md": ("Neural-networks", "Neural networks"),
     "agents.md": ("Agents", "Agents (TensorFlow models)"),
     "workflows.md": ("Workflows", "Workflows"),

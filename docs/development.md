@@ -19,7 +19,9 @@ opennve/
 │   ├── output.py        OutputConfig (fields x, y, p, t), CSV
 │   └── window.py        WindowConfig, WindowAccumulator, EventWindow
 ├── recordings/          recordings
-│   └── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
+│   ├── reader.py        RecordingReader (common base: packets, windows, frames, playback speed)
+│   ├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
+│   └── hdf5.py          HDF5 files: Hdf5Reader (layouts, labels), Hdf5Writer, open_recording
 ├── frames/              frames and tiles
 │   ├── config.py        FrameConfig, TileConfig, TimeSurfaceConfig, frame configuration files
 │   ├── frame.py         Frame, Tile, split_into_tiles, tile_grid
@@ -100,14 +102,14 @@ Every wheel contains a build number `<day of year>.<year>` of the build date in 
 
 ## Release
 
-1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "0.8.3"`).
+1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "1.0.0a1"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.8.3
+   git tag v1.0.0a1
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.8.3`.
+4. The action builds all wheels and attaches them to the release `v1.0.0a1`.
 
 ## New Python version
 

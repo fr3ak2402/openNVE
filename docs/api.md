@@ -26,17 +26,17 @@ All names described here are available directly as `opennve.<name>`.
 
 | Name | Description |
 |---|---|
-| `__version__` | Version, for instance `"0.8.2"` |
+| `__version__` | Version, for instance `"1.0.0a0"` |
 | `BUILD_NUMBER` / `build_number()` | Build number `<day of year>.<year>` of the build (UTC), for instance `"324.2026"` for 20 November 2026 |
 | `BUILD_DATE` | Build date and time (`datetime`, UTC) |
 | `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded neuromorphic_drivers |
 | `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `litert`, `tensorflow` |
-| `version_string()` | `"openNVE 0.8.2 (build 324.2026)"` |
+| `version_string()` | `"openNVE 1.0.0a0 (build 324.2026)"` |
 
 ```python
 import opennve
 
-print(opennve.__version__, opennve.BUILD_NUMBER)   # 0.8.2 324.2026
+print(opennve.__version__, opennve.BUILD_NUMBER)   # 1.0.0a0 324.2026
 print(opennve.version_info())
 ```
 
@@ -434,6 +434,18 @@ print(workflow.statistics_report())
 ```
 
 ---
+
+## Recordings
+
+`.raw` files ([RAW files](raw-files.md)) and HDF5 files with x, y, p, t, l ([HDF5 files](hdf5-files.md)) are read like a live camera.
+
+| Name | Description |
+|---|---|
+| `open_recording(path, config=None, **options)` | Opens `.raw` or HDF5, chosen by the file type |
+| `open_hdf5(path, config=None, *, config_path=None, name=None, **options) -> Hdf5Reader` | HDF5 file (options: `dataset`, `columns`, `time_unit`, `width`, `height`, `labels`, `sort`, `speed`, …) |
+| `read_hdf5(path, **options)` | All events of an HDF5 file |
+| `write_hdf5(path, events, ...)`, `Hdf5Writer(path, ...)` | Writes events (with labels) to an HDF5 file |
+| `RecordingReader` | Base class of `RawReader` and `Hdf5Reader` (same methods) |
 
 ## RAW files
 

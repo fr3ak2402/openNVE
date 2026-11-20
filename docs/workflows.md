@@ -102,16 +102,19 @@ A step can drop an item (`require`, or a function that returns `None`); the next
 | `max_blocks`, `duration_s` | `null` | Stop after this many blocks / seconds |
 | `install_driver` | `false` | Install missing USB drivers first (Windows) |
 
-**`raw`** – `.raw` recordings.
+**`recording`** (also `raw`, `hdf5`) – recordings: `.raw` files and [HDF5 files](hdf5-files.md) (`.h5`, `.hdf5`), chosen by the file type.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `path` | – | File, glob pattern (`"recordings/*.raw"`) or list; files are read one after the other |
+| `path` | – | File, glob pattern (`"recordings/*.raw"`, `"data/*.h5"`) or list; files are read one after the other |
 | `camera` | `null` | Camera of the camera configuration whose filter, output format and window are used |
 | `block_ms` | `null` | Block length (`null`: window of the camera configuration, else 40 ms) |
 | `speed` | `null` | `1.0` = real time, `null` = as fast as possible |
 | `max_blocks` | `null` | Stop after this many blocks |
-| `chunk_kb` | `null` | Bytes read at once (1024 KB; 16 KB with a `speed`, for smooth playback) |
+| `chunk_kb` | `null` | `.raw`: bytes read at once (1024 KB; 16 KB with a `speed`, for smooth playback) |
+| `dataset`, `time_unit`, `sort` | `null`, `"auto"`, `false` | HDF5: dataset with the events, unit of the time stamps, sort by time (see [HDF5 files](hdf5-files.md)) |
+
+Labels of HDF5 files are kept in `item.block.polarity_events["l"]` and, with the output field `l`, in the written events.
 
 ### Processing
 
@@ -174,7 +177,7 @@ The result (`item.events`) has the output format of the camera (for instance `x,
 
 | Parameter | Default | Description |
 |---|---|---|
-| `format` | `"csv"` | `csv`: one row per event (`item.events`, or all events of the block if no step set events); `jsonl`: one JSON line per item with its windows and the selected predictions (with pixels) |
+| `format` | `"csv"` | `csv`: one row per event (`item.events`, or all events of the block if no step set events); `hdf5`: the same events in an [HDF5 file](hdf5-files.md) (one dataset per column, labels included); `jsonl`: one JSON line per item with its windows and the selected predictions (with pixels) |
 | `path` | `"output/{workflow}_{date}_{time}.csv"` | File name with placeholders `{workflow}`, `{camera}`, `{date}`, `{time}`, `{datetime}` (start of the workflow) and `{index}`. Files are appended; the CSV header is written once |
 | `camera_column` | `false` | CSV: camera name as the first column |
 

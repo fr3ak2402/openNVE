@@ -22,7 +22,7 @@ Download the wheel for your platform from the [releases](https://github.com/fr3a
 
 ```sh
 pip uninstall -y neuromorphic_drivers     # only if installed separately (see below)
-pip install opennve-0.8.2-cp314-cp314-win_amd64.whl
+pip install opennve-1.0.0a0-cp314-cp314-win_amd64.whl
 ```
 
 pip installs the dependencies automatically:
@@ -30,6 +30,7 @@ pip installs the dependencies automatically:
 | Package | Used for |
 |---|---|
 | numpy | Events, filters, `.raw` files, time windows, frames and tiles |
+| h5py | [HDF5 event files](hdf5-files.md) (`.h5`, `.hdf5`). Installed for Python 3.14; for Python 3.15 there are no h5py wheels yet (`pip install h5py` builds it if the HDF5 library is installed) |
 | opencv-python | Display (`frame.to_image`, examples), resizing of agent inputs |
 | ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
 
@@ -38,12 +39,12 @@ Optional extras:
 | Extra | Installs | Used for |
 |---|---|---|
 | `tensorflow` | tf-nightly (about 600 MB, includes Keras 3) | [Neural networks](networks.md) (building, training, TensorFlow Lite export) and agents with Keras / SavedModel models |
-| `pandas` | pandas | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`) |
-| `all` | tensorflow, pandas, pytest | Everything |
+| `pandas` | pandas, PyTables | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`), HDF5 files written by pandas in table format |
+| `all` | tensorflow, pandas, PyTables, pytest | Everything |
 
 ```sh
-pip install "opennve-0.8.2-cp314-cp314-win_amd64.whl[tensorflow]"
-pip install "opennve-0.8.2-cp314-cp314-win_amd64.whl[all]"
+pip install "opennve-1.0.0a0-cp314-cp314-win_amd64.whl[tensorflow]"
+pip install "opennve-1.0.0a0-cp314-cp314-win_amd64.whl[all]"
 ```
 
 Stable TensorFlow has no wheels for Python 3.14 yet, so the `tensorflow` extra installs the nightly build `tf-nightly`. Do not install `tensorflow` and `tf-nightly` together. Without TensorFlow, everything except the neural networks and Keras models works.

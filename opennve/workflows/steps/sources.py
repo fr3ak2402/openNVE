@@ -73,22 +73,33 @@ class CameraSource(_Source):
                 camera.close()
 
 
-@register_step("raw")
-class RawSource(_Source):
-    """RAW recordings: one item per block of block_ms.
+@register_step("recording")
+class RecordingSource(_Source):
+    """Recordings (.raw or HDF5 .h5 / .hdf5, chosen by the file type): one item per block of block_ms.
 
-    path: file, glob pattern ("recordings/*.raw") or list (relative to the workflow file).
+    path: file, glob pattern ("recordings/*.h5") or list (relative to the workflow file).
     camera: camera name in the camera configuration whose filter, output format and window are
         used (null: defaults; the camera name is then the file name).
     speed: 1.0 = real time, null = as fast as possible.
-    chunk_kb: bytes read at once (null: 1024 KB, or 16 KB with a speed, for smooth playback).
+    chunk_kb: .raw: bytes read at once (null: 1024 KB, or 16 KB with a speed, for smooth playback).
+    dataset, time_unit, sort: HDF5 files (see opennve.open_hdf5).
     """
 
-    PARAMETERS = {"path": None, "camera": None, "block_ms": None, "speed": None, "max_blocks": None, "chunk_kb": None}
+    PARAMETERS = {
+        "path": None,
+        "camera": None,
+        "block_ms": None,
+        "speed": None,
+        "max_blocks": None,
+        "chunk_kb": None,
+        "dataset": None,
+        "time_unit": "auto",
+        "sort": False,
+    }
 
     def validate(self):
         if not self.params["path"]:
-            raise ValueError("step raw: path is required")
+            raise ValueError(f"step {self.TYPE}: path is required")
         _positive_number(self, "block_ms")
         _positive_number(self, "speed")
         _positive_number(self, "max_blocks", integer=True)
@@ -103,27 +114,42 @@ class RawSource(_Source):
             matches = sorted(glob.glob(pattern)) if any(c in pattern for c in "*?[") else [pattern]
             paths.extend(pathlib.Path(match) for match in matches)
         if not paths:
-            raise ValueError(f"step raw: no file matches {values}")
+            raise ValueError(f"step {self.TYPE}: no file matches {values}")
         return paths
 
-    def items(self, stop):
+    def _open(self, path: pathlib.Path, config):
+        from ...recordings.hdf5 import HDF5_SUFFIXES, is_hdf5, open_hdf5
         from ...recordings.raw import open_raw
 
+        speed = self.params["speed"]
+        if path.suffix.lower() in HDF5_SUFFIXES or (path.suffix.lower() != ".raw" and is_hdf5(path)):
+            return open_hdf5(
+                path,
+                config,
+                speed=speed,
+                dataset=self.params["dataset"],
+                time_unit=self.params["time_unit"],
+                sort=bool(self.params["sort"]),
+                chunk_events=20_000 if speed else 1_000_000,
+            )
+        chunk_kb = self.params["chunk_kb"] or (16 if speed else 1024)
+        return open_raw(path, config, speed=speed, chunk_bytes=chunk_kb * 1024)
+
+    def items(self, stop):
         config = None
         if self.params["camera"] is not None:
             configs = {c.name: c for c in self.context.camera_configs()}
             if self.params["camera"] not in configs:
-                raise ValueError(f"step raw: unknown camera {self.params['camera']!r}")
+                raise ValueError(f"step {self.TYPE}: unknown camera {self.params['camera']!r}")
             config = configs[self.params["camera"]]
         block_ms = self.params["block_ms"]
         index = 0
         for path in self.paths():
-            chunk_kb = self.params["chunk_kb"] or (16 if self.params["speed"] else 1024)
-            with open_raw(path, config, speed=self.params["speed"], chunk_bytes=chunk_kb * 1024) as raw:
-                if block_ms is None and raw.window_config is None:
+            with self._open(path, config) as recording:
+                if block_ms is None and recording.window_config is None:
                     block_ms = 40
                 while not stop.is_set():
-                    windows = raw.read_windows(block_ms)
+                    windows = recording.read_windows(block_ms)
                     if windows is None:
                         break
                     for window in windows:
@@ -135,3 +161,13 @@ class RawSource(_Source):
                             return
             if stop.is_set():
                 return
+
+
+@register_step("raw")
+class RawSource(RecordingSource):
+    """.raw recordings (the same as "recording")."""
+
+
+@register_step("hdf5")
+class Hdf5Source(RecordingSource):
+    """HDF5 recordings (the same as "recording")."""

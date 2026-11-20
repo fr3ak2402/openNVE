@@ -3,13 +3,16 @@
 
 # events, filters, .raw files, time windows, frames and tiles
 numpy>=1.26
+# HDF5 event files (.h5 / .hdf5)
+h5py>=3.12; python_version < '3.15'
 # display, resizing of agent inputs
 opencv-python>=4.10
 # agents with TensorFlow Lite models (.tflite); wheels for Windows x64, Linux x64 / ARM64, macOS ARM64
 ai-edge-litert>=2.3; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')
 
-# optional: events as pandas DataFrames
+# optional: events as pandas DataFrames, HDF5 files written by pandas in table format
 pandas>=2.2
+tables>=3.10
 # optional (about 600 MB): neural networks and agents with Keras / SavedModel models.
 # Stable TensorFlow has no Python 3.14 wheels yet: tf-nightly (includes Keras 3)
 tf-nightly

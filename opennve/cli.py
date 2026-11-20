@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import sys
 
 from .cameras.config import CameraConfig, load_configs
@@ -180,18 +181,28 @@ def _driver(args) -> int:
 def _raw(args) -> int:
     import numpy as np
 
-    from .recordings.raw import open_raw
+    from .recordings import HDF5_SUFFIXES, is_hdf5, open_hdf5, open_raw
 
-    with open_raw(args.path, format=args.format, width=args.width, height=args.height) as raw:
+    path = pathlib.Path(args.path)
+    if path.suffix.lower() in HDF5_SUFFIXES or (path.suffix.lower() != ".raw" and is_hdf5(path)):
+        reader = open_hdf5(path, dataset=args.dataset, width=args.width, height=args.height)
+    else:
+        reader = open_raw(path, format=args.format, width=args.width, height=args.height)
+    with reader as raw:
         info = raw.info()
         count = on = 0
         triggers = 0
         first_t = last_t = None
+        labels: dict[int, int] = {}
         for packet in raw.events():
             events = packet.polarity_events
             if len(events) > 0:
                 count += len(events)
                 on += int(np.count_nonzero(events["on"]))
+                if "l" in events.dtype.names:
+                    values, counts = np.unique(events["l"], return_counts=True)
+                    for value, number in zip(values.tolist(), counts.tolist()):
+                        labels[value] = labels.get(value, 0) + number
                 first_t = int(events["t"][0]) if first_t is None else first_t
                 last_t = int(events["t"][-1])
             if packet.trigger_events is not None:
@@ -209,6 +220,8 @@ def _raw(args) -> int:
             "event_rate": count / duration_s if duration_s > 0 else None,
         }
     )
+    if labels:
+        info["label_counts"] = {str(label): number for label, number in sorted(labels.items())}
     for key in ("filter", "output", "window"):
         info.pop(key)
     if args.json:
@@ -216,12 +229,17 @@ def _raw(args) -> int:
         return 0
     print(f"{info['path']}")
     print(f"  format:     {info['format']}, {info['resolution']['width']} x {info['resolution']['height']}")
-    print(f"  serial:     {info['serial'] or '-'}")
+    if "serial" in info:
+        print(f"  serial:     {info['serial'] or '-'}")
+    if "layout" in info:
+        print(f"  dataset:    {info['dataset']} ({info['layout']}, time unit {info['time_unit']})")
     print(f"  size:       {info['size_bytes'] / 1e6:.1f} MB")
     print(f"  events:     {count} ({on} ON, {count - on} OFF), {triggers} trigger events")
     if first_t is not None:
         rate = f", {info['event_rate'] / 1e6:.2f} Mev/s" if info["event_rate"] else ""
         print(f"  time:       {first_t / 1e6:.6f} s to {last_t / 1e6:.6f} s ({duration_s:.3f} s{rate})")
+    if labels:
+        print("  labels:     " + ", ".join(f"{label}: {number}" for label, number in sorted(labels.items())))
     return 0
 
 
@@ -282,13 +300,11 @@ def main(argv=None) -> int:
     command.add_argument("--force", action="store_true", help="also replace another (vendor) driver")
     command.set_defaults(function=_driver)
 
-    command = commands.add_parser("raw", help="show the header and statistics of a RAW file")
-    command.add_argument("path")
-    command.add_argument("--json", action="store_true", help="output JSON")
-    command.add_argument("--format", help="event format for files without header (EVT3, EVT2, EVT21)")
-    command.add_argument("--width", type=int)
-    command.add_argument("--height", type=int)
-    command.set_defaults(function=_raw)
+    for command_name in ("recording", "raw"):
+        command = commands.add_parser(
+            command_name, help="show the information and statistics of a recording (.raw or HDF5 .h5 / .hdf5)"
+        )
+        _recording_arguments(command)
 
     command = commands.add_parser("models", help="list supported camera models")
     command.set_defaults(function=_models)
@@ -299,6 +315,16 @@ def main(argv=None) -> int:
     except (ValueError, OSError, RuntimeError, ImportError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+
+
+def _recording_arguments(command):
+    command.add_argument("path")
+    command.add_argument("--json", action="store_true", help="output JSON")
+    command.add_argument("--format", help="event format for files without header (EVT3, EVT2, EVT21)")
+    command.add_argument("--width", type=int)
+    command.add_argument("--height", type=int)
+    command.set_defaults(function=_raw)
+    command.add_argument("--dataset", help="HDF5: group or dataset with the events")
 
 
 if __name__ == "__main__":

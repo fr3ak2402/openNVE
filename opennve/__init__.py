@@ -55,11 +55,18 @@ from .events import (
 )
 # recordings: .raw files
 from .recordings import (
+    Hdf5Reader,
+    Hdf5Writer,
     RawHeader,
     RawReader,
+    RecordingReader,
+    open_hdf5,
     open_raw,
+    open_recording,
     read_header,
+    read_hdf5,
     read_raw,
+    write_hdf5,
 )
 # frames and tiles
 from .frames import (
@@ -140,6 +147,13 @@ from ._version import (
 )
 
 __all__ = [
+    "Hdf5Reader",
+    "Hdf5Writer",
+    "RecordingReader",
+    "open_hdf5",
+    "open_recording",
+    "read_hdf5",
+    "write_hdf5",
     "BUILD_DATE",
     "BUILD_NUMBER",
     "NEUROMORPHIC_DRIVERS_VERSION",

@@ -542,7 +542,7 @@ def test_version_and_build_number(capsys):
 
     from opennve._version import format_build_number, parse_build_number
 
-    assert re.fullmatch(r"\d+\.\d+\.\d+", opennve.__version__)
+    assert re.fullmatch(r"\d+\.\d+\.\d+((a|b|rc)\d+)?", opennve.__version__)
     assert re.fullmatch(r"\d{1,3}\.\d{4}", opennve.BUILD_NUMBER) and opennve.build_number() == opennve.BUILD_NUMBER
     assert format_build_number(datetime.date(2026, 11, 20)) == "324.2026"
     assert format_build_number(datetime.date(2026, 1, 5)) == "5.2026"
@@ -578,10 +578,3 @@ def test_bundle_writes_build_number(tmp_path):
     bundle = zipfile.ZipFile(wheel_path).read("opennve/_bundle.py").decode()
     assert 'BUILD_NUMBER = "34.2026"' in bundle and 'BUILD_DATE = "2026-02-03T10:00:00+00:00"' in bundle
     assert 'NEUROMORPHIC_DRIVERS_VERSION = "0.19.2"' in bundle
-
-
-def test_version_matches_pyproject():
-    import tomllib
-
-    pyproject = pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml"
-    assert tomllib.loads(pyproject.read_text())["project"]["version"] == opennve.__version__

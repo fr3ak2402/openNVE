@@ -273,11 +273,13 @@ class LabelEventsStep(Step):
             window_labels[new] = values[new] - 1 if self.params["label"] is None else self.params["label"]
             matched[first:last] |= new
         output = block.output_config.format(events)
-        dtype = np.dtype([(name, output.dtype.fields[name][0]) for name in output.dtype.names] + [(self.params["field"], "<i4")])
+        field = self.params["field"]
+        names = [name for name in output.dtype.names if name != field]  # an "l" output field is replaced
+        dtype = np.dtype([(name, output.dtype.fields[name][0]) for name in names] + [(field, "<i4")])
         labeled = np.zeros(len(output), dtype)
-        for name in output.dtype.names:
+        for name in names:
             labeled[name] = output[name]
-        labeled[self.params["field"]] = labels
+        labeled[field] = labels
         item.events = labeled[matched] if self.params["only_labeled"] else labeled
         item.data["labeled_events"] = int(matched.sum())
         return item

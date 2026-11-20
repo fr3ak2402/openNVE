@@ -2,14 +2,14 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Troubleshooting](docs/troubleshooting.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Troubleshooting](docs/troubleshooting.md)
 
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
 - Open one or several cameras from that configuration (with clock synchronization)
 - Read filtered events, or collect them in time windows (default 40 ms) to build frames
 - Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px)
-- Read `.raw` recordings (EVT 2.0, 2.1, 3.0) with the same interface as a live camera
+- Read `.raw` recordings (EVT 2.0, 2.1, 3.0) and HDF5 files (x, y, p, t, optional label l) with the same interface as a live camera; write labeled events as HDF5
 - Agents: run TensorFlow and TensorFlow Lite models on the tiles or frames of every window (`agents.json`), classification or segmentation
 - Workflows: free chains of steps (camera / RAW → windows → frames → tiles → neural network → labeled events → files), multithreaded (`workflows.json`)
 - Neural networks: build (U-Net, own architectures), load, save, transfer weights and quantize models to TensorFlow Lite
@@ -22,7 +22,7 @@ Download the wheel for your platform and Python version from the [releases](http
 
 ```sh
 pip uninstall -y neuromorphic_drivers   # if a separate neuromorphic_drivers is installed
-pip install opennve-0.8.2-cp314-cp314-win_amd64.whl
+pip install opennve-1.0.0a0-cp314-cp314-win_amd64.whl
 ```
 
 | File name contains | Platform |
@@ -48,7 +48,7 @@ opennve list --json --config examples/cameras.json
 opennve template SE1-S4 --serial 05110634 --name left > left.json
 opennve check examples/cameras.json
 opennve models
-opennve raw recording.raw            # header and statistics of a .raw file
+opennve recording recording.raw      # information and statistics of a .raw or HDF5 (.h5) recording
 ```
 
 ## Camera configuration (JSON)
@@ -151,7 +151,7 @@ cameras = opennve.open_cameras(configs)
 python examples/list_cameras.py
 python examples/viewer.py examples/cameras.json   # Q: exit, F: filter on/off
 python examples/frames.py examples/cameras.json left   # one frame per time window, M: frame mode
-python examples/raw_player.py recording.raw             # play a .raw recording as frames
+python examples/raw_player.py recording.raw             # play a .raw or .h5 recording as frames
 python examples/tiles.py examples/cameras.json --camera left --frame tiles80   # frames and tiles (examples/frames.json)
 python examples/agents.py examples/cameras.json --camera left                  # TensorFlow models on tiles (examples/agents.json)
 python examples/networks.py recording.raw --out models                         # build a U-Net, convert it to TensorFlow Lite
@@ -160,7 +160,7 @@ opennve workflow run examples/workflows.json                                   #
 
 ## Wheels
 
-GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v0.8.2 && git push --tags`) they are attached to a GitHub release.
+GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v1.0.0a0 && git push --tags`) they are attached to a GitHub release.
 
 neuromorphic_drivers is distributed under the MIT License, its license is included in the wheels (`opennve-*.dist-info/licenses/neuromorphic_drivers/LICENSE`).
 

@@ -4,10 +4,8 @@ Tests that need TensorFlow or LiteRT are skipped if they are not installed.
 """
 
 import json
-import os
 import subprocess
 import sys
-import textwrap
 
 import numpy as np
 import pytest

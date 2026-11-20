@@ -138,6 +138,7 @@ The filters run on the computer after the events have been read. They apply to `
 | `y` | uint16 | Pixel row (0 … height−1) |
 | `p` | uint8 | Polarity: `1` = brighter (ON), `0` = darker (OFF) |
 | `t` | uint64 | Camera timestamp in µs |
+| `l` | int32 | Label, from recordings with labels ([HDF5 files](hdf5-files.md) with an `l` column); `0` for live cameras and `.raw` files |
 
 The **camera name** is not an event field. It is stored once per packet or window as `packet.camera` / `window.camera`. For CSV output, `to_csv(camera=True)` writes it once as the first line.
 

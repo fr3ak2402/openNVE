@@ -22,6 +22,7 @@ runs:
         "$VENV_BIN/python" -m pip install numpy opencv-python pytest
         # optional extra: tests with pandas DataFrames run if a pandas wheel exists for this Python version
         "$VENV_BIN/python" -m pip install --only-binary :all: pandas || echo "no pandas wheel, DataFrame tests are skipped"
+        "$VENV_BIN/python" -m pip install --only-binary :all: tables || echo "no PyTables wheel, pandas table HDF5 tests are skipped"
         # the openNVE wheel from dist, its dependencies (numpy, OpenCV, LiteRT) from PyPI
         "$VENV_BIN/python" -m pip install --no-index --find-links dist --no-deps opennve
         "$VENV_BIN/python" -m pip install --find-links dist opennve
