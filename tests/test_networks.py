@@ -164,6 +164,38 @@ def test_segmentation_options():
         opennve.Agent.from_model(lambda batch: np.zeros((len(batch), 3)), prediction=SEGMENTATION).predict(frame)
 
 
+def test_segmentation_logits_path_matches_probabilities(monkeypatch):
+    """The segmentation decodes from the logits (softmax only where needed); the results and the
+    lazily computed outputs are the same as with the softmax applied to everything first."""
+    from opennve.agents import tasks
+
+    rng = np.random.default_rng(3)
+    events = [(t, int(rng.integers(0, 40)), int(rng.integers(0, 24)), bool(rng.integers(0, 2))) for t in range(0, 400, 2)]
+    frame = _window(events, end_t=400).frame({"mode": "binary", "tiles": {"size": 16, "min_events": 1}})
+
+    def random_logits(batch):
+        return np.random.default_rng(len(batch)).normal(0, 2, batch.shape[:3] + (3,)).astype(np.float32)
+
+    for options in ({}, {"mask_inactive": True}, {"threshold": 0.7}, {"target_classes": None}):
+        agent = opennve.Agent.from_model(random_logits, prediction={**SEGMENTATION, **options})
+        monkeypatch.setattr(tasks._segmentation, "accepts_logits", True)
+        lazy = agent.predict(frame)
+        monkeypatch.setattr(tasks._segmentation, "accepts_logits", False)
+        eager = agent.predict(frame)
+        assert len(lazy) == len(eager) > 0
+        for a, b in zip(lazy.predictions, eager.predictions):
+            assert np.array_equal(a.pixels[["x", "y", "class_id"]], b.pixels[["x", "y", "class_id"]])
+            np.testing.assert_allclose(a.pixels["score"], b.pixels["score"], rtol=1e-5)
+            np.testing.assert_allclose(a.pixel_scores, b.pixel_scores, rtol=1e-5, atol=1e-7)
+            assert np.array_equal(a.class_map, b.class_map) and np.array_equal(a.class_counts, b.class_counts)
+            assert (a.class_id, a.label, a.selected) == (b.class_id, b.label, b.selected)
+            assert a.score == pytest.approx(b.score) if b.score is not None else a.score is None
+            np.testing.assert_allclose(a.output, b.output, rtol=1e-5, atol=1e-7)
+            assert len(a.outputs) == len(b.outputs)
+        np.testing.assert_allclose(lazy.outputs[0], eager.outputs[0], rtol=1e-5, atol=1e-7)
+        json.dumps(lazy.to_dict())
+
+
 # ------------------------------------------------------------------ TensorFlow
 
 

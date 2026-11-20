@@ -2,7 +2,7 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
 
 - List all connected cameras (as objects or JSON)
 - Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters

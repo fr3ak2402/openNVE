@@ -12,7 +12,7 @@ from ._util import _resize, _softmax
 from .backends import Backend, ModelBackend, ModelInput, create_backend
 from .config import AgentConfig, PathLike, load_agent_config, load_agent_configs
 from .registry import _TASKS
-from .results import AgentResult
+from .results import AgentResult, lazy_outputs_result
 from .tasks import TaskInput
 
 
@@ -196,7 +196,11 @@ class Agent:
         outputs = self.predict_batch(batch)
         inference_ms = (time.perf_counter() - start) * 1000
         prediction_config = self.config.prediction
-        if outputs and prediction_config.activation != "none":
+        decoder = _TASKS[prediction_config.task]
+        # tasks that read logits (segmentation) get the softmax lazily: only what they use is computed
+        logits = bool(outputs) and prediction_config.activation == "softmax" and getattr(decoder, "accepts_logits", False)
+        raw_outputs = outputs
+        if outputs and prediction_config.activation != "none" and not logits:
             first = outputs[0].astype(np.float32)
             first = _softmax(first) if prediction_config.activation == "softmax" else 1 / (1 + np.exp(-first))
             outputs = [first] + outputs[1:]
@@ -208,8 +212,13 @@ class Agent:
             pad_to=pad_to,
             outputs=outputs,
             count=len(batch),
+            logits=logits,
         )
-        predictions = _TASKS[prediction_config.task](context)
+        predictions = decoder(context)
+        if logits:
+            return lazy_outputs_result(
+                raw_outputs, _softmax, agent=self.name, frame=frame, predictions=predictions, inference_ms=inference_ms
+            )
         return AgentResult(
             agent=self.name, frame=frame, predictions=predictions, outputs=outputs, inference_ms=inference_ms
         )
