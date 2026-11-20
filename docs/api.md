@@ -375,6 +375,23 @@ for step in opennve.run_agents(camera, agents, opennve.load_frame_configs("frame
 
 ---
 
+## Neural networks
+
+Building, loading, saving and converting networks (TensorFlow / Keras), see [Neural networks](networks.md).
+
+| Name | Description |
+|---|---|
+| `NetworkParameters(number_of_classes, tile_height=80, tile_width=80, channels=2)` | Input and output size |
+| `Network.build(architecture, parameters, name=None, **options)` / `Network.load(path, ...)` | `model`, `save`, `load_weights`, `save_weights`, `summary`, `predict`, `compare_weights`, `transfer_weights_from`, `to_tflite`, `agent` |
+| `NeuralEngine(model_directory=".")` | Named networks: `add_network`, `add`, `get`, `save`, `quantize`, `transfer_weights`, `compare_weights` |
+| `list_networks()`, `register_network(name)` | Architectures (built in: `UNet`) |
+| `register_custom_objects(objects, package=None)`, `custom_objects()` | Custom Keras layers for loading models |
+| `register_weight_transfer(name)` | Weight transfer methods (built in: `hsnr_unet`) |
+| `representative_dataset(data, input_shape=None, max_samples=200, min_events=1)` | Samples for int8 quantization |
+| `compare_weights(a, b)` | `WeightComparison` |
+
+---
+
 ## RAW files
 
 `.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.

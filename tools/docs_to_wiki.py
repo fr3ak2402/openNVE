@@ -31,6 +31,7 @@ PAGES = {
     "api.md": ("Python-API", "Python API"),
     "time-windows.md": ("Time-windows-and-frames", "Time windows and frames"),
     "frames.md": ("Frames-and-tiles", "Frames and tiles"),
+    "networks.md": ("Neural-networks", "Neural networks"),
     "agents.md": ("Agents", "Agents (TensorFlow models)"),
     "multiple-cameras.md": ("Multiple-cameras", "Multiple cameras"),
     "raw-files.md": ("RAW-files", "RAW files"),

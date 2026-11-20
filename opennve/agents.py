@@ -54,7 +54,9 @@ from .frames import Frame, FrameConfig, Tile, as_frame_configs
 
 PathLike = typing.Union[str, pathlib.Path]
 
-BACKENDS = ("auto", "tflite", "tensorflow")
+_BACKENDS: dict[str, typing.Callable[..., "Backend"]] = {}  # name -> factory(config), see register_backend
+_BACKEND_SUFFIXES: dict[str, str] = {}  # model file suffix -> backend name
+_TASKS: dict[str, typing.Callable[..., list]] = {}  # name -> decoder, see register_task
 INPUTS = ("tiles", "frame")
 CHANNELS = ("both", "on", "off", "sum", "max")
 LAYOUTS = ("nhwc", "nchw")
@@ -116,18 +118,47 @@ class PreprocessConfig:
 class PredictionConfig:
     """How the model outputs are read.
 
+    task: how outputs are interpreted (see register_task):
+        "classification": one output vector per input (class id, label, score).
+        "segmentation": one class per pixel (output height x width x classes, for instance a U-Net):
+            class map, pixels of the target classes with frame coordinates and scores.
     activation: "none" (the model already returns probabilities or scores), "softmax" or "sigmoid"
-        (applied to the first output, for models that return logits).
-    labels: class names, index = class id of the output vector.
-    threshold: Prediction.selected is True for predictions with score >= threshold
-        (None: all predictions are selected).
+        (applied to the first output along the class axis, for models that return logits).
+    labels: class names, index = class id.
+    threshold: classification: selected if score >= threshold (None: all are selected).
+        segmentation: a pixel counts for a target class only if its probability >= threshold
+        (None: the class with the highest probability).
+    target_classes: segmentation: classes to detect, for instance [2] (None: all classes except 0).
+    min_pixels: segmentation: a tile is selected if it has at least this many target pixels.
+    mask_inactive: segmentation: ignore target pixels without events in the input (all channels
+        <= activity_threshold).
+    activity_threshold: segmentation: a pixel is active if one of its input channels is above this value.
     """
 
     activation: str = "none"
     labels: typing.Optional[list[str]] = None
     threshold: typing.Optional[float] = None
+    task: str = "classification"
+    target_classes: typing.Optional[list[int]] = None
+    min_pixels: int = 1
+    mask_inactive: bool = False
+    activity_threshold: float = 0.0
 
     def validate(self):
+        if self.task not in _TASKS:
+            raise ValueError(f"agent.prediction.task must be one of {', '.join(list_tasks())}")
+        if self.target_classes is not None:
+            if not isinstance(self.target_classes, (list, tuple)) or not all(
+                isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in self.target_classes
+            ):
+                raise ValueError("agent.prediction.target_classes must be a list of class ids or null")
+            self.target_classes = [int(value) for value in self.target_classes]
+        if isinstance(self.min_pixels, bool) or not isinstance(self.min_pixels, int) or self.min_pixels < 0:
+            raise ValueError("agent.prediction.min_pixels must be an integer >= 0")
+        if not isinstance(self.mask_inactive, bool):
+            raise ValueError("agent.prediction.mask_inactive must be true or false")
+        if isinstance(self.activity_threshold, bool) or not isinstance(self.activity_threshold, (int, float)):
+            raise ValueError("agent.prediction.activity_threshold must be a number")
         if self.activation not in ACTIVATIONS:
             raise ValueError(f"agent.prediction.activation must be one of {', '.join(ACTIVATIONS)}")
         if self.labels is not None and (
@@ -142,12 +173,21 @@ class PredictionConfig:
             raise ValueError("agent.prediction.threshold must be a number or null")
 
     def to_dict(self) -> dict[str, typing.Any]:
-        return {"activation": self.activation, "labels": self.labels, "threshold": self.threshold}
+        return {
+            "task": self.task,
+            "activation": self.activation,
+            "labels": self.labels,
+            "threshold": self.threshold,
+            "target_classes": self.target_classes,
+            "min_pixels": self.min_pixels,
+            "mask_inactive": self.mask_inactive,
+            "activity_threshold": self.activity_threshold,
+        }
 
 
 _AGENT_FIELDS = (
     "name", "model", "backend", "input", "frame", "batch_size", "threads", "call", "signature",
-    "preprocess", "prediction",
+    "safe_mode", "preprocess", "prediction",
 )
 
 
@@ -176,6 +216,7 @@ class AgentConfig:
     threads: typing.Optional[int] = None
     call: str = "predict"
     signature: str = "serving_default"
+    safe_mode: bool = True
     preprocess: PreprocessConfig = dataclasses.field(default_factory=PreprocessConfig)
     prediction: PredictionConfig = dataclasses.field(default_factory=PredictionConfig)
     base_dir: typing.Optional[pathlib.Path] = dataclasses.field(default=None, compare=False, repr=False)
@@ -196,8 +237,10 @@ class AgentConfig:
             raise ValueError("agent.model must be the path of a model file")
         if self.name is not None and (not isinstance(self.name, str) or not self.name.strip()):
             raise ValueError("agent.name must be a non-empty string")
-        if self.backend not in BACKENDS:
-            raise ValueError(f"agent.backend must be one of {', '.join(BACKENDS)}")
+        if self.backend != "auto" and self.backend not in _BACKENDS:
+            raise ValueError(f"agent.backend must be one of auto, {', '.join(sorted(_BACKENDS))}")
+        if not isinstance(self.safe_mode, bool):
+            raise ValueError("agent.safe_mode must be true or false")
         if self.input not in INPUTS:
             raise ValueError(f"agent.input must be one of {', '.join(INPUTS)}")
         if self.frame is not None and (not isinstance(self.frame, str) or not self.frame):
@@ -226,9 +269,9 @@ class AgentConfig:
         if self.backend != "auto":
             return self.backend
         path = self.model_path
-        if path.suffix.lower() == ".tflite":
-            return "tflite"
-        if path.suffix.lower() in (".keras", ".h5", ".hdf5") or path.is_dir():
+        if path.suffix.lower() in _BACKEND_SUFFIXES:
+            return _BACKEND_SUFFIXES[path.suffix.lower()]
+        if path.is_dir():
             return "tensorflow"
         raise ValueError(
             f"agent {self.name}: cannot choose a backend for {self.model!r} "
@@ -248,6 +291,7 @@ class AgentConfig:
             "threads": self.threads,
             "call": self.call,
             "signature": self.signature,
+            "safe_mode": self.safe_mode,
             "preprocess": self.preprocess.to_dict(),
             "prediction": self.prediction.to_dict(),
         }
@@ -306,12 +350,13 @@ def _prediction_from_dict(data) -> PredictionConfig:
     data = {} if data is None else data
     if not isinstance(data, dict):
         raise ValueError("agent.prediction must be an object")
-    unknown = set(data) - {"activation", "labels", "threshold"}
+    unknown = set(data) - {f.name for f in dataclasses.fields(PredictionConfig)}
     if unknown:
         raise ValueError(f"unknown agent.prediction setting(s): {', '.join(sorted(unknown))}")
     data = dict(data)
-    if isinstance(data.get("activation"), str):
-        data["activation"] = data["activation"].lower()
+    for key in ("activation", "task"):
+        if isinstance(data.get(key), str):
+            data[key] = data[key].lower()
     config = PredictionConfig(**data)
     config.validate()
     return config
@@ -523,21 +568,21 @@ def _import_tensorflow():
     return tf
 
 
-def _load_keras_model(path: str):
-    tf = _import_tensorflow()
-    try:
-        import keras  # type: ignore
+def _load_keras_model(path: str, safe_mode: bool = True):
+    """Loads a Keras model with the registered custom objects (UNet layers, register_custom_objects)."""
+    _import_tensorflow()
+    from .networks import load_keras_model
 
-        return keras.models.load_model(path, compile=False)
-    except ImportError:
-        return tf.keras.models.load_model(path, compile=False)
+    return load_keras_model(path, safe_mode=safe_mode)
 
 
 class TensorFlowBackend(Backend):
     """TensorFlow model: Keras files (.keras, .h5) run with model.predict (or model(x) with
     call="call"), SavedModel directories run with their serving signature."""
 
-    def __init__(self, path: PathLike, call: str = "predict", signature: str = "serving_default"):
+    def __init__(
+        self, path: PathLike, call: str = "predict", signature: str = "serving_default", safe_mode: bool = True
+    ):
         path = pathlib.Path(path)
         self.call = call
         self.model = None
@@ -561,7 +606,7 @@ class TensorFlowBackend(Backend):
             )
             self._tf = tf
         else:
-            self.model = _load_keras_model(os.fspath(path))
+            self.model = _load_keras_model(os.fspath(path), safe_mode)
             inputs = self.model.inputs
             if len(inputs) != 1:
                 raise ValueError(f"{path}: only models with one input are supported")
@@ -622,15 +667,38 @@ class ModelBackend(Backend):
         return [np.asarray(outputs)]
 
 
+def register_backend(name: str, factory=None, suffixes: typing.Sequence[str] = ()):
+    """Registers a model runtime: factory(config: AgentConfig) -> Backend.
+    suffixes: model file suffixes chosen by backend "auto", for instance [".onnx"].
+    Usable as a decorator: @register_backend("onnx", suffixes=[".onnx"])."""
+
+    def decorator(function):
+        _BACKENDS[name] = function
+        for suffix in suffixes:
+            _BACKEND_SUFFIXES[suffix.lower()] = name
+        return function
+
+    return decorator if factory is None else decorator(factory)
+
+
+def list_backends() -> list[str]:
+    return sorted(_BACKENDS)
+
+
+register_backend("tflite", lambda config: TFLiteBackend(config.model_path, config.threads), [".tflite"])
+register_backend(
+    "tensorflow",
+    lambda config: TensorFlowBackend(config.model_path, config.call, config.signature, config.safe_mode),
+    [".keras", ".h5", ".hdf5"],
+)
+
+
 def create_backend(config: AgentConfig) -> Backend:
-    """Loads the model of an agent configuration."""
+    """Loads the model of an agent configuration with its backend."""
     path = config.model_path
     if not path.exists():
         raise FileNotFoundError(f"agent {config.name}: model not found: {path}")
-    backend = config.resolved_backend
-    if backend == "tflite":
-        return TFLiteBackend(path, config.threads)
-    return TensorFlowBackend(path, config.call, config.signature)
+    return _BACKENDS[config.resolved_backend](config)
 
 
 # ------------------------------------------------------------------ results
@@ -657,10 +725,43 @@ class Prediction:
     label: typing.Optional[str] = None
     score: typing.Optional[float] = None
     selected: bool = True
+    class_map: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    pixels: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    pixel_scores: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    class_counts: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    activity_counts: typing.Optional[np.ndarray] = dataclasses.field(default=None, repr=False)
+    labels: typing.Optional[list[str]] = dataclasses.field(default=None, repr=False)
 
     @property
     def tile_id(self) -> typing.Optional[int]:
         return None if self.tile is None else self.tile.id
+
+    @property
+    def pixel_count(self) -> int:
+        """Segmentation: number of target pixels."""
+        return 0 if self.pixels is None else len(self.pixels)
+
+    def class_name(self, class_id: int) -> str:
+        if self.labels and class_id < len(self.labels):
+            return self.labels[class_id]
+        return f"class_{class_id}"
+
+    def pixel_list(self) -> list[dict[str, typing.Any]]:
+        """Segmentation: target pixels as dictionaries {x, y, class_id, score, scores: {class name: probability}}
+        (x, y in frame coordinates)."""
+        if self.pixels is None:
+            return []
+        names = [self.class_name(index) for index in range(self.pixel_scores.shape[1])] if len(self.pixels) else []
+        return [
+            {
+                "x": int(pixel["x"]),
+                "y": int(pixel["y"]),
+                "class_id": int(pixel["class_id"]),
+                "score": float(pixel["score"]),
+                "scores": {name: float(value) for name, value in zip(names, scores)},
+            }
+            for pixel, scores in zip(self.pixels, self.pixel_scores)
+        ]
 
     def to_dict(self) -> dict[str, typing.Any]:
         """JSON-friendly summary (without the tile data)."""
@@ -677,9 +778,14 @@ class Prediction:
                     "height": self.tile.height,
                 }
             )
-        result.update(
-            {"class_id": self.class_id, "label": self.label, "score": self.score, "output": self.output.tolist()}
-        )
+        result.update({"class_id": self.class_id, "label": self.label, "score": self.score})
+        if self.class_map is None:
+            result["output"] = self.output.tolist()
+        else:
+            result["class_counts"] = {
+                self.class_name(index): int(count) for index, count in enumerate(self.class_counts)
+            }
+            result["pixels"] = self.pixel_list()
         return result
 
 
@@ -715,6 +821,72 @@ class AgentResult:
     def by_tile(self) -> dict[int, Prediction]:
         """{tile id: prediction}."""
         return {prediction.tile.id: prediction for prediction in self.predictions if prediction.tile is not None}
+
+    def statistics(self) -> dict[str, typing.Any]:
+        """Segmentation statistics over all predictions: pixels per class, active / inactive pixels per
+        class (active: input has events), target pixel probabilities (mean, median, min, max)."""
+        segmented = [p for p in self.predictions if p.class_counts is not None]
+        if not segmented:
+            return {"inputs": len(self.predictions), "selected": len(self.selected)}
+        classes = max(len(p.class_counts) for p in segmented)
+        class_counts = np.zeros(classes, np.int64)
+        activity = np.zeros((2, classes), np.int64)
+        for prediction in segmented:
+            class_counts[: len(prediction.class_counts)] += prediction.class_counts
+            activity[:, : prediction.activity_counts.shape[1]] += prediction.activity_counts
+        scores = [p.pixels["score"] for p in segmented if p.pixels is not None and len(p.pixels)]
+        scores = np.concatenate(scores) if scores else np.zeros(0, np.float32)
+        names = [segmented[0].class_name(index) for index in range(classes)]
+        return {
+            "inputs": len(self.predictions),
+            "selected": len(self.selected),
+            "pixels": int(class_counts.sum()),
+            "active_pixels": int(activity[1].sum()),
+            "inactive_pixels": int(activity[0].sum()),
+            "class_pixels": dict(zip(names, class_counts.tolist())),
+            "active_class_pixels": dict(zip(names, activity[1].tolist())),
+            "inactive_class_pixels": dict(zip(names, activity[0].tolist())),
+            "target_pixels": int(len(scores)),
+            "target_score": None
+            if not len(scores)
+            else {
+                "mean": float(scores.mean()),
+                "median": float(np.median(scores)),
+                "min": float(scores.min()),
+                "max": float(scores.max()),
+            },
+        }
+
+    def statistics_report(self) -> str:
+        """The statistics as text (for debugging a segmentation model)."""
+        stats = self.statistics()
+        lines = [f"agent {self.agent}: {stats['inputs']} inputs, {stats['selected']} selected"]
+        if "pixels" not in stats:
+            return lines[0]
+        total, active, inactive = stats["pixels"], stats["active_pixels"], stats["inactive_pixels"]
+        lines.append(f"pixels: {total}, active: {active}, inactive: {inactive}")
+
+        def share(count, whole):
+            return f"{count} ({count / whole:.2%})" if whole else f"{count}"
+
+        for title, key, whole in (
+            ("active pixels", "active_class_pixels", active),
+            ("inactive pixels", "inactive_class_pixels", inactive),
+            ("all pixels", "class_pixels", total),
+        ):
+            lines.append(f"{title}: " + ", ".join(f"{name} {share(count, whole)}" for name, count in stats[key].items()))
+        score = stats["target_score"]
+        if score is None:
+            lines.append("target pixels: none")
+        else:
+            lines.append(
+                f"target pixels: {stats['target_pixels']}, probability mean {score['mean']:.4f}, "
+                f"median {score['median']:.4f}, min {score['min']:.4f}, max {score['max']:.4f}"
+            )
+        return "\n".join(lines)
+
+    def print_statistics(self):
+        print(self.statistics_report(), flush=True)
 
     def to_dict(self, selected_only: bool = False) -> dict[str, typing.Any]:
         predictions = self.selected if selected_only else self.predictions
@@ -934,49 +1106,190 @@ class Agent:
         start = time.perf_counter()
         outputs = self.predict_batch(batch)
         inference_ms = (time.perf_counter() - start) * 1000
-        return self._result(frame, tiles, outputs, inference_ms, len(batch))
-
-    def _result(self, frame, tiles, outputs, inference_ms, count) -> AgentResult:
         prediction_config = self.config.prediction
         if outputs and prediction_config.activation != "none":
             first = outputs[0].astype(np.float32)
             first = _softmax(first) if prediction_config.activation == "softmax" else 1 / (1 + np.exp(-first))
             outputs = [first] + outputs[1:]
-        predictions = []
-        for index in range(count):
-            per_input = [output[index] for output in outputs]
-            output = per_input[0] if per_input else np.zeros(0)
-            class_id = label = score = None
-            values = np.asarray(output).reshape(-1) if np.asarray(output).ndim <= 1 else None
-            if values is not None and values.size > 0:
-                if values.size == 1:
-                    score = float(values[0])
-                    class_id = int(score >= 0.5)
-                else:
-                    class_id = int(np.argmax(values))
-                    score = float(values[class_id])
-                labels = prediction_config.labels
-                if labels and class_id is not None and class_id < len(labels):
-                    label = labels[class_id]
-            selected = (
-                True
-                if prediction_config.threshold is None
-                else (score is not None and score >= prediction_config.threshold)
-            )
-            predictions.append(
-                Prediction(
-                    tile=None if tiles is None else tiles[index],
-                    output=np.asarray(output),
-                    outputs=per_input,
-                    class_id=class_id,
-                    label=label,
-                    score=score,
-                    selected=selected,
-                )
-            )
+        context = TaskInput(
+            agent=self,
+            frame=frame,
+            tiles=tiles,
+            images=[np.asarray(image) for image in images],
+            pad_to=pad_to,
+            outputs=outputs,
+            count=len(batch),
+        )
+        predictions = _TASKS[prediction_config.task](context)
         return AgentResult(
             agent=self.name, frame=frame, predictions=predictions, outputs=outputs, inference_ms=inference_ms
         )
+
+
+# ------------------------------------------------------------------ tasks (output decoders)
+
+
+@dataclasses.dataclass
+class TaskInput:
+    """What a task decoder gets: the agent, the frame / tiles, the input images (before
+    preprocessing, height x width x channels), the padded size and the model outputs (after the
+    activation, first dimension = inputs)."""
+
+    agent: "Agent"
+    frame: typing.Optional[Frame]
+    tiles: typing.Optional[list[Tile]]
+    images: list[np.ndarray]
+    pad_to: typing.Optional[tuple[int, int]]
+    outputs: list[np.ndarray]
+    count: int
+
+    @property
+    def config(self) -> PredictionConfig:
+        return self.agent.config.prediction
+
+    def tile(self, index: int) -> typing.Optional[Tile]:
+        return None if self.tiles is None else self.tiles[index]
+
+
+def register_task(name: str, decoder=None):
+    """Registers a task: decoder(TaskInput) -> list[Prediction] (one per input).
+    Usable as a decorator: @register_task("detection")."""
+
+    def wrapper(function):
+        _TASKS[name] = function
+        return function
+
+    return wrapper if decoder is None else wrapper(decoder)
+
+
+def list_tasks() -> list[str]:
+    return sorted(_TASKS)
+
+
+@register_task("classification")
+def _classification(task: TaskInput) -> list[Prediction]:
+    prediction_config = task.config
+    outputs = task.outputs
+    predictions = []
+    for index in range(task.count):
+        per_input = [output[index] for output in outputs]
+        output = per_input[0] if per_input else np.zeros(0)
+        class_id = label = score = None
+        values = np.asarray(output).reshape(-1) if np.asarray(output).ndim <= 1 else None
+        if values is not None and values.size > 0:
+            if values.size == 1:
+                score = float(values[0])
+                class_id = int(score >= 0.5)
+            else:
+                class_id = int(np.argmax(values))
+                score = float(values[class_id])
+            labels = prediction_config.labels
+            if labels and class_id is not None and class_id < len(labels):
+                label = labels[class_id]
+        selected = (
+            True
+            if prediction_config.threshold is None
+            else (score is not None and score >= prediction_config.threshold)
+        )
+        predictions.append(
+            Prediction(
+                tile=task.tile(index),
+                output=np.asarray(output),
+                outputs=per_input,
+                class_id=class_id,
+                label=label,
+                score=score,
+                selected=selected,
+                labels=prediction_config.labels,
+            )
+        )
+    return predictions
+
+
+_PIXEL_DTYPE = np.dtype([("x", "<u2"), ("y", "<u2"), ("class_id", "u1"), ("score", "<f4")])
+
+
+@register_task("segmentation")
+def _segmentation(task: TaskInput) -> list[Prediction]:
+    """One class per pixel: output (height, width, classes) per input, for instance a U-Net."""
+    config = task.config
+    layout = task.agent.config.preprocess.layout
+    predictions = []
+    for index in range(task.count):
+        per_input = [output[index] for output in task.outputs]
+        probabilities = np.asarray(per_input[0], dtype=np.float32)
+        if probabilities.ndim == 2:  # one class map channel
+            probabilities = probabilities[:, :, None]
+        if probabilities.ndim != 3:
+            raise ValueError(
+                f"agent {task.agent.name}: segmentation needs outputs of height x width x classes, "
+                f"got {probabilities.shape}"
+            )
+        if layout == "nchw":
+            probabilities = probabilities.transpose(1, 2, 0)
+        image = task.images[index]
+        if image.ndim == 2:
+            image = image[:, :, None]
+        height, width = image.shape[:2]
+        # output -> input size (padded tiles: padded size), then crop to the tile
+        source_height, source_width = task.pad_to if task.pad_to is not None else (height, width)
+        if probabilities.shape[:2] != (source_height, source_width):
+            probabilities = _resize(probabilities, source_width, source_height)
+        probabilities = probabilities[:height, :width]
+        classes = probabilities.shape[2]
+        if classes == 1:  # binary segmentation with one sigmoid channel
+            probabilities = np.concatenate([1 - probabilities, probabilities], axis=2)
+            classes = 2
+        class_map = np.argmax(probabilities, axis=2).astype(np.uint8)
+        active = np.any(image > config.activity_threshold, axis=2)
+        class_counts = np.bincount(class_map.ravel(), minlength=classes).astype(np.int64)
+        activity_counts = np.stack(
+            [
+                np.bincount(class_map[~active], minlength=classes),
+                np.bincount(class_map[active], minlength=classes),
+            ]
+        ).astype(np.int64)
+
+        targets = config.target_classes if config.target_classes is not None else list(range(1, classes))
+        target_mask = np.isin(class_map, targets)
+        if config.mask_inactive:
+            target_mask &= active
+        if config.threshold is not None:
+            target_mask &= np.take_along_axis(probabilities, class_map[:, :, None].astype(np.intp), axis=2)[:, :, 0] >= config.threshold
+        ys, xs = np.nonzero(target_mask)
+        tile = task.tile(index)
+        offset_x, offset_y = (tile.x, tile.y) if tile is not None else (0, 0)
+        pixels = np.zeros(len(ys), _PIXEL_DTYPE)
+        pixels["x"] = xs + offset_x
+        pixels["y"] = ys + offset_y
+        pixels["class_id"] = class_map[ys, xs]
+        pixel_scores = probabilities[ys, xs]
+        pixels["score"] = pixel_scores[np.arange(len(ys)), pixels["class_id"]] if len(ys) else 0
+
+        class_id = label = score = None
+        if len(ys):
+            class_id = int(np.bincount(pixels["class_id"]).argmax())
+            score = float(pixels["score"][pixels["class_id"] == class_id].mean())
+            if config.labels and class_id < len(config.labels):
+                label = config.labels[class_id]
+        predictions.append(
+            Prediction(
+                tile=tile,
+                output=probabilities,
+                outputs=per_input,
+                class_id=class_id,
+                label=label,
+                score=score,
+                selected=len(ys) >= max(config.min_pixels, 1),
+                class_map=class_map,
+                pixels=pixels,
+                pixel_scores=pixel_scores,
+                class_counts=class_counts,
+                activity_counts=activity_counts,
+                labels=config.labels,
+            )
+        )
+    return predictions
 
 
 def as_agents(agents) -> list[Agent]:
@@ -1086,6 +1399,11 @@ def run_agents(
 
 
 __all__ = [
+    "TaskInput",
+    "list_backends",
+    "list_tasks",
+    "register_backend",
+    "register_task",
     "Agent",
     "AgentConfig",
     "AgentResult",

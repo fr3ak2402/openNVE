@@ -29,6 +29,23 @@ from .agents import (
     process_window,
     run_agents,
     save_agent_configs,
+    TaskInput,
+    list_backends,
+    list_tasks,
+    register_backend,
+    register_task,
+)
+from .networks import (
+    NetworkParameters,
+    Network,
+    NeuralEngine,
+    compare_weights,
+    custom_objects,
+    list_networks,
+    register_custom_objects,
+    register_network,
+    register_weight_transfer,
+    representative_dataset,
 )
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
 from .config import (
@@ -78,6 +95,21 @@ except ImportError:
         NEUROMORPHIC_DRIVERS_VERSION = None
 
 __all__ = [
+    "TaskInput",
+    "list_backends",
+    "list_tasks",
+    "register_backend",
+    "register_task",
+    "Network",
+    "NetworkParameters",
+    "NeuralEngine",
+    "compare_weights",
+    "custom_objects",
+    "list_networks",
+    "register_custom_objects",
+    "register_network",
+    "register_weight_transfer",
+    "representative_dataset",
     "Agent",
     "AgentConfig",
     "AgentResult",

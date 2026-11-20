@@ -6,7 +6,7 @@ and shows the tiles the agents selected.
     python examples/agents.py recording.raw --agents my_agents.json
 
 Agents are configured in examples/agents.json (--agents), frames in examples/frames.json (--frames).
-The model files named in agents.json (models/insects.tflite, ...) are your own models; paths are
+The model files named in agents.json (models/unet_int8.tflite, ...) are your own models; paths are
 relative to agents.json. --agent selects some agents, for instance --agent insects.
 Keys: Q / ESC exit.
 """
@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--frames", default="examples/frames.json", help="frame configuration file")
     parser.add_argument("--agents", default="examples/agents.json", help="agent configuration file")
     parser.add_argument("--agent", action="append", help="only these agents (default: all)")
+    parser.add_argument("--statistics", action="store_true", help="print segmentation statistics per frame")
     arguments = parser.parse_args()
 
     agents = opennve.load_agents(arguments.agents)
@@ -52,11 +53,16 @@ def main():
                 for prediction in selected[:5]:
                     where = f"tile {prediction.tile_id}" if prediction.tile is not None else "frame"
                     score = "-" if prediction.score is None else f"{prediction.score:.2f}"
-                    print(f"    {where}: {prediction.label or prediction.class_id} {score}")
+                    pixels = f", {prediction.pixel_count} pixels" if prediction.pixels is not None else ""
+                    print(f"    {where}: {prediction.label or prediction.class_id} {score}{pixels}")
+                if arguments.statistics:
+                    result.print_statistics()
             # show the frame of the first agent with its selected tiles
             first = next(iter(step.results.values()))
             image = first.frame.to_image(draw_tiles=False)
             for prediction in first.selected:
+                if prediction.pixels is not None and len(prediction.pixels):  # segmentation: target pixels
+                    image[prediction.pixels["y"], prediction.pixels["x"]] = (0, 0, 255)
                 if prediction.tile is not None:
                     tile = prediction.tile
                     cv2.rectangle(image, (tile.x, tile.y), (tile.x + tile.width - 1, tile.y + tile.height - 1), (0, 255, 255), 2)

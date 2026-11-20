@@ -75,6 +75,7 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | `threads` | `null` | CPU threads of the TensorFlow Lite interpreter |
 | `call` | `"predict"` | Keras models: `predict` calls `model.predict(batch)`; `call` calls `model(batch)`, which has less overhead for small batches |
 | `signature` | `"serving_default"` | Signature of a SavedModel directory |
+| `safe_mode` | `true` | Keras models: `false` allows loading models with `Lambda` layers. Custom layers (for instance the [UNet](networks.md) layers) are found automatically |
 
 ### `preprocess` – from frames and tiles to model inputs
 
@@ -94,17 +95,71 @@ The batch is converted to the model's input type. Quantized TensorFlow Lite mode
 
 | Field | Default | Description |
 |---|---|---|
-| `activation` | `"none"` | `softmax` or `sigmoid` are applied to the first model output, for models that return logits. `none`: the outputs are used as they are |
-| `labels` | `null` | Class names: `labels[i]` is the name of output value `i` |
-| `threshold` | `null` | A prediction is **selected** if its score is at least the threshold. `null`: all predictions are selected |
+| `task` | `"classification"` | `classification`: one output vector per tile. `segmentation`: one class per pixel (see [Segmentation](#segmentation)) |
+| `activation` | `"none"` | `softmax` or `sigmoid` are applied to the first model output (along the class axis), for models that return logits. `none`: the outputs are used as they are |
+| `labels` | `null` | Class names: `labels[i]` is the name of class `i` |
+| `threshold` | `null` | Classification: a prediction is **selected** if its score is at least the threshold (`null`: all are selected). Segmentation: minimum probability of a target pixel (`null`: the most probable class counts) |
+| `target_classes` | `null` | Segmentation: classes to detect, for instance `[2]`. `null`: all classes except 0 |
+| `min_pixels` | `1` | Segmentation: a tile is selected if it has at least this many target pixels |
+| `mask_inactive` | `false` | Segmentation: only count target pixels where the input has events |
+| `activity_threshold` | `0.0` | Segmentation: a pixel is active if one of its input channels is above this value |
 
-For every input, the first model output gives:
+For classification, the first model output of every input gives:
 
 - `class_id`: index of the highest value (for an output with one value: `1` if the value is ≥ 0.5, else `0`),
 - `score`: the highest value (or the single value),
 - `label`: `labels[class_id]`.
 
 Outputs that are not vectors (for instance maps) have no class and score; they are available as `prediction.output`.
+
+## Segmentation
+
+Segmentation models such as the [U-Net](networks.md#unet) return one class per pixel: an output of tile height × tile width × classes. With `"task": "segmentation"`, the agent finds the pixels of the target classes and converts them to frame coordinates:
+
+```json
+{
+    "name": "insects",
+    "model": "models/unet_int8.tflite",
+    "frame": "tiles80",
+    "prediction": {
+        "task": "segmentation",
+        "activation": "softmax",
+        "labels": ["background", "noise", "insect"],
+        "target_classes": [2],
+        "min_pixels": 1
+    }
+}
+```
+
+For every tile:
+
+1. the softmax (for logits) gives the probability of each class per pixel,
+2. the class map is the most probable class per pixel (padded edge tiles are cropped back to their real size; outputs with another resolution are scaled to the tile size),
+3. target pixels are the pixels of `target_classes` (optionally only active pixels, `mask_inactive`, and only with a probability ≥ `threshold`),
+4. the tile is selected if it has at least `min_pixels` target pixels.
+
+```python
+for step in opennve.run_agents(camera, agents, frame_configs):
+    result = step["insects"]
+    for prediction in result.selected:                  # tiles with insect pixels
+        for pixel in prediction.pixels:                 # numpy structured array: x, y, class_id, score
+            print(pixel["x"], pixel["y"], pixel["score"])   # frame coordinates
+    result.print_statistics()                           # debugging, see below
+```
+
+| `Prediction` (segmentation) | Description |
+|---|---|
+| `pixels` | Target pixels: structured array with `x`, `y` (frame coordinates), `class_id`, `score` (probability of its class) |
+| `pixel_scores` | Probabilities of all classes for each target pixel (pixels × classes) |
+| `pixel_list()` | The target pixels as dictionaries `{"x", "y", "class_id", "score", "scores": {"background": ..., "noise": ..., "insect": ...}}` |
+| `pixel_count` | Number of target pixels |
+| `class_map` | Class per pixel (tile height × width) |
+| `output` | Probabilities (tile height × width × classes) |
+| `class_counts` | Pixels per class in this tile |
+| `activity_counts` | Pixels per class, split into inactive (row 0) and active (row 1) pixels |
+| `class_id`, `label`, `score` | Most frequent target class in the tile and the mean probability of its pixels |
+
+`result.statistics()` summarizes all tiles of a frame: pixels per class, active and inactive pixels per class (does the model mark pixels without events as insects?), and the mean, median, minimum and maximum probability of the target pixels. `result.statistics_report()` returns it as text, `result.print_statistics()` prints it. `result.to_dict(selected_only=True)` contains the target pixels of the selected tiles (`pixel_list()`), ready for JSON.
 
 ## Usage
 
@@ -175,6 +230,7 @@ result = agent.predict(frame)
 | `inference_ms` | Time spent in the model |
 | `by_tile()` | `{tile id: Prediction}` |
 | `to_dict()` | JSON-friendly summary (without tile data), `to_dict(selected_only=True)` |
+| `statistics()`, `statistics_report()`, `print_statistics()` | Segmentation statistics (see [Segmentation](#segmentation)) |
 
 | `Prediction` | Description |
 |---|---|
@@ -185,6 +241,27 @@ result = agent.predict(frame)
 | `class_id`, `label`, `score` | See [prediction](#prediction--reading-the-outputs) |
 | `selected` | `score >= threshold` |
 
+## Extending
+
+Tasks (how outputs are read) and backends (model runtimes) are registries, so new ones can be added without changing openNVE:
+
+```python
+@opennve.register_task("detection")
+def decode_detection(task: opennve.TaskInput) -> list[opennve.Prediction]:
+    # task.outputs: model outputs (after the activation), task.tiles / task.frame, task.images (inputs),
+    # task.config: the prediction settings; return one Prediction per input
+    ...
+
+@opennve.register_backend("onnx", suffixes=[".onnx"])
+class OnnxBackend(opennve.agents.Backend):
+    def __init__(self, config: opennve.AgentConfig):
+        ...  # load config.model_path; set self.input = opennve.agents.ModelInput(shape, dtype)
+    def predict(self, batch):
+        ...  # return a list of output arrays (first dimension = batch)
+```
+
+`"task": "detection"` and `"backend": "onnx"` (or a `.onnx` model with `"backend": "auto"`) then work in `agents.json`. `opennve.list_tasks()` and `opennve.list_backends()` list the registered ones. New network architectures are added with `register_network`, see [Neural networks](networks.md).
+
 ## Example
 
 ```sh
@@ -192,7 +269,7 @@ python examples/agents.py examples/cameras.json --camera left       # live camer
 python examples/agents.py recording.raw --agent insects               # RAW file, one agent
 ```
 
-The example prints the selected tiles of every agent and draws them on the frame. The model files named in `examples/agents.json` (`models/insects.tflite`, `models/scene.keras`) are placeholders for your own models.
+The example prints the selected tiles of every agent and draws them on the frame. The model files named in `examples/agents.json` (`models/unet_int8.tflite`: a U-Net with segmentation, `models/scene.keras`) are placeholders for your own models; see [Neural networks](networks.md) for building and converting a U-Net.
 
 ## Performance
 
@@ -215,4 +292,6 @@ The example prints the selected tiles of every agent and draws them on the frame
 | `run_agents(source, agents, frame_configs=None, duration_ms=None)` | Yields one `AgentStep` per time window of a camera or RAW file |
 | `process_window(window, agents, frame_configs=None)` | One `AgentStep` for one window |
 | `AgentStep` | `window`, `frames`, `results`, `step[agent name]` |
-| `AgentResult`, `Prediction` | See [Results](#results) |
+| `AgentResult`, `Prediction` | See [Results](#results) and [Segmentation](#segmentation) |
+| `register_task(name)`, `list_tasks()`, `TaskInput` | Output decoders (`classification`, `segmentation`) |
+| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`) |
