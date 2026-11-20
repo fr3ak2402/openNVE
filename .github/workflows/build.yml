@@ -1,6 +1,6 @@
 # Builds openNVE wheels with neuromorphic_drivers (fr3ak2402 fork, SE1-S4 driver) embedded,
 # for Python 3.14 and newer on Linux, macOS and Windows, and tests them.
-# For tags starting with "v" (for instance v1.0.0b0), the wheels are attached to a GitHub release.
+# For tags starting with "v" (for instance v1.0.0), the wheels are attached to a GitHub release.
 name: Build
 
 on:
@@ -100,6 +100,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+      - name: Release notes from CHANGELOG.md
+        run: python3 tools/release_notes.py "$GITHUB_REF_NAME" > release_notes.md
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -108,5 +111,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
+          name: openNVE ${{ github.ref_name }}
+          body_path: release_notes.md
           # alpha / beta / release candidate versions (v1.0.0a0, v1.0.0b0, v1.0.0rc1) are pre-releases
           prerelease: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
