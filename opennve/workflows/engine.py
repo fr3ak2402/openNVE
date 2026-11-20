@@ -191,6 +191,7 @@ class _Stage:
         self.kind = kind
         self.name = name
         self.instances: list[Step] = []
+        self.ordered_input = kind == "sink"
         self.statistics = StepStatistics(name, threads)
         self.lock = threading.Lock()
         self.finished = 0
@@ -259,7 +260,9 @@ class Workflow:
             return cls(self.context, **params)
 
         name = params.get("name") or step["type"]
-        return _Stage(factory, step, threads, cls.kind, name)
+        stage = _Stage(factory, step, threads, cls.kind, name)
+        stage.ordered_input = cls.kind == "sink" or bool(getattr(cls, "ORDERED", False))
+        return stage
 
     def _check_structure(self):
         kinds = [stage.kind for stage in self._stages]
@@ -322,7 +325,7 @@ class Workflow:
         source = self._stages[0]
         self._threads.append(threading.Thread(target=self._run_source, args=(source,), name=f"{self.name}:{source.name}", daemon=True))
         for position, stage in enumerate(self._stages[1:], start=1):
-            ordered = self.config.ordered and stage.kind == "sink"
+            ordered = self.config.ordered and stage.ordered_input
             for thread_index in range(stage.threads):
                 self._threads.append(
                     threading.Thread(

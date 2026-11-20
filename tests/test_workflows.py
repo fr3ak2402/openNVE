@@ -255,3 +255,30 @@ def test_custom_step_and_cli(raw_file, tmp_path, capsys):
     output = capsys.readouterr().out
     assert "[custom] block 0 rec | events" in output and "count_on" in output
     assert len((tmp_path / "custom.jsonl").read_text().splitlines()) == 2
+
+
+def test_windows_align_first_event_and_ordered_log(raw_file, capsys):
+    def slow(item):
+        time.sleep(0.03 if item.index % 2 else 0.0)
+        return item
+
+    workflow = opennve.Workflow.from_steps(
+        "align",
+        [
+            {"type": "raw", "path": str(raw_file), "block_ms": 100},
+            {"type": "windows", "count": 3, "overlap_ms": 20, "align": "first_event"},
+            {"type": "callback", "function": slow, "threads": 3},
+            {"type": "log", "timings": False},
+            {"type": "collect"},
+        ],
+    )
+    workflow.run()
+    item = workflow.results[2]
+    first = int(item.block.polarity_events["t"][0])
+    assert item.windows[0].start_t == first and first > item.block.start_t
+    # the windows cover the block length from the first event (as the previous build_bounds)
+    assert [(w.start_t - first, w.end_t - first) for w in item.windows] == [(0, 46667), (26667, 73334), (53333, 100000)]
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("[align] block")]
+    assert [int(line.split()[2]) for line in lines] == list(range(10))  # log in order
+    with pytest.raises(ValueError, match="align must be"):
+        opennve.Workflow.from_steps("x", [{"type": "raw", "path": "a.raw"}, {"type": "windows", "count": 2, "align": "end"}])
