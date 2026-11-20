@@ -34,7 +34,7 @@ TAG_PATTERN = re.compile(r"^cp(\d)(\d+)$")
 
 
 def _normalize_version(version: str) -> str:
-    """PEP 440 form of the version, as used in wheel file names (1.0.0-alpha -> 1.0.0a0)."""
+    """PEP 440 form of the version, as used in wheel file names (1.0.0-alpha -> 1.0.0a0, 1.0.0-beta -> 1.0.0b0)."""
     try:
         from packaging.version import Version
 

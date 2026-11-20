@@ -102,14 +102,14 @@ Every wheel contains a build number `<day of year>.<year>` of the build date in 
 
 ## Release
 
-1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "1.0.0a1"`).
+1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "1.0.0b1"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v1.0.0a1
+   git tag v1.0.0b1
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v1.0.0a1`.
+4. The action builds all wheels and attaches them to the release `v1.0.0b1`.
 
 ## New Python version
 

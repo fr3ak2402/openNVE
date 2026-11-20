@@ -25,7 +25,7 @@
 The wheel was installed with `-r`. Install it without `-r`:
 
 ```sh
-pip install opennve-1.0.0a0-cp314-cp314-win_amd64.whl
+pip install opennve-1.0.0b0-cp314-cp314-win_amd64.whl
 ```
 
 ## `No module named neuromorphic_drivers.sensing_se1_s4` or wrong driver version
