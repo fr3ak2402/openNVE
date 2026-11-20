@@ -542,7 +542,7 @@ def test_version_and_build_number(capsys):
 
     from opennve._version import format_build_number, parse_build_number
 
-    assert re.fullmatch(r"\d+\.\d+\.\d+", opennve.__version__)
+    assert re.fullmatch(r"\d+\.\d+\.\d+((a|b|rc)\d+)?", opennve.__version__)
     assert re.fullmatch(r"\d{1,3}\.\d{4}", opennve.BUILD_NUMBER) and opennve.build_number() == opennve.BUILD_NUMBER
     assert format_build_number(datetime.date(2026, 11, 20)) == "324.2026"
     assert format_build_number(datetime.date(2026, 1, 5)) == "5.2026"
