@@ -30,7 +30,7 @@ pip installs the dependencies automatically:
 | Package | Used for |
 |---|---|
 | numpy | Events, filters, `.raw` files, time windows, frames and tiles |
-| h5py | [HDF5 event files](hdf5-files.md) (`.h5`, `.hdf5`) |
+| h5py | [HDF5 event files](hdf5-files.md) (`.h5`, `.hdf5`). Installed for Python 3.14; for Python 3.15 there are no h5py wheels yet (`pip install h5py` builds it if the HDF5 library is installed) |
 | opencv-python | Display (`frame.to_image`, examples), resizing of agent inputs |
 | ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
 
