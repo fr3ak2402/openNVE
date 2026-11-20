@@ -435,6 +435,18 @@ print(workflow.statistics_report())
 
 ---
 
+## Recordings
+
+`.raw` files ([RAW files](raw-files.md)) and HDF5 files with x, y, p, t, l ([HDF5 files](hdf5-files.md)) are read like a live camera.
+
+| Name | Description |
+|---|---|
+| `open_recording(path, config=None, **options)` | Opens `.raw` or HDF5, chosen by the file type |
+| `open_hdf5(path, config=None, *, config_path=None, name=None, **options) -> Hdf5Reader` | HDF5 file (options: `dataset`, `columns`, `time_unit`, `width`, `height`, `labels`, `sort`, `speed`, …) |
+| `read_hdf5(path, **options)` | All events of an HDF5 file |
+| `write_hdf5(path, events, ...)`, `Hdf5Writer(path, ...)` | Writes events (with labels) to an HDF5 file |
+| `RecordingReader` | Base class of `RawReader` and `Hdf5Reader` (same methods) |
+
 ## RAW files
 
 `.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.

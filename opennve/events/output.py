@@ -10,6 +10,7 @@ Fields (any order, each at most once):
     y: pixel row
     p: polarity (1 = ON, brighter / 0 = OFF, darker)
     t: timestamp in microseconds
+    l: label (from recordings with labels, for instance HDF5 files with an "l" column; else 0)
 
 The camera name is not repeated in every event, it is stored once per packet
 (CameraPacket.camera).
@@ -27,10 +28,11 @@ FIELDS = {
     "y": "pixel row",
     "p": "polarity (1 = ON, 0 = OFF)",
     "t": "timestamp in microseconds",
+    "l": "label (from recordings with labels, else 0)",
 }
 DEFAULT_FIELDS = ("x", "y", "p", "t")
 
-_NUMERIC_DTYPES = {"x": np.uint16, "y": np.uint16, "p": np.uint8, "t": np.uint64}
+_NUMERIC_DTYPES = {"x": np.uint16, "y": np.uint16, "p": np.uint8, "t": np.uint64, "l": np.int32}
 
 
 @dataclasses.dataclass
@@ -82,6 +84,8 @@ class OutputConfig:
         for field in self.fields:
             if field == "p":
                 result["p"] = events["on"]
+            elif field == "l" and "l" not in (events.dtype.names or ()):
+                result["l"] = 0  # events without labels (live cameras, .raw files)
             else:
                 result[field] = events[field]
         return result

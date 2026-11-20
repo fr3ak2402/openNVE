@@ -1,7 +1,9 @@
 """
-Plays a RAW file (EVT 2.0, 2.1 or 3.0) as frames, with the settings of a camera configuration.
+Plays a recording (RAW file with EVT 2.0, 2.1 or 3.0, or an HDF5 file) as frames, with the settings
+of a camera configuration.
 
     python examples/raw_player.py recording.raw
+    python examples/raw_player.py recording.h5            (HDF5 with x, y, p, t, optionally l)
     python examples/raw_player.py recording.raw examples/cameras.json left
 
 Keys: Q / ESC exit, M switch frame mode, + / - playback speed.
@@ -22,7 +24,8 @@ MODES = ("color", "binary")
 def main():
     mode = 0
     speed = 1.0  # 1.0 = real time
-    with opennve.open_raw(RAW_PATH, config_path=CONFIG_PATH, name=CAMERA_NAME, speed=speed) as raw:
+    config = opennve.load_config(CONFIG_PATH, CAMERA_NAME) if CONFIG_PATH else None
+    with opennve.open_recording(RAW_PATH, config, speed=speed) as raw:  # .raw or HDF5 (.h5)
         print(raw.info())
         for window in raw.windows():  # 40 ms by default, or "window" of the configuration
             image = window.to_frame(MODES[mode])

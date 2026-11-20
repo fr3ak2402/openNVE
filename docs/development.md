@@ -19,7 +19,9 @@ opennve/
 │   ├── output.py        OutputConfig (fields x, y, p, t), CSV
 │   └── window.py        WindowConfig, WindowAccumulator, EventWindow
 ├── recordings/          recordings
-│   └── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
+│   ├── reader.py        RecordingReader (common base: packets, windows, frames, playback speed)
+│   ├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
+│   └── hdf5.py          HDF5 files: Hdf5Reader (layouts, labels), Hdf5Writer, open_recording
 ├── frames/              frames and tiles
 │   ├── config.py        FrameConfig, TileConfig, TimeSurfaceConfig, frame configuration files
 │   ├── frame.py         Frame, Tile, split_into_tiles, tile_grid

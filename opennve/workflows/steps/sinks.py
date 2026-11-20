@@ -34,7 +34,8 @@ def _format_path(context: StepContext, pattern: str, item: WorkItem) -> pathlib.
 class WriteStep(Step):
     """Writes the results to files.
 
-    format: "csv" (item.events, or the block events if no step set events; one row per event)
+    format: "csv" (item.events, or the block events if no step set events; one row per event),
+        "hdf5" (the same events as an HDF5 file with one dataset per column, see opennve.write_hdf5)
         or "jsonl" (one JSON line per item: block, windows and selected predictions with pixels).
     path: file name pattern with {workflow}, {camera}, {date}, {time}, {datetime}, {index},
         for instance "output/{workflow}_{camera}_{date}_{time}.csv". Files are appended.
@@ -46,11 +47,11 @@ class WriteStep(Step):
     PARAMETERS = {"format": "csv", "path": "output/{workflow}_{date}_{time}.csv", "camera_column": False}
 
     def validate(self):
-        if self.params["format"] not in ("csv", "jsonl"):
-            raise ValueError("step write: format must be csv or jsonl")
+        if self.params["format"] not in ("csv", "jsonl", "hdf5"):
+            raise ValueError("step write: format must be csv, hdf5 or jsonl")
         if not isinstance(self.params["path"], str):
             raise ValueError("step write: path must be a file name pattern")
-        self._files: dict[pathlib.Path, typing.TextIO] = {}
+        self._files: dict[pathlib.Path, typing.Any] = {}
         self._lock = threading.Lock()
         self.written: dict[str, int] = {}
 
@@ -61,9 +62,27 @@ class WriteStep(Step):
             self._files[path] = (open(path, "a", encoding="utf-8", newline=""), new)
         return self._files[path]
 
+    def _hdf5(self, path: pathlib.Path, item: WorkItem):
+        from ...recordings.hdf5 import Hdf5Writer
+
+        if path not in self._files:
+            self._files[path] = (
+                Hdf5Writer(path, width=item.block.width, height=item.block.height, attrs={"camera": item.camera}),
+                False,
+            )
+        return self._files[path][0]
+
     def process(self, item):
         path = _format_path(self.context, self.params["path"], item)
         with self._lock:
+            if self.params["format"] == "hdf5":
+                events = item.events if item.events is not None else item.block.events
+                writer = self._hdf5(path, item)
+                if len(events):
+                    writer.write(events)
+                writer.flush()
+                self.written[str(path)] = self.written.get(str(path), 0) + len(events)
+                return item
             handle, new = self._file(path)
             if self.params["format"] == "jsonl":
                 handle.write(json.dumps(item.summary()) + "\n")

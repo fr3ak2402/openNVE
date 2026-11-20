@@ -30,6 +30,7 @@ pip installs the dependencies automatically:
 | Package | Used for |
 |---|---|
 | numpy | Events, filters, `.raw` files, time windows, frames and tiles |
+| h5py | [HDF5 event files](hdf5-files.md) (`.h5`, `.hdf5`) |
 | opencv-python | Display (`frame.to_image`, examples), resizing of agent inputs |
 | ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
 
@@ -38,8 +39,8 @@ Optional extras:
 | Extra | Installs | Used for |
 |---|---|---|
 | `tensorflow` | tf-nightly (about 600 MB, includes Keras 3) | [Neural networks](networks.md) (building, training, TensorFlow Lite export) and agents with Keras / SavedModel models |
-| `pandas` | pandas | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`) |
-| `all` | tensorflow, pandas, pytest | Everything |
+| `pandas` | pandas, PyTables | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`), HDF5 files written by pandas in table format |
+| `all` | tensorflow, pandas, PyTables, pytest | Everything |
 
 ```sh
 pip install "opennve-0.8.2-cp314-cp314-win_amd64.whl[tensorflow]"

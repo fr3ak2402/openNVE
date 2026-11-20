@@ -40,6 +40,15 @@ opennve frame-template --name binary --mode binary
 
 Without `--width` / `--height` the sensor size is used, without `--tiles` the frame is not split.
 
+## `opennve recording <file>`
+
+Shows the information and statistics of a recording: `.raw` files and [HDF5 files](hdf5-files.md) (format, size, dataset, events, ON / OFF, time span, event rate, labels). `opennve raw` is the same command. Options: `--json`, `--width` / `--height`, `--format` (`.raw` without header), `--dataset` (HDF5).
+
+```sh
+opennve recording recording.h5
+opennve recording recording.raw --json
+```
+
 ## `opennve version`
 
 Shows the version, the build number and the versions of the dependencies (`--json` as JSON). `opennve --version` prints only the first line.

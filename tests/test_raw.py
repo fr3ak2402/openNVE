@@ -322,7 +322,7 @@ def test_cli_raw(capsys):
 
 
 def test_realtime_playback(tmp_path, monkeypatch):
-    from opennve.recordings import raw as raw_module
+    from opennve.recordings import reader as raw_module
 
     events = _random_events(9, count=200, start=1_000_000, span=2_000_000)
     path = tmp_path / "a.raw"

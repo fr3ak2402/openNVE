@@ -1,6 +1,6 @@
 # RAW files
 
-Besides live cameras, openNVE reads `.raw` recordings. RAW is the file format of Prophesee / Metavision (Metavision Studio, Metavision SDK, OpenEB) and of the SENSING software. A RAW file is processed exactly like a live camera: same packets, filters, output format, time windows and frames.
+Besides live cameras, openNVE reads `.raw` recordings (and [HDF5 files](hdf5-files.md); `opennve.open_recording(path)` opens both). RAW is the file format of Prophesee / Metavision (Metavision Studio, Metavision SDK, OpenEB) and of the SENSING software. A RAW file is processed exactly like a live camera: same packets, filters, output format, time windows and frames.
 
 ## Supported formats
 

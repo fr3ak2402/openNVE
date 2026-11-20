@@ -17,7 +17,7 @@ Own steps:
             item.data["my_value"] = len(item.block) * self.params["factor"]
             return item                       # None drops the item
 
-Modules: base (Step, StepContext, register_step), sources (camera, raw), processing (windows,
+Modules: base (Step, StepContext, register_step), sources (camera, recording / raw / hdf5), processing (windows,
 frames, tiles, agent, require, label_events, log, callback), sinks (write, collect).
 """
 
@@ -35,7 +35,7 @@ from .processing import (
     window_bounds,
 )
 from .sinks import CollectStep, WriteStep
-from .sources import CameraSource, RawSource
+from .sources import CameraSource, Hdf5Source, RawSource, RecordingSource
 
 __all__ = [
     "COMMON_PARAMETERS",
@@ -46,7 +46,9 @@ __all__ = [
     "FramesStep",
     "LabelEventsStep",
     "LogStep",
+    "Hdf5Source",
     "RawSource",
+    "RecordingSource",
     "RequireStep",
     "Step",
     "StepContext",
