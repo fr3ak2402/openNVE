@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennve"
-version = "1.0.0"
+version = "1.1.0"
 description = "Open Neuromorphic Vision Engine: event cameras, .raw and HDF5 recordings, filters, time windows, frames and tiles, TensorFlow agents and multithreaded workflows"
 readme = "README.md"
 requires-python = ">=3.14"

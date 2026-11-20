@@ -2,7 +2,10 @@
 
 All notable changes to openNVE. Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-20
+
+Faster processing: vectorized segmentation decoding with lazy softmax, and threads sized
+automatically to the CPU cores of the machine. Configurations of 1.0.0 work unchanged.
 
 ### Performance
 
