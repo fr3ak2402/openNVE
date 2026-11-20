@@ -31,15 +31,15 @@ jobs:
           - { os: macos-latest, target: aarch64, interpreters: "--find-interpreter" }
           - { os: macos-15-intel, target: x86_64, interpreters: "--find-interpreter" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: fr3ak2402/neuromorphic-drivers
           ref: ${{ env.NEUROMORPHIC_DRIVERS_REF }}
           path: neuromorphic-drivers
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: |
             3.14
@@ -73,7 +73,7 @@ jobs:
         with:
           python-version: "3.15"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: opennve-${{ matrix.os }}-${{ matrix.target }}
           path: dist/*.whl
@@ -82,14 +82,14 @@ jobs:
     name: Source distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - run: |
           python -m pip install --upgrade pip build
           python -m build --sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: opennve-sdist
           path: dist/*.tar.gz
@@ -100,12 +100,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: opennve-*
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           # alpha / beta / release candidate versions (v1.0.0a0, v1.0.0b1, v1.0.0rc1) are pre-releases
