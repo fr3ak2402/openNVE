@@ -12,9 +12,10 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Frames and tiles](frames.md) | Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px) |
 | [Neural networks](networks.md) | Building, loading, saving and converting networks (U-Net, own architectures), quantization to TensorFlow Lite, weight transfer |
 | [Agents (TensorFlow models)](agents.md) | Running TensorFlow and TensorFlow Lite models on tiles and frames, configured in `agents.json` |
+| [Workflows](workflows.md) | Free chains of steps (camera / RAW → windows → frames → tiles → agent → labels → files), multithreaded, configured in `workflows.json` |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
 | [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |
-| [Command line](cli.md) | `opennve list`, `template`, `frame-template`, `check`, `models`, `driver`, `raw` |
+| [Command line](cli.md) | `opennve list`, `template`, `frame-template`, `check`, `workflow`, `models`, `driver`, `raw` |
 | [Troubleshooting](troubleshooting.md) | Camera not found, noise, high event rates |
 | [Development](development.md) | Tests, wheel builds, releases, embedded driver |
 
@@ -40,6 +41,7 @@ Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in
 - **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
 - **Recordings:** `opennve.open_raw("recording.raw")` reads `.raw` files with the same interface
 - **Agents:** TensorFlow and TensorFlow Lite models (`agents.json`) run on the tiles or frames of every window: `opennve.run_agents(camera, agents, frame_configs)`; classification or segmentation (pixels per class with frame coordinates)
+- **Workflows:** steps such as collect → frames → tiles → neural network → save, each in its own threads: `opennve workflow run workflows.json`
 - **Networks:** `opennve.Network` / `NeuralEngine` build (U-Net or own architectures), load, save and quantize models for the agents
 - **Frames:** named frame configurations (`frames.json`), separate from the cameras; `camera.frames(config)` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
 

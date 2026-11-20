@@ -3,7 +3,9 @@
     python -m opennve list [--json] [--config cameras.json]
     python -m opennve template SE1-S4 [--serial 05110634] [--name left]
     python -m opennve frame-template [--name tiles80] [--width 1280 --height 720] [--tiles 80]
-    python -m opennve check cameras.json frames.json agents.json [--load]
+    python -m opennve check cameras.json frames.json agents.json workflows.json [--load]
+    python -m opennve workflow run workflows.json [--name insects] [--duration 60] [--debug]
+    python -m opennve workflow list workflows.json
     python -m opennve models
     python -m opennve driver [--install] [--model SE1-S4] [--force]
     python -m opennve raw recording.raw [--json]
@@ -65,10 +67,50 @@ def _describe_frame(config: FrameConfig) -> str:
     return f"{size}, {mode}, {tiles}"
 
 
+def _workflow(args) -> int:
+    from .workflows import Workflow, load_workflow_config, load_workflow_configs
+
+    if args.action == "list":
+        for config in load_workflow_configs(args.path):
+            default = " (default)" if config.default else ""
+            print(f"{config.name}{default}: {' -> '.join(step['type'] for step in config.steps)}")
+        return 0
+    config = load_workflow_config(args.path, args.name)
+    if args.debug:
+        config.debug = True
+    workflow = Workflow(config)
+    print(workflow.describe())
+    if not args.no_input:
+        import sys
+        import threading
+
+        print("Enter 'stop' (or press Ctrl+C) to stop.", flush=True)
+
+        def listen():
+            for line in sys.stdin:
+                if line.strip().lower() in ("stop", "q", "quit", "exit"):
+                    print("stopping ...", flush=True)
+                    workflow.stop()
+                    return
+
+        threading.Thread(target=listen, daemon=True).start()
+    workflow.run(duration_s=args.duration)
+    print(workflow.statistics_report())
+    return 0
+
+
 def _check(args) -> int:
     for path in args.paths:
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
+        if isinstance(data, dict) and "workflows" in data:
+            from .workflows import Workflow, load_workflow_configs
+
+            print(path)
+            for config in load_workflow_configs(path):
+                print("  " + Workflow(config).describe().replace("\n", "\n  "))
+            print("  configuration is valid")
+            continue
         has_frames = isinstance(data, dict) and "frames" in data
         has_agents = isinstance(data, dict) and "agents" in data
         has_cameras = (not has_frames and not has_agents) or (isinstance(data, dict) and "cameras" in data)
@@ -189,6 +231,15 @@ def main(argv=None) -> int:
     command.add_argument("--decay", default="linear", choices=("linear", "exponential"))
     command.add_argument("--tiles", type=int, help="tile size in pixels, for instance 80 (default: no tiles)")
     command.set_defaults(function=_frame_template)
+
+    command = commands.add_parser("workflow", help="list or run workflows")
+    command.add_argument("action", choices=("run", "list"))
+    command.add_argument("path", help="workflow configuration file")
+    command.add_argument("--name", help="workflow name (default: the default workflow)")
+    command.add_argument("--duration", type=float, help="stop after this many seconds")
+    command.add_argument("--debug", action="store_true", help="print step timings")
+    command.add_argument("--no-input", action="store_true", help="do not read 'stop' from the console")
+    command.set_defaults(function=_workflow)
 
     command = commands.add_parser("check", help="validate camera, frame and agent configuration files")
     command.add_argument("paths", nargs="+")

@@ -7,6 +7,7 @@ opennve/
 ├── __init__.py      public API
 ├── __main__.py      command line (opennve ...)
 ├── agents.py        AgentConfig, Agent, run_agents, tasks (classification, segmentation), backends
+├── workflows/       workflows: engine.py (Workflow, threads, queues), steps.py (built-in steps), item.py
 ├── networks/        neural networks (need TensorFlow when used)
 │   ├── registry.py  NetworkParameters, register_network, custom objects
 │   ├── network.py   Network, TensorFlow Lite export, representative_dataset, weight comparison
@@ -23,7 +24,7 @@ opennve/
 ├── output.py        OutputConfig (fields x, y, p, t), CSV
 ├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
 └── window.py        WindowConfig, WindowAccumulator, EventWindow, frames
-examples/            cameras.json, frames.json, agents.json, viewer.py, frames.py, tiles.py, agents.py,
+examples/            cameras.json, frames.json, agents.json, workflows.json, viewer.py, frames.py, tiles.py, agents.py,
                      networks.py, list_cameras.py, raw_player.py
 tests/               pytest, without hardware (the camera is simulated)
 tests/data/          RAW reference files written by faery (independent encoder) and small
@@ -41,7 +42,7 @@ pip install -e ".[test]"
 pytest
 ```
 
-The tests do not need a camera: `neuromorphic_drivers.open` and `list_devices` are replaced by fakes. They cover configuration and validation, filters, output format, time windows, frames, agents, networks, the camera class and the command line.
+The tests do not need a camera: `neuromorphic_drivers.open` and `list_devices` are replaced by fakes. They cover configuration and validation, filters, output format, time windows, frames, agents, networks, workflows, the camera class and the command line.
 
 The agent tests run the models in `tests/data` with LiteRT and TensorFlow and compare the outputs with values computed in numpy. Tests for a runtime that is not installed are skipped: `pip install ai-edge-litert` for TensorFlow Lite, `pip install tf-nightly` (Python 3.14) or `tensorflow` (Python ≤ 3.13) for TensorFlow. LiteRT is a dependency of openNVE and is installed in the CI where wheels exist; TensorFlow (extra `tensorflow`, about 600 MB) is not installed in the CI.
 

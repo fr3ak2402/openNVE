@@ -1,0 +1,55 @@
+{
+    "workflows": [
+        {
+            "name": "insects",
+            "default": true,
+            "description": "Live camera: 1 s blocks, 3 overlapping windows, U-Net on 80 x 80 tiles, insect events to CSV",
+            "cameras": "cameras.json",
+            "frames": "frames.json",
+            "agents": "agents.json",
+            "queue_size": 8,
+            "ordered": true,
+            "debug": false,
+            "steps": [
+                {"type": "camera", "cameras": ["left"], "block_ms": 1000},
+                {"type": "windows", "count": 3, "overlap_ms": 200},
+                {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15, "threads": 2},
+                {"type": "agent", "agent": "insects", "threads": 4},
+                {"type": "require", "agent": "insects", "min_windows": 1},
+                {"type": "label_events", "agent": "insects", "label": 2},
+                {"type": "log", "agent": "insects"},
+                {"type": "write", "format": "csv", "path": "output/{workflow}_{camera}_{date}_{time}.csv"}
+            ]
+        },
+        {
+            "name": "insects_raw",
+            "description": "The same for .raw recordings, with the predictions as JSON lines",
+            "cameras": "cameras.json",
+            "frames": "frames.json",
+            "agents": "agents.json",
+            "steps": [
+                {"type": "raw", "path": "recordings/*.raw", "camera": "left", "block_ms": 1000},
+                {"type": "windows", "count": 3, "overlap_ms": 200},
+                {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15, "threads": 2},
+                {"type": "agent", "agent": "insects", "threads": 4},
+                {"type": "require", "agent": "insects", "min_windows": 1},
+                {"type": "label_events", "agent": "insects", "label": 2},
+                {"type": "write", "format": "csv", "path": "output/{workflow}_{camera}_{date}_{time}.csv"},
+                {"type": "write", "format": "jsonl", "path": "output/{workflow}_{date}_{time}.jsonl"}
+            ]
+        },
+        {
+            "name": "record_frames",
+            "description": "Without a model: frames of both cameras, tiles after the frame, event log",
+            "cameras": "cameras.json",
+            "frames": "frames.json",
+            "steps": [
+                {"type": "camera", "block_ms": 40, "duration_s": 60},
+                {"type": "frames", "frame": "full"},
+                {"type": "tiles", "size": 80, "min_events": 10},
+                {"type": "log"},
+                {"type": "write", "format": "csv", "path": "output/{camera}_events_{datetime}.csv"}
+            ]
+        }
+    ]
+}

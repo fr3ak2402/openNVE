@@ -47,6 +47,18 @@ from .networks import (
     register_weight_transfer,
     representative_dataset,
 )
+from .workflows import (
+    Step,
+    WorkItem,
+    Workflow,
+    WorkflowConfig,
+    list_steps,
+    load_workflow,
+    load_workflow_config,
+    load_workflow_configs,
+    register_step,
+    save_workflow_configs,
+)
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
 from .config import (
     CameraConfig,
@@ -95,6 +107,16 @@ except ImportError:
         NEUROMORPHIC_DRIVERS_VERSION = None
 
 __all__ = [
+    "Step",
+    "WorkItem",
+    "Workflow",
+    "WorkflowConfig",
+    "list_steps",
+    "load_workflow",
+    "load_workflow_config",
+    "load_workflow_configs",
+    "register_step",
+    "save_workflow_configs",
     "TaskInput",
     "list_backends",
     "list_tasks",

@@ -33,6 +33,7 @@ PAGES = {
     "frames.md": ("Frames-and-tiles", "Frames and tiles"),
     "networks.md": ("Neural-networks", "Neural networks"),
     "agents.md": ("Agents", "Agents (TensorFlow models)"),
+    "workflows.md": ("Workflows", "Workflows"),
     "multiple-cameras.md": ("Multiple-cameras", "Multiple cameras"),
     "raw-files.md": ("RAW-files", "RAW files"),
     "cli.md": ("Command-line", "Command line"),
