@@ -4,10 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennve"
-version = "1.0.0b0"
-description = "Open Neuromorphic Vision Engine: event cameras and .raw recordings, JSON configuration, filters, time windows, frames and tiles"
+version = "1.0.0"
+description = "Open Neuromorphic Vision Engine: event cameras, .raw and HDF5 recordings, filters, time windows, frames and tiles, TensorFlow agents and multithreaded workflows"
 readme = "README.md"
 requires-python = ">=3.14"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
 dependencies = [
     # Cameras: the SENSING SE1-S4 driver is in the fr3ak2402/neuromorphic-drivers wheel (0.19.2 or newer),
     # embedded in the openNVE wheels
@@ -24,6 +37,11 @@ dependencies = [
     # run with TensorFlow (extra "tensorflow")
     "ai-edge-litert>=2.3; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')",
 ]
+
+[project.urls]
+Homepage = "https://github.com/fr3ak2402/openNVE"
+Documentation = "https://github.com/fr3ak2402/openNVE/wiki"
+Changelog = "https://github.com/fr3ak2402/openNVE/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Events as pandas DataFrames (FrameEngine.generate_frame / build accept DataFrames with x, y, p, t),

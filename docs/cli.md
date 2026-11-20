@@ -54,7 +54,7 @@ opennve recording recording.raw --json
 Shows the version, the build number and the versions of the dependencies (`--json` as JSON). `opennve --version` prints only the first line.
 
 ```text
-openNVE 1.0.0b0 (build 324.2026)
+openNVE 1.0.0 (build 324.2026)
   build date            2026-11-20T13:43:21+00:00
   neuromorphic_drivers  0.19.2
   Python                3.14.1
