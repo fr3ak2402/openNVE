@@ -40,9 +40,26 @@ opennve frame-template --name binary --mode binary
 
 Without `--width` / `--height` the sensor size is used, without `--tiles` the frame is not split.
 
+## `opennve workflow run|list <file>`
+
+Runs or lists the [workflows](workflows.md) of a workflow configuration file.
+
+```sh
+opennve workflow list workflows.json
+opennve workflow run workflows.json                       # default workflow; 'stop' + Enter or Ctrl+C stops
+opennve workflow run workflows.json --name insects_raw --duration 60 --debug
+```
+
+| Option | Description |
+|---|---|
+| `--name` | Workflow name (default: the workflow with `"default": true`, or the only one) |
+| `--duration` | Stop after this many seconds |
+| `--debug` | Print the steps and the statistics |
+| `--no-input` | Do not read `stop` from the console (for scripts and services) |
+
 ## `opennve check <file> [<file> ...]`
 
-Validates camera, frame and agent configuration files without opening a camera. `--load` also loads the agent models and prints their input shape (needs LiteRT or TensorFlow, see [Agents](agents.md)).
+Validates camera, frame, agent and workflow configuration files without opening a camera. `--load` also loads the agent models and prints their input shape (needs LiteRT or TensorFlow, see [Agents](agents.md)).
 
 ```sh
 opennve check cameras.json frames.json

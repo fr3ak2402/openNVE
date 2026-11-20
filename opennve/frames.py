@@ -386,6 +386,7 @@ class Frame:
             )
         self.tiles = split_into_tiles(data, tile_size, self.tile_event_counts(tile_size), min_events)
         self.tile_rows, self.tile_cols = tile_grid(self.width, self.height, tile_size)
+        self._tile_size, self._min_events = tile_size, min_events
         return self.tiles
 
     _tile_size: typing.Optional[int] = dataclasses.field(default=None, repr=False)

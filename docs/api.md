@@ -392,6 +392,26 @@ Building, loading, saving and converting networks (TensorFlow / Keras), see [Neu
 
 ---
 
+## Workflows
+
+Configurable chains of steps in threads, see [Workflows](workflows.md).
+
+| Name | Description |
+|---|---|
+| `load_workflow(path, name=None)` | Workflow of a file (default workflow without a name) |
+| `load_workflow_configs(path)` / `load_workflow_config(path, name=None)` / `save_workflow_configs(path, configs)` | Workflow configurations |
+| `Workflow(config)` / `Workflow.from_steps(name, steps, **settings)` | `run(duration_s=None)`, `start()`, `stop()`, `join(timeout=None)`, `add_step(...)`, `results`, `statistics()`, `statistics_report()`, `describe()` |
+| `WorkItem` | `index`, `camera`, `block`, `windows`, `frames`, `results`, `events`, `data`, `timings`, `summary()` |
+| `Step`, `register_step(name)`, `list_steps()` | Own step types |
+
+```python
+workflow = opennve.load_workflow("workflows.json", "insects")
+workflow.run()
+print(workflow.statistics_report())
+```
+
+---
+
 ## RAW files
 
 `.raw` recordings (EVT 2.0, 2.1, 3.0) are read with the same interface as a live camera. See [RAW files](raw-files.md) for all options.
