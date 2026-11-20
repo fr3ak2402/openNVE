@@ -128,7 +128,7 @@ from .workflows import (
     save_workflow_configs,
 )
 
-__version__ = "0.6.2"
+__version__ = "0.8.2"
 
 try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
     from ._bundle import NEUROMORPHIC_DRIVERS_VERSION
