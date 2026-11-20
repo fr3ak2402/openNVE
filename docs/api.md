@@ -26,17 +26,17 @@ All names described here are available directly as `opennve.<name>`.
 
 | Name | Description |
 |---|---|
-| `__version__` | Version, for instance `"1.0.0a0"` |
+| `__version__` | Version, for instance `"1.0.0b0"` |
 | `BUILD_NUMBER` / `build_number()` | Build number `<day of year>.<year>` of the build (UTC), for instance `"324.2026"` for 20 November 2026 |
 | `BUILD_DATE` | Build date and time (`datetime`, UTC) |
 | `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded neuromorphic_drivers |
 | `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `litert`, `tensorflow` |
-| `version_string()` | `"openNVE 1.0.0a0 (build 324.2026)"` |
+| `version_string()` | `"openNVE 1.0.0b0 (build 324.2026)"` |
 
 ```python
 import opennve
 
-print(opennve.__version__, opennve.BUILD_NUMBER)   # 1.0.0a0 324.2026
+print(opennve.__version__, opennve.BUILD_NUMBER)   # 1.0.0b0 324.2026
 print(opennve.version_info())
 ```
 
