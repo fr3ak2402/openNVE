@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 import opennve
-from opennve import camera as camera_module
-from opennve import discovery as discovery_module
+from opennve.cameras import camera as camera_module
+from opennve.cameras import discovery as discovery_module
 
 EVENT_DTYPE = np.dtype([("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("on", "?")])
 
@@ -411,7 +411,7 @@ def test_open_cameras_starts_secondaries_first(fake_open, monkeypatch):
 
 
 def test_cli(capsys, tmp_path):
-    from opennve.__main__ import main
+    from opennve.cli import main
 
     assert main(["template", "SE1-S4", "--serial", "05110634", "--name", "left"]) == 0
     output = capsys.readouterr().out
@@ -465,7 +465,7 @@ class FakeWindowsDriver:
 
 @pytest.fixture
 def windows(monkeypatch):
-    from opennve import driver as driver_module
+    from opennve.cameras import driver as driver_module
 
     fake = FakeWindowsDriver([(0x04B4, 0x00C4, None), (0x04B4, 0x00F5, "CYUSB3")])
     monkeypatch.setattr(driver_module.sys, "platform", "win32")
@@ -509,7 +509,7 @@ def test_open_camera_driver_not_ready(windows, fake_open, monkeypatch):
 
 
 def test_driver_status_linux(monkeypatch):
-    from opennve import driver as driver_module
+    from opennve.cameras import driver as driver_module
 
     listed = [
         types.SimpleNamespace(name=nd.Name.SENSING_SE1_S4, error="permission denied"),
@@ -525,7 +525,7 @@ def test_driver_status_linux(monkeypatch):
 
 
 def test_cli_driver(windows, capsys):
-    from opennve.__main__ import main
+    from opennve.cli import main
 
     assert main(["driver"]) == 1
     assert "not ready" in capsys.readouterr().out

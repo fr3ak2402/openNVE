@@ -10,10 +10,10 @@ import numpy as np
 
 from .config import CameraConfig, PathLike, load_config, settings_to_dict
 from .driver import MODEL_USB_IDS, ensure_driver
-from .filters import EventFilter, FilterConfig
-from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
-from .output import OutputConfig, to_csv, to_rows
-from .window import EventWindow, WindowAccumulator, WindowConfig
+from ..events.filters import EventFilter, FilterConfig
+from ..frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
+from ..events.output import OutputConfig, to_csv, to_rows
+from ..events.window import EventWindow, WindowAccumulator, WindowConfig
 from .models import get_model
 
 

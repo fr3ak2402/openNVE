@@ -35,7 +35,7 @@ test = ["pytest"]
 all = ["pandas>=2.2", "tf-nightly", "pytest"]
 
 [project.scripts]
-opennve = "opennve.__main__:main"
+opennve = "opennve.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["opennve*"]

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 import opennve
-from opennve.agents import _tflite_interpreter_class
+from opennve.agents.backends import _tflite_interpreter_class
 
 DATA = pathlib.Path(__file__).resolve().parent / "data"
 TILE_WEIGHTS = np.array([[4.0, -2.0], [-3.0, 5.0]], dtype=np.float32)

@@ -51,9 +51,9 @@ import typing
 
 import numpy as np
 
-from .filters import FilterConfig
-from .output import OutputConfig
-from .window import WindowConfig
+from ..events.filters import FilterConfig
+from ..events.output import OutputConfig
+from ..events.window import WindowConfig
 from .models import CameraModel, get_model
 
 PathLike = typing.Union[str, pathlib.Path]

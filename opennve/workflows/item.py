@@ -9,7 +9,7 @@ import numpy as np
 
 from ..agents import AgentResult
 from ..frames import Frame
-from ..window import EventWindow
+from ..events.window import EventWindow
 
 
 @dataclasses.dataclass

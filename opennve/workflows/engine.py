@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
 import pathlib
 import queue
 import threading
@@ -43,7 +42,7 @@ import time
 import typing
 
 from .item import WorkItem
-from .steps import COMMON_PARAMETERS, CallbackStep, CollectStep, Step, StepContext, get_step_class
+from .steps import COMMON_PARAMETERS, CollectStep, Step, StepContext, get_step_class
 
 PathLike = typing.Union[str, pathlib.Path]
 
@@ -162,6 +161,7 @@ def load_workflow_config(path: PathLike, name: typing.Optional[str] = None) -> W
 def load_workflow(path: PathLike, name: typing.Optional[str] = None) -> "Workflow":
     """The workflow (by name, else the default) of a workflow configuration file."""
     return Workflow(load_workflow_config(path, name))
+
 
 
 # ------------------------------------------------------------------ statistics

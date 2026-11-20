@@ -23,12 +23,12 @@ import typing
 
 import numpy as np
 
-from .camera import CameraPacket
-from .config import CameraConfig, PathLike, load_config
-from .filters import EventFilter, FilterConfig
-from .frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
-from .output import OutputConfig
-from .window import EventWindow, WindowAccumulator, WindowConfig
+from ..cameras.camera import CameraPacket
+from ..cameras.config import CameraConfig, PathLike, load_config
+from ..events.filters import EventFilter, FilterConfig
+from ..frames import Frame, FrameConfig, FrameEngine, as_frame_config, as_frame_configs
+from ..events.output import OutputConfig
+from ..events.window import EventWindow, WindowAccumulator, WindowConfig
 
 POLARITY_EVENTS_DTYPE = np.dtype([("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("on", "?")])
 TRIGGER_EVENTS_DTYPE = np.dtype([("t", "<u8"), ("id", "u1"), ("rising", "?")])
