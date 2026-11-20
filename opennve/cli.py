@@ -99,6 +99,29 @@ def _workflow(args) -> int:
     return 0
 
 
+def _version(args) -> int:
+    from ._version import version_info
+
+    info = version_info()
+    if args.json:
+        print(json.dumps(info, indent=4))
+        return 0
+    print(f"openNVE {info['version']} (build {info['build']})")
+    source = {"wheel": "", "git": ", from the last git commit", "today": ", not a built wheel"}[info["build_source"]]
+    print(f"  build date            {info['build_date']}{source}")
+    for key, label in (
+        ("neuromorphic_drivers", "neuromorphic_drivers"),
+        ("python", "Python"),
+        ("platform", "platform"),
+        ("numpy", "numpy"),
+        ("opencv", "OpenCV"),
+        ("litert", "LiteRT"),
+        ("tensorflow", "TensorFlow"),
+    ):
+        print(f"  {label:<21} {info[key] or '-'}")
+    return 0
+
+
 def _check(args) -> int:
     for path in args.paths:
         with open(path, encoding="utf-8") as file:
@@ -209,8 +232,15 @@ def _models(args) -> int:
 
 
 def main(argv=None) -> int:
+    from ._version import version_string
+
     parser = argparse.ArgumentParser(prog="opennve", description="openNVE camera tools")
+    parser.add_argument("--version", action="version", version=version_string())
     commands = parser.add_subparsers(dest="command", required=True)
+
+    command = commands.add_parser("version", help="show version, build number and dependencies")
+    command.add_argument("--json", action="store_true", help="output as JSON")
+    command.set_defaults(function=_version)
 
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")

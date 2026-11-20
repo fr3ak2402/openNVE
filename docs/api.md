@@ -6,6 +6,7 @@ import opennve
 
 All names described here are available directly as `opennve.<name>`.
 
+- [Version and build](#version-and-build)
 - [Finding cameras](#finding-cameras)
 - [Configuration](#configuration)
 - [USB driver](#usb-driver)
@@ -18,6 +19,28 @@ All names described here are available directly as `opennve.<name>`.
 - [RAW files](#raw-files)
 - [Models](#models)
 - [Helper functions](#helper-functions)
+
+---
+
+## Version and build
+
+| Name | Description |
+|---|---|
+| `__version__` | Version, for instance `"0.8.2"` |
+| `BUILD_NUMBER` / `build_number()` | Build number `<day of year>.<year>` of the build (UTC), for instance `"324.2026"` for 20 November 2026 |
+| `BUILD_DATE` | Build date and time (`datetime`, UTC) |
+| `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded neuromorphic_drivers |
+| `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `litert`, `tensorflow` |
+| `version_string()` | `"openNVE 0.8.2 (build 324.2026)"` |
+
+```python
+import opennve
+
+print(opennve.__version__, opennve.BUILD_NUMBER)   # 0.8.2 324.2026
+print(opennve.version_info())
+```
+
+The build number is written into the wheel when it is built (`tools/bundle_wheel.py`). In a source checkout or an editable install it is the date of the last git commit (`build_source` `"git"`), without git the current date (`"today"`); in a wheel `build_source` is `"wheel"`. On the command line: `opennve version`.
 
 ---
 

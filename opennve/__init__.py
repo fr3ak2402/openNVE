@@ -128,19 +128,25 @@ from .workflows import (
     save_workflow_configs,
 )
 
-__version__ = "0.8.2"
-
-try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
-    from ._bundle import NEUROMORPHIC_DRIVERS_VERSION
-except ImportError:
-    import importlib.metadata as _metadata
-
-    try:
-        NEUROMORPHIC_DRIVERS_VERSION = _metadata.version("neuromorphic_drivers")
-    except _metadata.PackageNotFoundError:
-        NEUROMORPHIC_DRIVERS_VERSION = None
+# version and build
+from ._version import (
+    BUILD_DATE,
+    BUILD_NUMBER,
+    NEUROMORPHIC_DRIVERS_VERSION,
+    __version__,
+    build_number,
+    version_info,
+    version_string,
+)
 
 __all__ = [
+    "BUILD_DATE",
+    "BUILD_NUMBER",
+    "NEUROMORPHIC_DRIVERS_VERSION",
+    "__version__",
+    "build_number",
+    "version_info",
+    "version_string",
     "Agent",
     "AgentConfig",
     "AgentResult",

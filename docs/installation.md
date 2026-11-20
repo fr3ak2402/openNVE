@@ -55,7 +55,7 @@ Stable TensorFlow has no wheels for Python 3.14 yet, so the `tensorflow` extra i
 Check the installation:
 
 ```sh
-python -c "import opennve; print(opennve.__version__, opennve.NEUROMORPHIC_DRIVERS_VERSION)"
+opennve version                    # version, build number (<day of year>.<year>) and dependencies
 opennve models
 ```
 

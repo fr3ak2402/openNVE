@@ -86,6 +86,10 @@ Bundling locally:
 python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 ```
 
+## Build number
+
+Every wheel contains a build number `<day of year>.<year>` of the build date in UTC (for instance `324.2026` for 20 November 2026), available as `opennve.BUILD_NUMBER` and with `opennve version`. `tools/bundle_wheel.py` writes it into `opennve/_bundle.py`; the build date can be fixed with the environment variable `OPENNVE_BUILD_DATE` (ISO date / time) or `SOURCE_DATE_EPOCH` (reproducible builds).
+
 ## Wiki
 
 `.github/workflows/wiki.yml` publishes `docs/` to the [GitHub wiki](https://github.com/fr3ak2402/openNVE/wiki) whenever `docs/` changes on `main` (or manually: *Actions → Wiki → Run workflow*). `tools/docs_to_wiki.py` turns `docs/README.md` into the wiki home page, gives the other pages readable names, rewrites the links and generates the sidebar.
@@ -96,7 +100,7 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.8.3"`).
+1. Increase the version in `pyproject.toml` and `opennve/_version.py` (`version = "0.8.3"`).
 2. Commit and push.
 3. Create a tag:
    ```sh

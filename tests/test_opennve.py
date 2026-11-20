@@ -1,6 +1,8 @@
 """Tests without hardware (neuromorphic_drivers is mocked where a camera is needed)."""
 
 import json
+import os
+import pathlib
 import types
 
 import neuromorphic_drivers as nd
@@ -532,3 +534,54 @@ def test_cli_driver(windows, capsys):
     assert main(["driver", "--install", "--model", "SE1-S4"]) == 0
     assert main(["driver", "--model", "SE1-S4"]) == 0
     assert "ready" in capsys.readouterr().out
+
+
+def test_version_and_build_number(capsys):
+    import datetime
+    import re
+
+    from opennve._version import format_build_number, parse_build_number
+
+    assert re.fullmatch(r"\d+\.\d+\.\d+", opennve.__version__)
+    assert re.fullmatch(r"\d{1,3}\.\d{4}", opennve.BUILD_NUMBER) and opennve.build_number() == opennve.BUILD_NUMBER
+    assert format_build_number(datetime.date(2026, 11, 20)) == "324.2026"
+    assert format_build_number(datetime.date(2026, 1, 5)) == "5.2026"
+    assert format_build_number(datetime.date(2024, 12, 31)) == "366.2024"  # leap year
+    assert parse_build_number("324.2026") == datetime.date(2026, 11, 20)
+    info = opennve.version_info()
+    assert info["version"] == opennve.__version__ and info["build"] == opennve.BUILD_NUMBER
+    assert format_build_number(datetime.datetime.fromisoformat(info["build_date"])) == info["build"]
+    assert opennve.version_string() == f"openNVE {opennve.__version__} (build {opennve.BUILD_NUMBER})"
+    from opennve.cli import main
+
+    assert main(["version", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["build"] == opennve.BUILD_NUMBER
+
+
+def test_bundle_writes_build_number(tmp_path):
+    import subprocess
+    import sys
+    import zipfile
+
+    nd = tmp_path / "nd"
+    nd.mkdir()
+    with zipfile.ZipFile(nd / "neuromorphic_drivers-0.19.2-cp314-cp314-manylinux_2_28_x86_64.whl", "w") as wheel:
+        info = "neuromorphic_drivers-0.19.2.dist-info"
+        wheel.writestr("neuromorphic_drivers/__init__.py", "")
+        wheel.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\nName: neuromorphic_drivers\nVersion: 0.19.2\n")
+        wheel.writestr(f"{info}/WHEEL", "Wheel-Version: 1.0\nTag: cp314-cp314-manylinux_2_28_x86_64\n")
+        wheel.writestr(f"{info}/entry_points.txt", "")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    env = {**os.environ, "OPENNVE_BUILD_DATE": "2026-02-03T10:00:00+00:00"}
+    subprocess.run([sys.executable, str(root / "tools" / "bundle_wheel.py"), str(nd), "--out", str(tmp_path / "dist")], check=True, env=env, capture_output=True)
+    (wheel_path,) = (tmp_path / "dist").glob("*.whl")
+    bundle = zipfile.ZipFile(wheel_path).read("opennve/_bundle.py").decode()
+    assert 'BUILD_NUMBER = "34.2026"' in bundle and 'BUILD_DATE = "2026-02-03T10:00:00+00:00"' in bundle
+    assert 'NEUROMORPHIC_DRIVERS_VERSION = "0.19.2"' in bundle
+
+
+def test_version_matches_pyproject():
+    import tomllib
+
+    pyproject = pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml"
+    assert tomllib.loads(pyproject.read_text())["project"]["version"] == opennve.__version__

@@ -28,6 +28,8 @@ runs:
         "$VENV_BIN/python" -m pip show ai-edge-litert >/dev/null 2>&1 && echo "LiteRT installed as a dependency" || echo "no LiteRT for this platform / Python version, TensorFlow Lite tests are skipped"
         cd "$RUNNER_TEMP"
         "$VENV_BIN/python" -c "import sys, opennve, neuromorphic_drivers as nd; print(sys.version); print(opennve.__file__, opennve.NEUROMORPHIC_DRIVERS_VERSION); assert 'site-packages' in opennve.__file__; assert hasattr(nd, 'sensing_se1_s4'); import cv2; print('opencv', cv2.__version__)"
+        "$VENV_BIN/opennve" version
+        "$VENV_BIN/python" -c "import opennve; info = opennve.version_info(); assert info['build_source'] == 'wheel', info; print(opennve.version_string())"
         "$VENV_BIN/opennve" models
         "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json" "$GITHUB_WORKSPACE/examples/frames.json" "$GITHUB_WORKSPACE/examples/agents.json" "$GITHUB_WORKSPACE/examples/workflows.json"
         cd "$GITHUB_WORKSPACE"
