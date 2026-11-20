@@ -124,6 +124,7 @@ Labels of HDF5 files are kept in `item.block.polarity_events["l"]` and, with the
 |---|---|
 | `count`, `overlap_ms` | `count` windows of equal size that cover the block, neighbours overlapping by `overlap_ms`. Example: 1000 ms, 3 windows, 200 ms overlap → 0–467, 267–733, 533–1000 ms |
 | `duration_ms`, `step_ms` | Alternatively: windows of `duration_ms` every `step_ms` (sliding windows) |
+| `align` | `block` (default): the windows start at the start of the block. `first_event`: they start at the first event of the block (as `build_bounds` of the previous workflow engine) |
 
 **`frames`** – builds the frames of each window.
 
@@ -167,7 +168,7 @@ Labels of HDF5 files are kept in `item.block.polarity_events["l"]` and, with the
 
 The result (`item.events`) has the output format of the camera (for instance `x, y, p, t`) plus the label field.
 
-**`log`** – prints one line per item: block, events, windows, tiles, positive windows and pixels per agent, step timings (`"timings": false` hides them; `"agent"` limits the output to one agent).
+**`log`** – prints one line per item, in the order of the items (one thread): block, events, windows, tiles, positive windows and pixels per agent, step timings (`"timings": false` hides them; `"agent"` limits the output to one agent).
 
 **`callback`** – calls a Python function (only from code, see below).
 
@@ -262,7 +263,7 @@ Then `{"type": "denoise_frames", "kernel": 5, "threads": 2}` works in `workflows
 |---|---|
 | `workflow.json` with `event_cameras`, `workers`, `vision_engine`, `frame_engine`, `agent_name`, `output_file` | `workflows.json` with `cameras`, `frames`, `agents` and a list of `steps` |
 | Worker `collector` (VisionEngine, `sequence_length_ms`, test data) | Step `camera` (`block_ms`) or `raw` (recordings instead of the test mode) |
-| `frame_engine.sequence_windows`, `sequence_overlap_ms` (`build_bounds`) | Step `windows` with `count`, `overlap_ms` (same window bounds) |
+| `frame_engine.sequence_windows`, `sequence_overlap_ms` (`build_bounds`) | Step `windows` with `count`, `overlap_ms` and `"align": "first_event"` (same window bounds) |
 | `frame_weight_px`, `frame_height_px`, `tile_size_px` | Frame configuration (`width`, `height`, `tiles.size`) |
 | Tile threshold `(upper - lower) / 10000 * 1.5` | `"min_events_per_ms": 0.15` |
 | Worker `processor` (several) | Steps `frames`, `agent` (with `threads`), `require`, `label_events` |
