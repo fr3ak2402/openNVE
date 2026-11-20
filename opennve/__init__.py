@@ -14,6 +14,39 @@
             print(frame.name, frame.data.shape, len(frame.tiles))
 """
 
+from .agents import (
+    Agent,
+    AgentConfig,
+    AgentResult,
+    AgentStep,
+    Prediction,
+    PredictionConfig,
+    PreprocessConfig,
+    load_agent,
+    load_agent_config,
+    load_agent_configs,
+    load_agents,
+    process_window,
+    run_agents,
+    save_agent_configs,
+    TaskInput,
+    list_backends,
+    list_tasks,
+    register_backend,
+    register_task,
+)
+from .networks import (
+    NetworkParameters,
+    Network,
+    NeuralEngine,
+    compare_weights,
+    custom_objects,
+    list_networks,
+    register_custom_objects,
+    register_network,
+    register_weight_transfer,
+    representative_dataset,
+)
 from .camera import CameraPacket, EventCamera, open_camera, open_cameras
 from .config import (
     CameraConfig,
@@ -49,7 +82,7 @@ from .output import OutputConfig, to_csv, to_rows
 from .raw import RawHeader, RawReader, open_raw, read_header, read_raw
 from .window import EventWindow, WindowAccumulator, WindowConfig
 
-__version__ = "0.25.9"
+__version__ = "0.6.2"
 
 try:  # wheels with embedded neuromorphic_drivers (tools/bundle_wheel.py)
     from ._bundle import NEUROMORPHIC_DRIVERS_VERSION
@@ -62,6 +95,35 @@ except ImportError:
         NEUROMORPHIC_DRIVERS_VERSION = None
 
 __all__ = [
+    "TaskInput",
+    "list_backends",
+    "list_tasks",
+    "register_backend",
+    "register_task",
+    "Network",
+    "NetworkParameters",
+    "NeuralEngine",
+    "compare_weights",
+    "custom_objects",
+    "list_networks",
+    "register_custom_objects",
+    "register_network",
+    "register_weight_transfer",
+    "representative_dataset",
+    "Agent",
+    "AgentConfig",
+    "AgentResult",
+    "AgentStep",
+    "Prediction",
+    "PredictionConfig",
+    "PreprocessConfig",
+    "load_agent",
+    "load_agent_config",
+    "load_agent_configs",
+    "load_agents",
+    "process_window",
+    "run_agents",
+    "save_agent_configs",
     "NEUROMORPHIC_DRIVERS_VERSION",
     "MODELS",
     "FRAME_MODES",

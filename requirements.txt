@@ -1,10 +1,15 @@
-# Runtime dependencies of openNVE (see pyproject.toml).
-# neuromorphic_drivers with the SE1-S4 driver is embedded in the openNVE wheels; for a source
-# checkout, install the neuromorphic_drivers wheel from fr3ak2402/neuromorphic-drivers first.
-neuromorphic_drivers>=0.19.2
-# events, filters, .raw decoding, time windows, frames and tiles
+# openNVE dependencies (pip installs them automatically with the openNVE wheel).
+# neuromorphic_drivers (with the SE1-S4 driver) is embedded in the openNVE wheels.
+
+# events, filters, .raw files, time windows, frames and tiles
 numpy>=1.26
-# display (frame.to_image, examples)
+# display, resizing of agent inputs
 opencv-python>=4.10
+# agents with TensorFlow Lite models (.tflite); wheels for Windows x64, Linux x64 / ARM64, macOS ARM64
+ai-edge-litert>=2.3; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')
+
 # optional: events as pandas DataFrames
 pandas>=2.2
+# optional (about 600 MB): neural networks and agents with Keras / SavedModel models.
+# Stable TensorFlow has no Python 3.14 wheels yet: tf-nightly (includes Keras 3)
+tf-nightly

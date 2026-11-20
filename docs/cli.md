@@ -42,10 +42,11 @@ Without `--width` / `--height` the sensor size is used, without `--tiles` the fr
 
 ## `opennve check <file> [<file> ...]`
 
-Validates camera and frame configuration files without opening a camera.
+Validates camera, frame and agent configuration files without opening a camera. `--load` also loads the agent models and prints their input shape (needs LiteRT or TensorFlow, see [Agents](agents.md)).
 
 ```sh
 opennve check cameras.json frames.json
+opennve check agents.json --load
 ```
 
 ```text

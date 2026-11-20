@@ -22,14 +22,31 @@ Download the wheel for your platform from the [releases](https://github.com/fr3a
 
 ```sh
 pip uninstall -y neuromorphic_drivers     # only if installed separately (see below)
-pip install opennve-0.25.9-cp314-cp314-win_amd64.whl
+pip install opennve-0.6.2-cp314-cp314-win_amd64.whl
 ```
 
-pip installs numpy and OpenCV automatically. Reading `.raw` files and building frames only needs numpy. To pass events as pandas DataFrames (for instance to `FrameEngine.generate_frame`), install the optional extra:
+pip installs the dependencies automatically:
+
+| Package | Used for |
+|---|---|
+| numpy | Events, filters, `.raw` files, time windows, frames and tiles |
+| opencv-python | Display (`frame.to_image`, examples), resizing of agent inputs |
+| ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
+
+Optional extras:
+
+| Extra | Installs | Used for |
+|---|---|---|
+| `tensorflow` | tf-nightly (about 600 MB, includes Keras 3) | [Neural networks](networks.md) (building, training, TensorFlow Lite export) and agents with Keras / SavedModel models |
+| `pandas` | pandas | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`) |
+| `all` | tensorflow, pandas, pytest | Everything |
 
 ```sh
-pip install "opennve-0.25.9-cp314-cp314-win_amd64.whl[pandas]"
+pip install "opennve-0.6.2-cp314-cp314-win_amd64.whl[tensorflow]"
+pip install "opennve-0.6.2-cp314-cp314-win_amd64.whl[all]"
 ```
+
+Stable TensorFlow has no wheels for Python 3.14 yet, so the `tensorflow` extra installs the nightly build `tf-nightly`. Do not install `tensorflow` and `tf-nightly` together. Without TensorFlow, everything except the neural networks and Keras models works.
 
 > **Important:** The wheel contains `neuromorphic_drivers` 0.19.2 with the SE1-S4 driver. A separately installed `neuromorphic_drivers` would overwrite it (and vice versa), so uninstall it first.
 

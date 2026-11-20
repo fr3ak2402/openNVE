@@ -10,9 +10,11 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Python API](api.md) | Reference of all functions, classes and methods |
 | [Time windows and frames](time-windows.md) | Collecting events in windows (40 ms by default) and building images |
 | [Frames and tiles](frames.md) | Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px) |
+| [Neural networks](networks.md) | Building, loading, saving and converting networks (U-Net, own architectures), quantization to TensorFlow Lite, weight transfer |
+| [Agents (TensorFlow models)](agents.md) | Running TensorFlow and TensorFlow Lite models on tiles and frames, configured in `agents.json` |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
 | [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |
-| [Command line](cli.md) | `opennve list`, `template`, `check`, `models` |
+| [Command line](cli.md) | `opennve list`, `template`, `frame-template`, `check`, `models`, `driver`, `raw` |
 | [Troubleshooting](troubleshooting.md) | Camera not found, noise, high event rates |
 | [Development](development.md) | Tests, wheel builds, releases, embedded driver |
 
@@ -21,18 +23,24 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 ```text
            ┌────────────────────────────────────────────────────────────┐
 JSON  ───► │ CameraConfig: name, model, serial, settings, filter,       │
-           │               output, window, frame                        │
+           │               output, window                               │
            └──────────────────────────┬─────────────────────────────────┘
                                       ▼
 Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in the format x, y, p, t)
  (USB)     (neuromorphic_drivers)     └──► EventWindow (40 ms) ──► Frame (tensor) ──► Tiles (80 × 80)
-.raw  ───► RawReader ─────┘
+.raw  ───► RawReader ─────┘                                ▲                 │
+                                  frames.json: FrameConfig ┘                 ▼
+                                  agents.json: Agent (TensorFlow / TFLite) ──► predictions per tile / pixel
+                                                     ▲
+                                  NeuralEngine / Network (UNet, ...) ──► .keras / .tflite
 ```
 
 - **Find cameras:** `opennve.list_cameras()`
 - **Configure:** one JSON file per setup, with one entry per camera
 - **Read:** `camera.events()` yields packets of filtered events, `camera.windows()` yields time windows
 - **Recordings:** `opennve.open_raw("recording.raw")` reads `.raw` files with the same interface
+- **Agents:** TensorFlow and TensorFlow Lite models (`agents.json`) run on the tiles or frames of every window: `opennve.run_agents(camera, agents, frame_configs)`; classification or segmentation (pixels per class with frame coordinates)
+- **Networks:** `opennve.Network` / `NeuralEngine` build (U-Net or own architectures), load, save and quantize models for the agents
 - **Frames:** named frame configurations (`frames.json`), separate from the cameras; `camera.frames(config)` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
 
 ## Supported cameras

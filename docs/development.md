@@ -6,6 +6,12 @@
 opennve/
 ├── __init__.py      public API
 ├── __main__.py      command line (opennve ...)
+├── agents.py        AgentConfig, Agent, run_agents, tasks (classification, segmentation), backends
+├── networks/        neural networks (need TensorFlow when used)
+│   ├── registry.py  NetworkParameters, register_network, custom objects
+│   ├── network.py   Network, TensorFlow Lite export, representative_dataset, weight comparison
+│   ├── engine.py    NeuralEngine
+│   └── unet.py      UNet layers and builder, transfer_unet_weights
 ├── camera.py        EventCamera, CameraPacket, open_camera, open_cameras
 ├── config.py        CameraConfig, loading/saving JSON, validation of the hardware settings
 ├── devices.py       SE1S4Driver, EVK4Driver, EVK3HDDriver
@@ -17,9 +23,12 @@ opennve/
 ├── output.py        OutputConfig (fields x, y, p, t), CSV
 ├── raw.py           RAW files: header, EVT 2.0 / 2.1 / 3.0 decoders, RawReader
 └── window.py        WindowConfig, WindowAccumulator, EventWindow, frames
-examples/            cameras.json, viewer.py, frames.py, tiles.py, list_cameras.py, raw_player.py
+examples/            cameras.json, frames.json, agents.json, viewer.py, frames.py, tiles.py, agents.py,
+                     networks.py, list_cameras.py, raw_player.py
 tests/               pytest, without hardware (the camera is simulated)
-tests/data/          RAW reference files written by faery (independent encoder)
+tests/data/          RAW reference files written by faery (independent encoder) and small
+                     TensorFlow / TensorFlow Lite test models (tools/make_test_models.py)
+tools/make_test_models.py  creates the test models (needs TensorFlow)
 tools/bundle_wheel.py  embeds neuromorphic_drivers into the wheels
 tools/docs_to_wiki.py  publishes docs/ to the GitHub wiki
 docs/                this documentation
@@ -32,7 +41,9 @@ pip install -e ".[test]"
 pytest
 ```
 
-The tests do not need a camera: `neuromorphic_drivers.open` and `list_devices` are replaced by fakes. They cover configuration and validation, filters, output format, time windows, frames, the camera class and the command line.
+The tests do not need a camera: `neuromorphic_drivers.open` and `list_devices` are replaced by fakes. They cover configuration and validation, filters, output format, time windows, frames, agents, networks, the camera class and the command line.
+
+The agent tests run the models in `tests/data` with LiteRT and TensorFlow and compare the outputs with values computed in numpy. Tests for a runtime that is not installed are skipped: `pip install ai-edge-litert` for TensorFlow Lite, `pip install tf-nightly` (Python 3.14) or `tensorflow` (Python ≤ 3.13) for TensorFlow. LiteRT is a dependency of openNVE and is installed in the CI where wheels exist; TensorFlow (extra `tensorflow`, about 600 MB) is not installed in the CI.
 
 ## Hardware settings of new models
 
@@ -65,14 +76,14 @@ python tools/bundle_wheel.py path/to/neuromorphic_drivers-wheels/ --out dist
 
 ## Release
 
-1. Increase the version in `pyproject.toml` (`version = "0.25.10"`).
+1. Increase the version in `pyproject.toml` (`version = "0.6.3"`).
 2. Commit and push.
 3. Create a tag:
    ```sh
-   git tag v0.25.10
+   git tag v0.6.3
    git push --tags
    ```
-4. The action builds all wheels and attaches them to the release `v0.25.10`.
+4. The action builds all wheels and attaches them to the release `v0.6.3`.
 
 ## New Python version
 

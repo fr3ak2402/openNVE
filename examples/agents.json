@@ -1,0 +1,59 @@
+{
+    "agents": [
+        {
+            "name": "insects",
+            "model": "models/unet_int8.tflite",
+            "backend": "auto",
+            "input": "tiles",
+            "frame": "tiles80",
+            "batch_size": 64,
+            "threads": 2,
+            "preprocess": {
+                "channels": "both",
+                "pad": true,
+                "resize": null,
+                "layout": "nhwc",
+                "scale": 1.0
+            },
+            "prediction": {
+                "task": "segmentation",
+                "activation": "softmax",
+                "labels": [
+                    "background",
+                    "noise",
+                    "insect"
+                ],
+                "threshold": null,
+                "target_classes": [
+                    2
+                ],
+                "min_pixels": 1,
+                "mask_inactive": false,
+                "activity_threshold": 0.0
+            }
+        },
+        {
+            "name": "scene",
+            "model": "models/scene.keras",
+            "backend": "auto",
+            "input": "frame",
+            "frame": "binary",
+            "call": "predict",
+            "preprocess": {
+                "channels": "sum",
+                "resize": [
+                    160,
+                    90
+                ]
+            },
+            "prediction": {
+                "activation": "softmax",
+                "labels": [
+                    "empty",
+                    "motion",
+                    "crowd"
+                ]
+            }
+        }
+    ]
+}

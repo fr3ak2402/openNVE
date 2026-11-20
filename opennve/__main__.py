@@ -3,7 +3,7 @@
     python -m opennve list [--json] [--config cameras.json]
     python -m opennve template SE1-S4 [--serial 05110634] [--name left]
     python -m opennve frame-template [--name tiles80] [--width 1280 --height 720] [--tiles 80]
-    python -m opennve check cameras.json frames.json
+    python -m opennve check cameras.json frames.json agents.json [--load]
     python -m opennve models
     python -m opennve driver [--install] [--model SE1-S4] [--force]
     python -m opennve raw recording.raw [--json]
@@ -17,6 +17,7 @@ import sys
 
 from .config import CameraConfig, load_configs
 from .frames import FrameConfig, TileConfig, TimeSurfaceConfig, frame_configs_from_data
+from .agents import Agent, agent_configs_from_data
 from .discovery import list_cameras
 from .models import MODELS
 
@@ -69,7 +70,8 @@ def _check(args) -> int:
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
         has_frames = isinstance(data, dict) and "frames" in data
-        has_cameras = not has_frames or "cameras" in data
+        has_agents = isinstance(data, dict) and "agents" in data
+        has_cameras = (not has_frames and not has_agents) or (isinstance(data, dict) and "cameras" in data)
         print(path)
         if has_cameras:
             configs = load_configs(path)
@@ -79,6 +81,17 @@ def _check(args) -> int:
             frames = frame_configs_from_data(data, path)
             for frame in frames:
                 print(f"  frame {frame.name}: {_describe_frame(frame)}")
+        if has_agents:
+            import pathlib
+
+            agents = agent_configs_from_data(data, path, pathlib.Path(path).resolve().parent)
+            for config in agents:
+                frame = f", frame {config.frame}" if config.frame else ""
+                print(f"  agent {config.name}: {config.model} ({config.resolved_backend}), input {config.input}{frame}")
+                if args.load:
+                    agent = Agent(config).load()
+                    print(f"    model input {list(agent.input.shape)} {agent.input.dtype}")
+                    agent.close()
         print("  configuration is valid")
     return 0
 
@@ -177,8 +190,9 @@ def main(argv=None) -> int:
     command.add_argument("--tiles", type=int, help="tile size in pixels, for instance 80 (default: no tiles)")
     command.set_defaults(function=_frame_template)
 
-    command = commands.add_parser("check", help="validate camera and frame configuration files")
+    command = commands.add_parser("check", help="validate camera, frame and agent configuration files")
     command.add_argument("paths", nargs="+")
+    command.add_argument("--load", action="store_true", help="also load the agent models")
     command.set_defaults(function=_check)
 
     command = commands.add_parser("driver", help="show or install the USB driver of the cameras (WinUSB on Windows)")
@@ -201,7 +215,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.function(args)
-    except (ValueError, OSError, RuntimeError) as error:
+    except (ValueError, OSError, RuntimeError, ImportError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
