@@ -69,11 +69,12 @@ class TFLiteBackend(Backend):
     dimension are resized to the batch.
     """
 
-    def __init__(self, path: PathLike, threads: typing.Optional[int] = None):
+    def __init__(self, path: PathLike, threads: typing.Union[int, str, None] = None):
+        from ..system import is_auto, standalone_interpreter_threads
+
         Interpreter = _tflite_interpreter_class()
-        kwargs = {"model_path": os.fspath(path)}
-        if threads is not None:
-            kwargs["num_threads"] = threads
+        self.threads = standalone_interpreter_threads() if is_auto(threads) else int(threads)
+        kwargs = {"model_path": os.fspath(path), "num_threads": self.threads}
         self.interpreter = Interpreter(**kwargs)
         self.interpreter.allocate_tensors()
         details = self.interpreter.get_input_details()

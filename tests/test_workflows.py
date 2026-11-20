@@ -282,3 +282,77 @@ def test_windows_align_first_event_and_ordered_log(raw_file, capsys):
     assert [int(line.split()[2]) for line in lines] == list(range(10))  # log in order
     with pytest.raises(ValueError, match="align must be"):
         opennve.Workflow.from_steps("x", [{"type": "raw", "path": "a.raw"}, {"type": "windows", "count": 2, "align": "end"}])
+
+
+# ------------------------------------------------------------------ automatic threads
+
+
+def test_cpu_count_and_system_info(monkeypatch):
+    monkeypatch.setenv("OPENNVE_CPUS", "6")
+    assert opennve.cpu_count() == 6
+    info = opennve.system_info()
+    assert info["usable_cpus"] == 6 and info["usable_cpus_source"] == "OPENNVE_CPUS" and info["logical_cpus"] >= 1
+    monkeypatch.setenv("OPENNVE_CPUS", "nonsense")
+    assert opennve.cpu_count() >= 1 and opennve.system_info()["usable_cpus_source"] != "OPENNVE_CPUS"
+    json.dumps(info)
+
+
+def _thread_steps(workflow):
+    return {step["name"]: step for step in workflow.thread_plan()["steps"]}
+
+
+@needs_tflite
+def test_automatic_threads(raw_file):
+    tiles = {"name": "t16", "mode": "binary", "tiles": {"size": 16, "min_events": 1}}
+    agent = {"name": "tiles", "model": str(DATA / "agent_tiles.tflite"), "frame": "t16"}
+    steps = [{"type": "raw", "path": str(raw_file), "block_ms": 250}, {"type": "windows", "count": 1},
+             {"type": "frames", "frame": "t16"}, {"type": "agent", "agent": "tiles"}, {"type": "collect"}]
+
+    def workflow(cpus, agents=(agent,), step_threads=None, extra=()):
+        agent_step = {**steps[3], **({"threads": step_threads} if step_threads else {})}
+        return opennve.Workflow.from_steps("auto", [*steps[:3], agent_step, *extra, steps[4]], frames=[tiles],
+                                           agents=list(agents), cpus=cpus)
+
+    # defaults ("auto"): the agent gets all cores with one interpreter thread each
+    plan = _thread_steps(workflow(12))
+    assert plan["raw"]["threads"] == 1 and plan["frames"]["threads"] == 2 and plan["frames"]["auto"]
+    assert plan["agent"]["threads"] == 12 and plan["agent"]["interpreter_threads"] == {"tiles": 1}
+    assert workflow(12).queue_size == 24 and workflow(2).queue_size == 8
+    assert _thread_steps(workflow(4))["frames"]["threads"] == 1
+    assert _thread_steps(workflow(64))["agent"]["threads"] == 16  # capped, ...
+    assert _thread_steps(workflow(64))["agent"]["interpreter_threads"] == {"tiles": 4}  # ... the rest to the interpreters
+    # fixed step threads: the interpreters share the cores
+    plan = _thread_steps(workflow(8, step_threads=2))
+    assert plan["agent"]["threads"] == 2 and not plan["agent"]["auto"] and plan["agent"]["interpreter_threads"] == {"tiles": 4}
+    # fixed interpreter threads: the step threads follow
+    plan = _thread_steps(workflow(8, agents=[{**agent, "threads": 2}]))
+    assert plan["agent"]["threads"] == 4 and plan["agent"]["interpreter_threads"] == {"tiles": 2}
+    # two agent steps share the cores
+    second = {"type": "agent", "agent": "tiles", "name": "second"}
+    plan = _thread_steps(workflow(8, extra=[second]))
+    assert plan["agent"]["threads"] == 4 and plan["second"]["threads"] == 4
+    # single-thread steps stay at one thread with "auto"
+    assert _thread_steps(opennve.Workflow.from_steps("w", [{**steps[0], "threads": "auto"}, steps[4]]))["raw"]["threads"] == 1
+    assert "agent            x12 (auto), interpreter threads tiles 1" in workflow(12).thread_report()
+    # the workflow runs with the planned threads and every agent instance has its interpreter threads
+    run = workflow(3).run()
+    assert len(run.results) == 4 and run.statistics()["cpus"] == 3
+    agents = [instance for stage in run._stages for instance in stage.instances if type(instance).__name__ == "AgentStep"]
+    assert len(agents) == 3 and all(step.configs[0].threads == 1 for step in agents)
+    with pytest.raises(ValueError, match="threads"):
+        opennve.Workflow.from_steps("w", [steps[0], {"type": "frames", "frame": "t16", "threads": "many"}, steps[4]], frames=[tiles])
+    with pytest.raises(ValueError, match="cpus"):
+        opennve.Workflow.from_steps("w", [steps[0], steps[4]], cpus=0)
+
+
+@needs_tflite
+def test_agent_threads_auto(monkeypatch):
+    monkeypatch.setenv("OPENNVE_CPUS", "3")
+    agent = opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"), threads="auto")).load()
+    assert agent.backend.threads == 3
+    monkeypatch.setenv("OPENNVE_CPUS", "32")
+    assert opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"))).load().backend.threads == 4
+    assert opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"), threads=2)).load().backend.threads == 2
+    assert opennve.AgentConfig(model="m.tflite", threads="auto").to_dict()["threads"] == "auto"
+    with pytest.raises(ValueError, match="threads"):
+        opennve.AgentConfig(model="m.tflite", threads="all")

@@ -7,7 +7,14 @@ import math
 import numpy as np
 
 from ...events.window import EventWindow
+from ...system import MAX_AUTO_AGENT_THREADS, is_auto
 from .base import Step, _positive_number, register_step
+
+
+def _light_threads(cpus: int) -> int:
+    """Threads of light steps (frames, tiles): ~0.1 ms per tile against ~4 ms in the agent, and
+    mostly Python (GIL), so one thread is enough up to 8 cores, then two."""
+    return 1 if cpus < 8 else 2
 
 
 
@@ -99,6 +106,10 @@ class FramesStep(Step):
     """
 
     PARAMETERS = {"frame": None, "min_events_per_ms": None}
+    DEFAULT_THREADS = "auto"
+
+    def auto_threads(self, cpus):
+        return _light_threads(cpus)
 
     def validate(self):
         frames = self.params["frame"]
@@ -132,6 +143,10 @@ class TilesStep(Step):
     """
 
     PARAMETERS = {"frame": None, "size": 80, "min_events": 1, "min_events_per_ms": None}
+    DEFAULT_THREADS = "auto"
+
+    def auto_threads(self, cpus):
+        return _light_threads(cpus)
 
     def validate(self):
         _positive_number(self, "size", allow_none=False, integer=True)
@@ -160,9 +175,44 @@ class AgentStep(Step):
     frame: frame configuration name the agent uses (default: the agent's "frame" setting, else
         the only frame of the window).
     Each thread loads its own copy of the model.
+
+    Threads ("auto" by default): TensorFlow Lite agents get one thread per core with one
+    interpreter thread each (several interpreters in parallel are faster than one with several
+    threads). With a fixed number of step threads, agents with "threads": "auto" share the cores:
+    interpreter threads = cores / step threads. TensorFlow models run in one thread (TensorFlow
+    uses all cores itself).
     """
 
     PARAMETERS = {"agent": None, "frame": None}
+    DEFAULT_THREADS = "auto"
+    HEAVY = True
+
+    def _tflite(self):
+        return [config for config in self.configs if config.resolved_backend == "tflite"]
+
+    def auto_threads(self, cpus):
+        tflite = self._tflite()
+        if not tflite:  # TensorFlow (or own backends): the backend parallelizes itself
+            return 1
+        fixed = [config.threads for config in tflite if not is_auto(config.threads)]
+        if fixed:
+            return max(1, cpus // max(fixed))
+        return max(1, min(cpus, MAX_AUTO_AGENT_THREADS))
+
+    def thread_plan(self, threads, cpus):
+        if not self._tflite():
+            return {}
+        auto = max(1, cpus // threads)
+        return {"interpreter_threads": {
+            config.name: auto if is_auto(config.threads) else config.threads for config in self._tflite()
+        }}
+
+    def configure_threads(self, plan):
+        threads = plan.get("interpreter_threads") or {}
+        self.configs = [
+            config.copy(threads=threads[config.name]) if is_auto(config.threads) and config.name in threads else config
+            for config in self.configs
+        ]
 
     def validate(self):
         agents = self.params["agent"]

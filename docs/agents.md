@@ -70,7 +70,7 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | `input` | `"tiles"` | `tiles`: one model input per tile of the frame. `frame`: the whole frame is one input |
 | `frame` | `null` | Name of the [frame configuration](frames.md) that builds the input (from `frames.json`). May be omitted if only one frame configuration is used |
 | `batch_size` | `null` | Inputs per model call. `null` = all tiles of a frame in one call |
-| `threads` | `null` | CPU threads of the TensorFlow Lite interpreter |
+| `threads` | `"auto"` | CPU threads of the TensorFlow Lite interpreter. `"auto"`/`null`: sized to the hardware — a single agent uses all cores up to 4; in [workflows](workflows.md#multithreading) the agent step splits the cores between its threads (usually 1 interpreter thread per agent thread) |
 | `call` | `"predict"` | Keras models: `predict` calls `model.predict(batch)`; `call` calls `model(batch)`, which has less overhead for small batches |
 | `signature` | `"serving_default"` | Signature of a SavedModel directory |
 | `safe_mode` | `true` | Keras models: `false` allows loading models with `Lambda` layers. Custom layers (for instance the [UNet](networks.md) layers) are found automatically |

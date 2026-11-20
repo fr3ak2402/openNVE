@@ -15,6 +15,19 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 - New guide [docs/performance.md](docs/performance.md): int8 models (~2.4 × faster than float16),
   fewer tiles, threads
 
+### Automatic threads
+
+- `"threads": "auto"` for workflow steps, now the default of `frames`, `tiles` and `agent`: the
+  threads are sized to the CPU cores of the machine (agent: one thread per core with one
+  TensorFlow Lite interpreter thread each; frames / tiles: 1–2 threads); several agent steps share
+  the cores
+- Agent `"threads": "auto"` (also `null`, the default): a single agent uses all cores up to 4; in
+  workflows the interpreter threads follow the agent step threads (cores / step threads)
+- `opennve.cpu_count()` (affinity, container CPU limits, environment variable `OPENNVE_CPUS`) and
+  `opennve.system_info()`; command `opennve system`
+- Workflow setting `cpus` (cores to plan for), `queue_size` automatic by default;
+  `workflow.thread_plan()` / `thread_report()`, `opennve workflow threads <file> [--cpus n]`
+
 ## [1.0.0] - 2026-11-20
 
 First release of openNVE, the Open Neuromorphic Vision Engine: a Python library for event cameras

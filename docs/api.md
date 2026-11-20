@@ -42,6 +42,13 @@ print(opennve.version_info())
 
 The build number is written into the wheel when it is built (`tools/bundle_wheel.py`). In a source checkout or an editable install it is the date of the last git commit (`build_source` `"git"`), without git the current date (`"today"`); in a wheel `build_source` is `"wheel"`. On the command line: `opennve version`.
 
+## Hardware
+
+| Name | Description |
+|---|---|
+| `cpu_count()` | CPU cores this process may use (affinity, container CPU limits, environment variable `OPENNVE_CPUS`); the basis of `"threads": "auto"` |
+| `system_info()` | `platform`, `machine`, `processor`, `logical_cpus`, `physical_cores`, `usable_cpus`, `usable_cpus_source`, `python` (also: `opennve system`) |
+
 ---
 
 ## Finding cameras
@@ -423,7 +430,7 @@ Configurable chains of steps in threads, see [Workflows](workflows.md).
 |---|---|
 | `load_workflow(path, name=None)` | Workflow of a file (default workflow without a name) |
 | `load_workflow_configs(path)` / `load_workflow_config(path, name=None)` / `save_workflow_configs(path, configs)` | Workflow configurations |
-| `Workflow(config)` / `Workflow.from_steps(name, steps, **settings)` | `run(duration_s=None)`, `start()`, `stop()`, `join(timeout=None)`, `add_step(...)`, `results`, `statistics()`, `statistics_report()`, `describe()` |
+| `Workflow(config)` / `Workflow.from_steps(name, steps, **settings)` | `run(duration_s=None)`, `start()`, `stop()`, `join(timeout=None)`, `add_step(...)`, `results`, `statistics()`, `statistics_report()`, `describe()`, `cpus`, `queue_size`, `thread_plan()`, `thread_report()` |
 | `WorkItem` | `index`, `camera`, `block`, `windows`, `frames`, `results`, `events`, `data`, `timings`, `summary()` |
 | `Step`, `register_step(name)`, `list_steps()` | Own step types |
 

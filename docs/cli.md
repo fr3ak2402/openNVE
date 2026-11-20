@@ -67,11 +67,27 @@ openNVE 1.0.0 (build 324.2026)
 
 The build number is `<day of year>.<year>` of the day the wheel was built (UTC), for instance `324.2026` for 20 November 2026.
 
-## `opennve workflow run|list <file>`
+## `opennve system`
 
-Runs or lists the [workflows](workflows.md) of a workflow configuration file.
+Shows the processor and the CPU cores openNVE uses for automatic threads (`--json` as JSON).
+
+```text
+Linux 6.8.0 (x86_64), Python 3.14.1
+  processor             AMD Ryzen 7 7840U w/ Radeon 780M Graphics
+  logical CPUs          16
+  physical cores        8
+  usable by openNVE     16 (process)
+```
+
+`usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
+
+## `opennve workflow run|list|threads <file>`
+
+Runs or lists the [workflows](workflows.md) of a workflow configuration file, or shows the threads of every step on this machine.
 
 ```sh
+opennve workflow threads workflows.json --name main_mh    # threads for the CPU cores of this machine
+opennve workflow threads workflows.json --cpus 4          # ... for a machine with 4 cores
 opennve workflow list workflows.json
 opennve workflow run workflows.json                       # default workflow; 'stop' + Enter or Ctrl+C stops
 opennve workflow run workflows.json --name insects_raw --duration 60 --debug
@@ -83,6 +99,7 @@ opennve workflow run workflows.json --name insects_raw --duration 60 --debug
 | `--duration` | Stop after this many seconds |
 | `--debug` | Print the steps and the statistics |
 | `--no-input` | Do not read `stop` from the console (for scripts and services) |
+| `--cpus` | Size the automatic threads for this many CPU cores (instead of the detected ones) |
 
 ## `opennve check <file> [<file> ...]`
 

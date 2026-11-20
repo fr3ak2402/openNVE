@@ -11,13 +11,12 @@ frame and agent configuration files it uses and its steps, in order:
                 "cameras": "cameras.json",
                 "frames": "frames.json",
                 "agents": "agents.json",
-                "queue_size": 8,
                 "ordered": true,
                 "steps": [
                     {"type": "camera", "cameras": ["left"], "block_ms": 1000},
                     {"type": "windows", "count": 3, "overlap_ms": 200},
-                    {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15, "threads": 2},
-                    {"type": "agent", "agent": "insects", "threads": 4},
+                    {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15},
+                    {"type": "agent", "agent": "insects"},
                     {"type": "require", "agent": "insects", "min_windows": 1},
                     {"type": "label_events", "agent": "insects", "label": 2},
                     {"type": "write", "format": "csv", "path": "output/{workflow}_{camera}_{date}_{time}.csv"}
@@ -29,6 +28,11 @@ frame and agent configuration files it uses and its steps, in order:
 Every step runs in its own thread(s) ("threads"), connected by queues: while the agent
 evaluates block 1, the source already reads block 2 and the writer saves block 0. With
 "ordered": true the sink receives the items in their original order.
+
+Threads: "threads": "auto" (the default of the frames, tiles and agent steps) sizes a step to the
+CPU cores of the machine (opennve.cpu_count(), or the workflow's "cpus"): the agent steps share
+all cores (one TensorFlow Lite interpreter per thread), frames and tiles get 1-2 threads. A number
+fixes the threads. workflow.thread_report() shows the result.
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ import threading
 import time
 import typing
 
+from ..system import cpu_count
 from .item import WorkItem
 from .steps import COMMON_PARAMETERS, CollectStep, Step, StepContext, get_step_class
 
@@ -75,12 +80,16 @@ class WorkflowConfig:
     cameras: typing.Any = None
     frames: typing.Any = None
     agents: typing.Any = None
-    queue_size: int = 8
+    queue_size: typing.Optional[int] = None
     ordered: bool = True
     debug: bool = False
+    cpus: typing.Union[int, str, None] = None
     base_dir: typing.Optional[pathlib.Path] = dataclasses.field(default=None, compare=False, repr=False)
 
-    FIELDS = ("name", "steps", "default", "description", "cameras", "frames", "agents", "queue_size", "ordered", "debug")
+    FIELDS = (
+        "name", "steps", "default", "description", "cameras", "frames", "agents", "queue_size", "ordered", "debug",
+        "cpus",
+    )
 
     def validate(self):
         if not isinstance(self.name, str) or not self.name:
@@ -90,8 +99,14 @@ class WorkflowConfig:
         for index, step in enumerate(self.steps):
             if not isinstance(step, dict) or not isinstance(step.get("type"), str):
                 raise ValueError(f"workflow {self.name}: step {index} must be an object with \"type\"")
-        if isinstance(self.queue_size, bool) or not isinstance(self.queue_size, int) or self.queue_size <= 0:
-            raise ValueError(f"workflow {self.name}: queue_size must be a positive integer")
+        if self.queue_size is not None and (
+            isinstance(self.queue_size, bool) or not isinstance(self.queue_size, int) or self.queue_size <= 0
+        ):
+            raise ValueError(f"workflow {self.name}: queue_size must be a positive integer or null (automatic)")
+        if self.cpus is not None and self.cpus != "auto" and (
+            isinstance(self.cpus, bool) or not isinstance(self.cpus, int) or self.cpus <= 0
+        ):
+            raise ValueError(f"workflow {self.name}: cpus must be a positive integer, \"auto\" or null")
         for key in ("default", "ordered", "debug"):
             if not isinstance(getattr(self, key), bool):
                 raise ValueError(f"workflow {self.name}: {key} must be true or false")
@@ -184,17 +199,25 @@ class StepStatistics:
 
 
 class _Stage:
-    def __init__(self, factory: typing.Callable[[], Step], config: dict, threads: int, kind: str, name: str):
-        self.factory = factory
+    def __init__(self, factory: typing.Callable[[], Step], config: dict, requested, kind: str, name: str, prototype: Step):
+        self._factory = factory
         self.config = config
-        self.threads = threads
+        self.requested = requested  # number or "auto"
+        self.threads = requested if isinstance(requested, int) else 1
+        self.plan: dict[str, typing.Any] = {}
+        self.prototype = prototype
         self.kind = kind
         self.name = name
         self.instances: list[Step] = []
         self.ordered_input = kind == "sink"
-        self.statistics = StepStatistics(name, threads)
+        self.statistics = StepStatistics(name, self.threads)
         self.lock = threading.Lock()
         self.finished = 0
+
+    def factory(self) -> Step:
+        step = self._factory()
+        step.configure_threads(self.plan)
+        return step
 
 
 class Workflow:
@@ -213,7 +236,7 @@ class Workflow:
             config = WorkflowConfig.from_dict(config)
         if overrides:
             config = dataclasses.replace(config, **overrides)
-            config.validate()
+        config.validate()
         self.config = config
         self.context = StepContext(
             workflow=config.name,
@@ -227,6 +250,7 @@ class Workflow:
         for index, step in enumerate(config.steps):
             self._stages.append(self._make_stage(index, step))
         self._check_structure()
+        self._plan_threads()
         self._threads: list[threading.Thread] = []
         self._queues: list[queue.Queue] = []
         self._stop = threading.Event()
@@ -243,9 +267,11 @@ class Workflow:
     def _make_stage(self, index: int, step: dict) -> _Stage:
         params = {key: value for key, value in step.items() if key != "type"}
         cls = get_step_class(step["type"])
-        threads = params.get("threads", 1)
-        if isinstance(threads, bool) or not isinstance(threads, int) or threads <= 0:
-            raise ValueError(f"step {index} ({step['type']}): threads must be a positive integer")
+        threads = params.get("threads", cls.DEFAULT_THREADS)
+        if threads != "auto" and (isinstance(threads, bool) or not isinstance(threads, int) or threads <= 0):
+            raise ValueError(f"step {index} ({step['type']}): threads must be a positive integer or \"auto\"")
+        if cls.MAX_THREADS is not None and threads == "auto":
+            threads = cls.MAX_THREADS
         if cls.MAX_THREADS is not None and threads > cls.MAX_THREADS:
             raise ValueError(f"step {index} ({step['type']}): at most {cls.MAX_THREADS} thread(s)")
         try:
@@ -260,7 +286,7 @@ class Workflow:
             return cls(self.context, **params)
 
         name = params.get("name") or step["type"]
-        stage = _Stage(factory, step, threads, cls.kind, name)
+        stage = _Stage(factory, step, threads, cls.kind, name, first)
         stage.ordered_input = cls.kind == "sink" or bool(getattr(cls, "ORDERED", False))
         return stage
 
@@ -294,7 +320,64 @@ class Workflow:
         index = self.config.steps.index(step)
         self._stages.insert(index, self._make_stage(index, step))
         self._check_structure()
+        self._plan_threads()
         return self
+
+    # threads
+
+    @property
+    def cpus(self) -> int:
+        """CPU cores the automatic threads are sized for ("cpus" of the workflow, else
+        opennve.cpu_count())."""
+        cpus = self.config.cpus
+        return cpu_count() if cpus is None or cpus == "auto" else cpus
+
+    def _plan_threads(self):
+        """Sizes the steps with "threads": "auto" to the CPU cores: light steps (frames, tiles)
+        1-2 threads, the agent steps share all cores (several agent steps: in equal parts)."""
+        cpus = self.cpus
+        heavy = [stage for stage in self._stages if stage.prototype.HEAVY]
+        budget = max(1, cpus // max(1, len(heavy)))
+        for stage in self._stages:
+            available = budget if stage.prototype.HEAVY else cpus
+            if stage.requested == "auto":
+                stage.threads = max(1, int(stage.prototype.auto_threads(available)))
+                if stage.prototype.MAX_THREADS is not None:
+                    stage.threads = min(stage.threads, stage.prototype.MAX_THREADS)
+            stage.statistics.threads = stage.threads
+            stage.plan = stage.prototype.thread_plan(stage.threads, available)
+
+    @property
+    def queue_size(self) -> int:
+        """Items per queue between two steps ("queue_size", else at least 8 and twice the
+        threads of the busiest step, so that all threads get work)."""
+        if self.config.queue_size is not None:
+            return self.config.queue_size
+        return max(8, 2 * max(stage.threads for stage in self._stages))
+
+    def thread_plan(self) -> dict[str, typing.Any]:
+        """The threads of every step for this hardware:
+        {"cpus": 8, "steps": [{"name": "agent", "threads": 8, "auto": True,
+        "interpreter_threads": {"prototyp": 1}}, ...]}."""
+        return {
+            "cpus": self.cpus,
+            "queue_size": self.queue_size,
+            "steps": [
+                {"name": stage.name, "threads": stage.threads, "auto": stage.requested == "auto", **stage.plan}
+                for stage in self._stages
+            ],
+        }
+
+    def thread_report(self) -> str:
+        plan = self.thread_plan()
+        source = "" if self.config.cpus not in (None, "auto") else " (detected)"
+        lines = [f"threads for {plan['cpus']} CPU cores{source}:"]
+        for step in plan["steps"]:
+            extra = ""
+            if step.get("interpreter_threads"):
+                extra = ", interpreter threads " + ", ".join(f"{k} {v}" for k, v in step["interpreter_threads"].items())
+            lines.append(f"  {step['name']:<16} x{step['threads']}{' (auto)' if step['auto'] else ''}{extra}")
+        return "\n".join(lines)
 
     # running
 
@@ -321,7 +404,7 @@ class Workflow:
         if self._threads:
             raise RuntimeError("the workflow was already started (create a new Workflow to run it again)")
         self._started = time.perf_counter()
-        self._queues = [queue.Queue(maxsize=self.config.queue_size) for _ in self._stages[1:]]
+        self._queues = [queue.Queue(maxsize=self.queue_size) for _ in self._stages[1:]]
         source = self._stages[0]
         self._threads.append(threading.Thread(target=self._run_source, args=(source,), name=f"{self.name}:{source.name}", daemon=True))
         for position, stage in enumerate(self._stages[1:], start=1):
@@ -339,6 +422,7 @@ class Workflow:
             thread.start()
         if self.config.debug:
             self.context.log(f"[{self.name}] started: " + " -> ".join(f"{s.name}x{s.threads}" for s in self._stages))
+            self.context.log(self.thread_report())
         return self
 
     def stop(self):
@@ -499,6 +583,7 @@ class Workflow:
         end = self._finished or time.perf_counter()
         return {
             "workflow": self.name,
+            "cpus": self.cpus,
             "seconds": None if self._started is None else end - self._started,
             "steps": [
                 {

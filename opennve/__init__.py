@@ -135,6 +135,9 @@ from .workflows import (
     save_workflow_configs,
 )
 
+# hardware (automatic threads)
+from .system import cpu_count, system_info
+
 # version and build
 from ._version import (
     BUILD_DATE,
@@ -147,6 +150,8 @@ from ._version import (
 )
 
 __all__ = [
+    "cpu_count",
+    "system_info",
     "Hdf5Reader",
     "Hdf5Writer",
     "RecordingReader",

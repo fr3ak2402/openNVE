@@ -156,7 +156,9 @@ class AgentConfig:
     input: "tiles" (one model input per tile) or "frame" (the whole frame).
     frame: name of the frame configuration that builds the input (see run_agents), or None.
     batch_size: inputs per model call (None: all tiles of a frame at once).
-    threads: CPU threads of the TensorFlow Lite interpreter (None: default).
+    threads: CPU threads of the TensorFlow Lite interpreter: a number, or "auto" / null (default):
+        sized to the hardware (opennve.cpu_count()): all cores up to 4 for a single agent; in
+        workflows the agent step splits the cores between its threads (see docs/performance.md).
     call: TensorFlow (Keras) models: "predict" (model.predict) or "call" (model(x), lower latency
         for small batches).
     signature: SavedModel signature (default "serving_default").
@@ -168,7 +170,7 @@ class AgentConfig:
     input: str = "tiles"
     frame: typing.Optional[str] = None
     batch_size: typing.Optional[int] = None
-    threads: typing.Optional[int] = None
+    threads: typing.Union[int, str, None] = None
     call: str = "predict"
     signature: str = "serving_default"
     safe_mode: bool = True
@@ -200,10 +202,14 @@ class AgentConfig:
             raise ValueError(f"agent.input must be one of {', '.join(INPUTS)}")
         if self.frame is not None and (not isinstance(self.frame, str) or not self.frame):
             raise ValueError("agent.frame must be the name of a frame configuration or null")
-        for name in ("batch_size", "threads"):
-            value = getattr(self, name)
-            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value <= 0):
-                raise ValueError(f"agent.{name} must be a positive integer or null")
+        if self.batch_size is not None and (
+            isinstance(self.batch_size, bool) or not isinstance(self.batch_size, int) or self.batch_size <= 0
+        ):
+            raise ValueError("agent.batch_size must be a positive integer or null")
+        if self.threads is not None and self.threads != "auto" and (
+            isinstance(self.threads, bool) or not isinstance(self.threads, int) or self.threads <= 0
+        ):
+            raise ValueError("agent.threads must be a positive integer, \"auto\" or null")
         if self.call not in CALLS:
             raise ValueError(f"agent.call must be one of {', '.join(CALLS)}")
         if not isinstance(self.signature, str) or not self.signature:

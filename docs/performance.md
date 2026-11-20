@@ -55,12 +55,25 @@ Every tile that reaches the agent costs one inference:
 
 ## 3. Threads
 
-- The `threads` of an agent step run several interpreters in parallel (one model per thread); the
-  agent configuration's `threads` sets the CPU threads of each TensorFlow Lite interpreter.
-- Keep *agent step threads × interpreter threads* at or below the number of CPU cores. More threads
-  than cores make every inference slower.
-- The frames step is cheap; 1–2 threads are enough. Log and write steps are ordered and use one
-  thread.
+Leave the threads on `"auto"` (the default): openNVE reads the CPU cores of the machine and gives
+the agent step one thread per core with one interpreter thread each, the frames step 1–2 threads
+(see [Workflows → Multithreading](workflows.md#multithreading)). `opennve system` shows the cores,
+`opennve workflow threads workflows.json` the resulting threads.
+
+Measured on 2 cores (U-Net, 80 × 80 tiles, ms per tile):
+
+| Agent threads × interpreter threads | float16 | int8 |
+|---|---|---|
+| 1 × 1 | 6.9 | 4.0 |
+| 1 × 2 | 4.7 | 3.1 |
+| **2 × 1 (auto)** | **3.7** | **2.1** |
+| 2 × 2 (more threads than cores) | 3.7 | 8.1 |
+
+- Several interpreters in parallel beat one interpreter with several threads.
+- *Agent step threads × interpreter threads* above the number of cores makes the inference slower,
+  with int8 models up to 4 times.
+- `"cpus": 6` in the workflow (or the environment variable `OPENNVE_CPUS=6`) leaves the other cores
+  free, for instance for a live view.
 - Look at the statistics at the end of a workflow (`agent x3 1200 items, 9.8 ms per item`): the step
   with the highest time per item and thread is the bottleneck.
 

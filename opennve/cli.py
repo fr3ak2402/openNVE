@@ -79,8 +79,14 @@ def _workflow(args) -> int:
     config = load_workflow_config(args.path, args.name)
     if args.debug:
         config.debug = True
+    if args.cpus is not None:
+        config.cpus = args.cpus
     workflow = Workflow(config)
+    if args.action == "threads":
+        print(workflow.thread_report())
+        return 0
     print(workflow.describe())
+    print(workflow.thread_report())
     if not args.no_input:
         import sys
         import threading
@@ -120,6 +126,21 @@ def _version(args) -> int:
         ("tensorflow", "TensorFlow"),
     ):
         print(f"  {label:<21} {info[key] or '-'}")
+    return 0
+
+
+def _system(args) -> int:
+    from .system import system_info
+
+    info = system_info()
+    if args.json:
+        print(json.dumps(info, indent=4))
+        return 0
+    print(f"{info['platform']} ({info['machine']}), Python {info['python']}")
+    print(f"  processor             {info['processor']}")
+    print(f"  logical CPUs          {info['logical_cpus']}")
+    print(f"  physical cores        {info['physical_cores'] or '-'}")
+    print(f"  usable by openNVE     {info['usable_cpus']} ({info['usable_cpus_source']})")
     return 0
 
 
@@ -260,6 +281,10 @@ def main(argv=None) -> int:
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_version)
 
+    command = commands.add_parser("system", help="show the processor and the CPU cores used for automatic threads")
+    command.add_argument("--json", action="store_true", help="output as JSON")
+    command.set_defaults(function=_system)
+
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")
     command.add_argument("--config", help="configuration file, adds the camera names")
@@ -280,13 +305,14 @@ def main(argv=None) -> int:
     command.add_argument("--tiles", type=int, help="tile size in pixels, for instance 80 (default: no tiles)")
     command.set_defaults(function=_frame_template)
 
-    command = commands.add_parser("workflow", help="list or run workflows")
-    command.add_argument("action", choices=("run", "list"))
+    command = commands.add_parser("workflow", help="list or run workflows, or show their threads")
+    command.add_argument("action", choices=("run", "list", "threads"))
     command.add_argument("path", help="workflow configuration file")
     command.add_argument("--name", help="workflow name (default: the default workflow)")
     command.add_argument("--duration", type=float, help="stop after this many seconds")
     command.add_argument("--debug", action="store_true", help="print step timings")
     command.add_argument("--no-input", action="store_true", help="do not read 'stop' from the console")
+    command.add_argument("--cpus", type=int, help="size the automatic threads for this many CPU cores")
     command.set_defaults(function=_workflow)
 
     command = commands.add_parser("check", help="validate camera, frame and agent configuration files")
