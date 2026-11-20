@@ -46,9 +46,11 @@ class WindowsStep(Step):
     count / overlap_ms: count windows of equal size that cover the block and overlap by
         overlap_ms (for instance a 1000 ms block, count 3, overlap 200 ms: 0-467, 267-733, 533-1000 ms).
     duration_ms / step_ms: alternatively windows of duration_ms every step_ms (sliding windows).
+    align: where the windows start: "block" (start of the block) or "first_event" (time stamp of
+        the first event of the block, as in the previous workflow engine).
     """
 
-    PARAMETERS = {"count": None, "overlap_ms": 0, "duration_ms": None, "step_ms": None}
+    PARAMETERS = {"count": None, "overlap_ms": 0, "duration_ms": None, "step_ms": None, "align": "block"}
 
     def validate(self):
         _positive_number(self, "count", integer=True)
@@ -59,17 +61,22 @@ class WindowsStep(Step):
             raise ValueError("step windows: overlap_ms must be a number >= 0")
         if (self.params["count"] is None) == (self.params["duration_ms"] is None):
             raise ValueError("step windows: set either count (with overlap_ms) or duration_ms (with step_ms)")
+        if self.params["align"] not in ("block", "first_event"):
+            raise ValueError("step windows: align must be block or first_event")
 
     def process(self, item):
         block = item.block
+        origin = block.start_t
+        if self.params["align"] == "first_event" and len(block):
+            origin = int(block.polarity_events["t"][0])
         length = block.end_t - block.start_t
         if self.params["count"] is not None:
-            bounds = window_bounds(block.start_t, length, self.params["count"], self.params["overlap_ms"] * 1000)
+            bounds = window_bounds(origin, length, self.params["count"], self.params["overlap_ms"] * 1000)
         else:
             duration = self.params["duration_ms"] * 1000
             step = (self.params["step_ms"] or self.params["duration_ms"]) * 1000
             bounds = []
-            start = block.start_t
+            start = origin
             while start < block.end_t:
                 bounds.append((round(start), round(min(start + duration, block.end_t))))
                 if start + duration >= block.end_t:
@@ -287,8 +294,11 @@ class LabelEventsStep(Step):
 
 @register_step("log")
 class LogStep(Step):
-    """Prints a line per item: block, events, windows, tiles, selected predictions, timings."""
+    """Prints a line per item: block, events, windows, tiles, selected predictions, timings.
+    Runs in one thread and prints the items in their order (if the workflow is "ordered")."""
 
+    MAX_THREADS = 1
+    ORDERED = True
     PARAMETERS = {"agent": None, "timings": True}
 
     def process(self, item):

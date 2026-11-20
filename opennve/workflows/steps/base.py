@@ -133,6 +133,7 @@ class Step:
     kind = "process"
     PARAMETERS: dict[str, typing.Any] = {}
     MAX_THREADS: typing.Optional[int] = None
+    ORDERED = False  # True: gets the items in their original order (like the sinks) if the workflow is "ordered"
 
     def __init__(self, context: StepContext, **params):
         unknown = set(params) - set(self.PARAMETERS) - set(COMMON_PARAMETERS)
