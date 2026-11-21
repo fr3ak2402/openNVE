@@ -88,6 +88,9 @@ from .frames import (
 )
 # agents: TensorFlow / TensorFlow Lite models
 from .agents import (
+    benchmark_agent,
+    benchmark_report,
+    litert_accelerators,
     Agent,
     AgentConfig,
     AgentResult,
@@ -230,6 +233,9 @@ __all__ = [
     "load_agent_config",
     "load_agent_configs",
     "load_agents",
+    "benchmark_agent",
+    "benchmark_report",
+    "litert_accelerators",
     "load_config",
     "load_configs",
     "load_frame_config",

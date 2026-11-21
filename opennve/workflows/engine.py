@@ -376,6 +376,8 @@ class Workflow:
             extra = ""
             if step.get("interpreter_threads"):
                 extra = ", interpreter threads " + ", ".join(f"{k} {v}" for k, v in step["interpreter_threads"].items())
+            if step.get("devices"):
+                extra += ", device " + ", ".join(f"{k} {v}" for k, v in step["devices"].items())
             lines.append(f"  {step['name']:<16} x{step['threads']}{' (auto)' if step['auto'] else ''}{extra}")
         return "\n".join(lines)
 

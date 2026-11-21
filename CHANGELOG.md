@@ -4,8 +4,9 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 
 ## [1.1.0] - 2026-11-20
 
-Faster processing: vectorized segmentation decoding with lazy softmax, and threads sized
-automatically to the CPU cores of the machine. Configurations of 1.0.0 work unchanged.
+Faster processing: vectorized segmentation decoding with lazy softmax, threads sized
+automatically to the CPU cores of the machine, and agents on the GPU or an NPU. Configurations of
+1.0.0 work unchanged.
 
 ### Performance
 
@@ -28,6 +29,23 @@ automatically to the CPU cores of the machine. Configurations of 1.0.0 work unch
   workflows the interpreter threads follow the agent step threads (cores / step threads)
 - `opennve.cpu_count()` (affinity, container CPU limits, environment variable `OPENNVE_CPUS`) and
   `opennve.system_info()`; command `opennve system`
+
+### GPU and NPU
+
+- Agents with TensorFlow Lite models run on the GPU or an NPU: `"device": "gpu"`, `"npu"` or
+  `"auto"` in `agents.json`, with the LiteRT 2.4 CompiledModel API (GPU: WebGPU on Windows /
+  Linux, Metal on macOS; NPU: Intel Core Ultra, Qualcomm Snapdragon). Falls back to the CPU with
+  a message if the device is missing (`"fallback": false` raises an error)
+- Models are rewritten in memory for accelerators (static shapes; "same" transposed convolutions
+  as "valid" + crop, which the LiteRT GPU otherwise computes wrongly for U-Nets on 80 x 80 tiles);
+  a test input checks the results against the CPU when the model is loaded
+- `gpu_precision` (`fp16` / `fp32`), `delegate` (TensorFlow Lite delegates, for instance the Coral
+  Edge TPU); Keras / SavedModel agents use `tf.device` for `"device": "gpu"`
+- `opennve benchmark` / `opennve.benchmark_agent()`: speed and agreement of CPU, GPU and NPU
+- `opennve system` shows the GPU / NPU support of the installed LiteRT; agent steps with GPU / NPU
+  agents use 2 threads with `"threads": "auto"`; workflows report where each agent runs
+- Extras `npu-intel`, `npu-qualcomm`; dependency `ai-edge-litert>=2.4`
+- New guide [docs/accelerators.md](docs/accelerators.md)
 
 ### System information
 

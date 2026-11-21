@@ -86,7 +86,25 @@ Linux 6.8.0 (x86_64), Python 3.14.1
 - `usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
 - RAM: installed and available memory, plus the memory limit of a container.
 - GPUs and NPUs are found through the operating system, without extra packages: on Linux `nvidia-smi`, `/sys/class/drm` (also Raspberry Pi, Mali, Jetson) and NPUs in `/sys/class/accel` (Intel AI Boost, AMD Ryzen AI), Hailo (Raspberry Pi AI Kit / HAT), Coral Edge TPU and Rockchip NPU; on macOS the GPU of the Mac and the Apple Neural Engine; on Windows the graphics adapters and the "compute accelerators" of the device manager (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon).
-- This is information only: openNVE runs the TensorFlow Lite models on the CPU.
+- The last line shows what the installed LiteRT can use: the GPU (WebGPU, Metal) and the NPU runtimes, see [GPU and NPU](accelerators.md).
+
+## `opennve benchmark <agents.json>`
+
+Runs an agent on the CPU, the GPU and the NPU with the same inputs and compares speed and results (see [GPU and NPU](accelerators.md)).
+
+```sh
+opennve benchmark config/agents.json --agent prototyp --recording data/rec.h5 --frames config/frames.json
+opennve benchmark config/agents.json --devices cpu,gpu --inputs 256      # random inputs of the model's size
+```
+
+| Option | Description |
+|---|---|
+| `--agent` | Agent name (default: the first) |
+| `--devices` | Devices to compare (default `cpu,gpu,npu`) |
+| `--recording`, `--frames`, `--frame` | Take the inputs from a recording (tiles of its frames) |
+| `--windows`, `--window-ms` | Number and length of the time windows read (default 20 × 40 ms) |
+| `--inputs` | Number of inputs (default: all tiles of the windows, or 64 random inputs) |
+| `--json` | Output as JSON |
 
 ## `opennve workflow run|list|threads <file>`
 

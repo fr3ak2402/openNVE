@@ -433,7 +433,8 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
     physical_cores: cores without hyper-threading (None if unknown); usable_cpus: what openNVE
     uses for "auto" (cpu_count()); usable_cpus_source: "process" (affinity), "system", "container
     limit" or "OPENNVE_CPUS"; memory: memory_info(); gpus, npus: accelerators() (empty lists with
-    devices=False, which skips the slower device search).
+    devices=False, which skips the slower device search); litert: the GPU and NPU support of the
+    installed LiteRT (opennve.litert_accelerators()).
     """
     usable, source = _usable_cpus()
     found = accelerators() if devices else []
@@ -449,8 +450,18 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
         "memory": memory_info(),
         "gpus": [device for device in found if device["type"] == "gpu"],
         "npus": [device for device in found if device["type"] == "npu"],
+        "litert": _litert_info(),
         "python": platform.python_version(),
     }
+
+
+def _litert_info() -> dict[str, typing.Any]:
+    try:
+        from .agents._litert import litert_accelerators
+
+        return litert_accelerators()
+    except Exception:
+        return {"version": None, "compiled_model": False, "gpu": None, "npu": []}
 
 
 def format_bytes(value: typing.Optional[int]) -> str:

@@ -7,6 +7,9 @@ with numpy in the tests:
 
     agent_tiles.*:  input (batch, 16, 16, 2) -> mean per channel -> Dense(2) -> softmax
     agent_frame.tflite: input (1, 24, 40, 1), fixed batch size 1 -> mean -> Dense(3) (logits)
+    agent_unet.tflite: small U-Net (batch, 16, 16, 2) -> (batch, 16, 16, 3) logits, with
+        Conv2DTranspose (output shape computed at run time) and a dynamic batch size: tests the
+        static shapes for GPU / NPU (opennve.agents.static_model)
 """
 
 import os
@@ -45,6 +48,23 @@ def frame_model() -> keras.Model:
     return model
 
 
+def unet_model() -> keras.Model:
+    keras.utils.set_random_seed(7)
+    inputs = keras.Input((16, 16, 2), name="tiles")
+    down = keras.layers.Conv2D(4, 3, padding="same", activation="relu")(inputs)
+    x = keras.layers.MaxPooling2D()(down)
+    x = keras.layers.Conv2D(8, 3, padding="same", activation="relu")(x)
+    x = keras.layers.Conv2DTranspose(4, 2, strides=2, padding="same")(x)
+    x = keras.layers.Concatenate()([x, down])
+    outputs = keras.layers.Conv2D(3, 1, name="logits")(x)
+    return keras.Model(inputs, outputs)
+
+
+def write_unet(out: pathlib.Path):
+    converter = tf.lite.TFLiteConverter.from_keras_model(unet_model())
+    (out / "agent_unet.tflite").write_bytes(converter.convert())
+
+
 def main(directory: str):
     out = pathlib.Path(directory)
     out.mkdir(parents=True, exist_ok=True)
@@ -72,6 +92,7 @@ def main(directory: str):
     model = frame_model()
     converter = tf.lite.TFLiteConverter.from_keras_model(model)  # fixed batch size 1 (keras.Input batch_size)
     (out / "agent_frame.tflite").write_bytes(converter.convert())
+    write_unet(out)
     for path in sorted(out.glob("agent_*")):
         print(path)
 

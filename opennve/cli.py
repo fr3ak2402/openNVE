@@ -163,6 +163,47 @@ def _system(args) -> int:
     for label, items in (("GPU", info["gpus"]), ("NPU", info["npus"])):
         for number, line in enumerate(devices(items)):
             print(f"  {label if number == 0 else '':<22}{line}")
+    litert = info.get("litert") or {}
+    if litert.get("version"):
+        parts = [f"GPU via {litert['gpu']}" if litert.get("gpu") else "no GPU accelerator"]
+        for npu in litert.get("npu", []):
+            parts.append(f"NPU {npu['name']}" + ("" if npu["sdk_installed"] else f" (needs pip install {npu['install']})"))
+        if not litert.get("compiled_model"):
+            parts = ["CPU only (GPU / NPU need ai-edge-litert 2.4 or newer)"]
+        print(f"  LiteRT {litert['version']:<15}{', '.join(parts)}")
+    else:
+        print("  LiteRT                not installed")
+    return 0
+
+
+def _benchmark(args) -> int:
+    from .agents import benchmark_agent, benchmark_report, load_agent_config
+    from .frames import load_frame_config
+
+    config = load_agent_config(args.agents, args.agent)
+    frames = None
+    if args.recording:
+        if not args.frames:
+            print("--recording needs --frames (the frame configuration file)", file=sys.stderr)
+            return 2
+        from .recordings import open_recording
+
+        frame_config = load_frame_config(args.frames, args.frame or config.frame)
+        frames = []
+        with open_recording(args.recording, window={"duration_ms": args.window_ms}) as recording:
+            for window in recording.windows():
+                frame = window.frame(frame_config)
+                if config.input != "tiles" or frame.tiles:
+                    frames.append(frame)
+                if len(frames) >= args.windows:
+                    break
+    devices = [device.strip() for device in args.devices.split(",") if device.strip()]
+    print(f"agent {config.name}: {config.model_path.name}")
+    results = benchmark_agent(config, devices, frames=frames, count=args.inputs)
+    if args.json:
+        print(json.dumps(results, indent=4))
+    else:
+        print(benchmark_report(results))
     return 0
 
 
@@ -306,6 +347,19 @@ def main(argv=None) -> int:
     command = commands.add_parser("system", help="show processor, CPU cores, RAM, GPUs and NPUs")
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_system)
+
+    command = commands.add_parser("benchmark", help="compare CPU, GPU and NPU for an agent (speed and results)")
+    command.add_argument("agents", help="agent configuration file (agents.json)")
+    command.add_argument("--agent", help="agent name (default: the first)")
+    command.add_argument("--devices", default="cpu,gpu,npu", help="devices to compare (default cpu,gpu,npu)")
+    command.add_argument("--recording", help="take the inputs from this recording (.h5, .hdf5, .raw)")
+    command.add_argument("--frames", help="frame configuration file (with --recording)")
+    command.add_argument("--frame", help="frame configuration name (default: the agent's \"frame\")")
+    command.add_argument("--windows", type=int, default=20, help="time windows to read from the recording (default 20)")
+    command.add_argument("--window-ms", type=float, default=40.0, help="window length in ms (default 40)")
+    command.add_argument("--inputs", type=int, default=0, help="number of inputs (default: all of the windows, or 64 random)")
+    command.add_argument("--json", action="store_true", help="output as JSON")
+    command.set_defaults(function=_benchmark)
 
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")

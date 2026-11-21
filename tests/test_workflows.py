@@ -435,3 +435,17 @@ def test_system_processor_names_and_virtual_gpus(tmp_path, monkeypatch):
     assert system._linux_devices(tmp_path) == []
     monkeypatch.setattr(system, "_powershell", lambda script: json.dumps({"gpus": {"Name": "Microsoft Hyper-V Video"}, "npus": None}))
     assert system._windows_devices() == []
+
+
+@needs_tflite
+def test_gpu_agents_get_two_threads(raw_file):
+    tiles = {"name": "t16", "mode": "binary", "tiles": {"size": 16, "min_events": 1}}
+    agent = {"name": "tiles", "model": str(DATA / "agent_tiles.tflite"), "frame": "t16", "device": "gpu"}
+    steps = [{"type": "raw", "path": str(raw_file), "block_ms": 250}, {"type": "windows", "count": 1},
+             {"type": "frames", "frame": "t16"}, {"type": "agent", "agent": "tiles"}, {"type": "collect"}]
+    workflow = opennve.Workflow.from_steps("gpu", steps, frames=[tiles], agents=[agent], cpus=8)
+    plan = {step["name"]: step for step in workflow.thread_plan()["steps"]}
+    assert plan["agent"]["threads"] == 2 and plan["agent"]["devices"] == {"tiles": "gpu"}
+    assert "device tiles gpu" in workflow.thread_report()
+    run = opennve.Workflow.from_steps("gpu", steps, frames=[tiles], agents=[agent], cpus=2).run()
+    assert len(run.results) == 4  # runs on the GPU or falls back to the CPU

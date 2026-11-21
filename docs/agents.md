@@ -67,6 +67,10 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | `name` | model file name | Name of the agent (key of the results) |
 | `model` | – | Model path: `.tflite`, `.keras`, `.h5` or a SavedModel directory. Relative paths are relative to the agent file |
 | `backend` | `"auto"` | `tflite`, `tensorflow`, or `auto` (by the file name: `.tflite` → `tflite`, otherwise `tensorflow`) |
+| `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto`: where the model runs, see [GPU and NPU](accelerators.md) |
+| `fallback` | `true` | Device not available: `true` runs on the CPU (with a message), `false` raises an error |
+| `gpu_precision` | `"fp16"` | GPU: `fp16` (faster) or `fp32` (the same results as the CPU) |
+| `delegate` | `null` | TensorFlow Lite delegate library (Coral Edge TPU, ...): a path or `{"library": ..., "options": {...}}` |
 | `input` | `"tiles"` | `tiles`: one model input per tile of the frame. `frame`: the whole frame is one input |
 | `frame` | `null` | Name of the [frame configuration](frames.md) that builds the input (from `frames.json`). May be omitted if only one frame configuration is used |
 | `batch_size` | `null` | Inputs per model call. `null` = all tiles of a frame in one call |

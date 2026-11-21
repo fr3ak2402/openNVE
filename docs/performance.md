@@ -77,7 +77,13 @@ Measured on 2 cores (U-Net, 80 × 80 tiles, ms per tile):
 - Look at the statistics at the end of a workflow (`agent x3 1200 items, 9.8 ms per item`): the step
   with the highest time per item and thread is the bottleneck.
 
-## 4. Batches
+## 4. GPU and NPU
+
+Agents can run on the GPU or an NPU (`"device": "gpu"`, `"npu"` or `"auto"` in `agents.json`).
+Whether that is faster depends on the model and the hardware; `opennve benchmark` measures it on
+your computer. See [GPU and NPU](accelerators.md).
+
+## 5. Batches
 
 `batch_size` in `agents.json` runs several tiles in one interpreter call. On the CPU this helps only
 a little (a few percent); it pays off on accelerators (GPU / NPU delegates).
