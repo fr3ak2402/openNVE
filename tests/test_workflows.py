@@ -356,3 +356,64 @@ def test_agent_threads_auto(monkeypatch):
     assert opennve.AgentConfig(model="m.tflite", threads="auto").to_dict()["threads"] == "auto"
     with pytest.raises(ValueError, match="threads"):
         opennve.AgentConfig(model="m.tflite", threads="all")
+
+
+def test_system_info_memory_and_devices(tmp_path, monkeypatch):
+    from opennve import system
+
+    info = opennve.system_info()
+    for key in ("memory", "gpus", "npus", "model"):
+        assert key in info
+    assert info["memory"]["total"] is None or info["memory"]["total"] > 0
+    assert opennve.system_info(devices=False)["gpus"] == []
+    json.dumps(info)
+    assert system.format_bytes(16 * 1024**3) == "16.0 GB" and system.format_bytes(None) == "-"
+
+    # Linux: PCI GPU (AMD with VRAM), Raspberry Pi GPU, Intel NPU, Hailo
+    monkeypatch.setattr(system, "_nvidia_smi", lambda: [])
+
+    def device(name, driver, vendor=None, **files):
+        path = tmp_path / "devices" / name
+        (path / "drivers").mkdir(parents=True)
+        (path / "uevent").write_text(f"DRIVER={driver}\n")
+        if vendor:
+            (path / "vendor").write_text(vendor + "\n")
+        for key, value in files.items():
+            (path / key).write_text(value)
+        return path
+
+    def link(cls, name, target):
+        (tmp_path / "sys/class" / cls).mkdir(parents=True, exist_ok=True)
+        (tmp_path / "sys/class" / cls / name).mkdir()
+        (tmp_path / "sys/class" / cls / name / "device").symlink_to(target)
+
+    link("drm", "card0", device("amd", "amdgpu", "0x1002", mem_info_vram_total=str(8 * 1024**3)))
+    (tmp_path / "sys/class/drm/card0-HDMI-A-1").mkdir()
+    link("drm", "card1", device("v3d", "v3d"))
+    link("accel", "accel0", device("npu", "intel_vpu", "0x8086"))
+    (tmp_path / "dev").mkdir()
+    (tmp_path / "dev/hailo0").write_text("")
+    found = system._linux_devices(tmp_path)
+    assert [(d["type"], d["name"], d["vendor"]) for d in found] == [
+        ("gpu", "AMD GPU (amdgpu)", "AMD"),
+        ("gpu", "VideoCore GPU (V3D)", "Broadcom"),
+        ("npu", "Hailo AI accelerator", "Hailo"),
+        ("npu", "Intel NPU (AI Boost)", "Intel"),
+    ]
+    assert found[0]["memory"] == 8 * 1024**3
+
+    # Windows: graphics adapters and compute accelerators (WMI as JSON)
+    monkeypatch.setattr(system, "_powershell", lambda script: json.dumps({
+        "gpus": [{"Name": "Intel(R) Arc(TM) Graphics", "AdapterCompatibility": "Intel Corporation", "AdapterRAM": 2147483648},
+                 {"Name": "Microsoft Basic Display Adapter", "AdapterCompatibility": "Microsoft", "AdapterRAM": 0}],
+        "npus": {"Name": "Intel(R) AI Boost", "Manufacturer": "Intel Corporation"},
+    }))
+    found = system._windows_devices()
+    assert [(d["type"], d["name"]) for d in found] == [("gpu", "Intel(R) Arc(TM) Graphics"), ("npu", "Intel(R) AI Boost")]
+
+    # macOS (Apple silicon): GPU from system_profiler, Neural Engine
+    monkeypatch.setattr(system, "_run", lambda command, timeout=5: json.dumps({"SPDisplaysDataType": [
+        {"_name": "Apple M2", "sppci_model": "Apple M2", "sppci_cores": "10", "spdisplays_vendor": "sppci_vendor_Apple"}]}))
+    monkeypatch.setattr(system.platform, "machine", lambda: "arm64")
+    found = system._macos_devices()
+    assert [(d["type"], d["name"]) for d in found] == [("gpu", "Apple M2 (10 cores)"), ("npu", "Apple Neural Engine")]

@@ -130,17 +130,39 @@ def _version(args) -> int:
 
 
 def _system(args) -> int:
-    from .system import system_info
+    from .system import format_bytes, system_info
 
     info = system_info()
     if args.json:
         print(json.dumps(info, indent=4))
         return 0
+    memory = info["memory"]
+    ram = format_bytes(memory["total"])
+    if memory["available"] is not None:
+        ram += f" ({format_bytes(memory['available'])} available)"
+    if memory["limit"] is not None:
+        ram += f", limit {format_bytes(memory['limit'])}"
+
+    def devices(items):
+        if not items:
+            return ["none found"]
+        lines = []
+        for item in items:
+            details = [value for value in (format_bytes(item["memory"]) if item["memory"] else None, item["driver"]) if value]
+            lines.append(item["name"] + (f" ({', '.join(details)})" if details else ""))
+        return lines
+
     print(f"{info['platform']} ({info['machine']}), Python {info['python']}")
+    if info["model"]:
+        print(f"  model                 {info['model']}")
     print(f"  processor             {info['processor']}")
     print(f"  logical CPUs          {info['logical_cpus']}")
     print(f"  physical cores        {info['physical_cores'] or '-'}")
     print(f"  usable by openNVE     {info['usable_cpus']} ({info['usable_cpus_source']})")
+    print(f"  RAM                   {ram}")
+    for label, items in (("GPU", info["gpus"]), ("NPU", info["npus"])):
+        for number, line in enumerate(devices(items)):
+            print(f"  {label if number == 0 else '':<22}{line}")
     return 0
 
 
@@ -281,7 +303,7 @@ def main(argv=None) -> int:
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_version)
 
-    command = commands.add_parser("system", help="show the processor and the CPU cores used for automatic threads")
+    command = commands.add_parser("system", help="show processor, CPU cores, RAM, GPUs and NPUs")
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_system)
 

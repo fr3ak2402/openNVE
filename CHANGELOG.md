@@ -28,6 +28,13 @@ automatically to the CPU cores of the machine. Configurations of 1.0.0 work unch
   workflows the interpreter threads follow the agent step threads (cores / step threads)
 - `opennve.cpu_count()` (affinity, container CPU limits, environment variable `OPENNVE_CPUS`) and
   `opennve.system_info()`; command `opennve system`
+
+### System information
+
+- `opennve system` / `system_info()` show the computer model, RAM (total, available, container
+  limit) and the GPUs and NPUs (Intel AI Boost, AMD Ryzen AI, Apple Neural Engine, Hailo, Coral,
+  Rockchip, Qualcomm Hexagon, ...), found through the operating system without extra packages
+- `opennve.memory_info()`, `opennve.accelerators()`
 - Workflow setting `cpus` (cores to plan for), `queue_size` automatic by default;
   `workflow.thread_plan()` / `thread_report()`, `opennve workflow threads <file> [--cpus n]`
 

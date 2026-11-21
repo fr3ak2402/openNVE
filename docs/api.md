@@ -47,7 +47,9 @@ The build number is written into the wheel when it is built (`tools/bundle_wheel
 | Name | Description |
 |---|---|
 | `cpu_count()` | CPU cores this process may use (affinity, container CPU limits, environment variable `OPENNVE_CPUS`); the basis of `"threads": "auto"` |
-| `system_info()` | `platform`, `machine`, `processor`, `logical_cpus`, `physical_cores`, `usable_cpus`, `usable_cpus_source`, `python` (also: `opennve system`) |
+| `system_info(devices=True)` | `platform`, `machine`, `model`, `processor`, `logical_cpus`, `physical_cores`, `usable_cpus`, `usable_cpus_source`, `memory`, `gpus`, `npus`, `python` (also: `opennve system`); `devices=False` skips the GPU / NPU search |
+| `memory_info()` | RAM in bytes: `{"total", "available", "limit"}` (`limit`: container memory limit, else `None`) |
+| `accelerators()` | GPUs and NPUs: list of `{"type": "gpu" or "npu", "name", "vendor", "memory", "driver"}` (`memory` in bytes, `None` if unknown or shared); information only, the models run on the CPU |
 
 ---
 

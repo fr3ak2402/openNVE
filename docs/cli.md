@@ -69,17 +69,24 @@ The build number is `<day of year>.<year>` of the day the wheel was built (UTC),
 
 ## `opennve system`
 
-Shows the processor and the CPU cores openNVE uses for automatic threads (`--json` as JSON).
+Shows the computer: processor, CPU cores (and how many openNVE uses for automatic threads), RAM, GPUs and NPUs (`--json` as JSON).
 
 ```text
 Linux 6.8.0 (x86_64), Python 3.14.1
+  model                 LENOVO 21K5
   processor             AMD Ryzen 7 7840U w/ Radeon 780M Graphics
   logical CPUs          16
   physical cores        8
   usable by openNVE     16 (process)
+  RAM                   30.6 GB (21.2 GB available)
+  GPU                   AMD GPU (amdgpu) (512.0 MB, amdgpu)
+  NPU                   AMD NPU (Ryzen AI) (amdxdna)
 ```
 
-`usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
+- `usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
+- RAM: installed and available memory, plus the memory limit of a container.
+- GPUs and NPUs are found through the operating system, without extra packages: on Linux `nvidia-smi`, `/sys/class/drm` (also Raspberry Pi, Mali, Jetson) and NPUs in `/sys/class/accel` (Intel AI Boost, AMD Ryzen AI), Hailo (Raspberry Pi AI Kit / HAT), Coral Edge TPU and Rockchip NPU; on macOS the GPU of the Mac and the Apple Neural Engine; on Windows the graphics adapters and the "compute accelerators" of the device manager (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon).
+- This is information only: openNVE runs the TensorFlow Lite models on the CPU.
 
 ## `opennve workflow run|list|threads <file>`
 

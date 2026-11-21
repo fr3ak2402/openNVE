@@ -32,6 +32,8 @@ runs:
         "$VENV_BIN/opennve" version
         "$VENV_BIN/python" -c "import opennve; info = opennve.version_info(); assert info['build_source'] == 'wheel', info; print(opennve.version_string())"
         "$VENV_BIN/opennve" models
+        "$VENV_BIN/opennve" system
+        "$VENV_BIN/python" -c "import opennve; info = opennve.system_info(); assert info['usable_cpus'] >= 1 and info['memory']['total'], info"
         "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json" "$GITHUB_WORKSPACE/examples/frames.json" "$GITHUB_WORKSPACE/examples/agents.json" "$GITHUB_WORKSPACE/examples/workflows.json"
         cd "$GITHUB_WORKSPACE"
         "$VENV_BIN/pytest" -q -p no:cacheprovider tests
