@@ -443,7 +443,8 @@ def _windows_registry(name: str) -> typing.Optional[str]:
 def os_info() -> dict[str, typing.Any]:
     """Operating system: name (for example "Windows 11 Pro", "macOS 15.1 Sequoia",
     "Ubuntu 24.04.1 LTS", "Debian GNU/Linux 12 (bookworm)"), version, build (Windows: build
-    number, macOS: build, Linux: None), kernel (the kernel release) and family ("Windows",
+    number, macOS: build, Linux: None), kernel ("Windows NT 10.0.26100", "Darwin 24.1.0",
+    "Linux 6.8.0-49-generic") and family ("Windows",
     "macOS", "Linux")."""
     system = platform.system()
     kernel = platform.release()
@@ -462,13 +463,14 @@ def os_info() -> dict[str, typing.Any]:
             name += f" {display}"
         revision = _windows_registry("UBR")
         return {"family": "Windows", "name": name, "version": version or None,
-                "build": f"{build}.{revision}" if build and revision else build, "kernel": kernel}
+                "build": f"{build}.{revision}" if build and revision else build,
+                "kernel": f"Windows NT {version}" if version else kernel}
     if sys.platform == "darwin":
         version = platform.mac_ver()[0] or ""
         major = version.split(".")[0]
         name = f"macOS {version}".strip() + (f" {_MACOS_NAMES[major]}" if major in _MACOS_NAMES else "")
         build = _run(["sw_vers", "-buildVersion"], timeout=2).strip() or None
-        return {"family": "macOS", "name": name, "version": version or None, "build": build, "kernel": kernel}
+        return {"family": "macOS", "name": name, "version": version or None, "build": build, "kernel": f"Darwin {kernel}"}
     if sys.platform.startswith("linux"):
         release: dict[str, str] = {}
         try:
@@ -476,7 +478,7 @@ def os_info() -> dict[str, typing.Any]:
         except (OSError, AttributeError):
             pass
         name = release.get("PRETTY_NAME") or " ".join(filter(None, [release.get("NAME"), release.get("VERSION")])) or "Linux"
-        return {"family": "Linux", "name": name, "version": release.get("VERSION_ID"), "build": None, "kernel": kernel}
+        return {"family": "Linux", "name": name, "version": release.get("VERSION_ID"), "build": None, "kernel": f"Linux {kernel}"}
     return {"family": system or None, "name": f"{system} {kernel}".strip(), "version": platform.version() or None,
             "build": None, "kernel": kernel}
 

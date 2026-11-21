@@ -461,4 +461,4 @@ def test_os_info(monkeypatch):
     monkeypatch.setattr(system.platform, "mac_ver", lambda: ("15.1", ("", "", ""), "arm64"))
     monkeypatch.setattr(system, "_run", lambda command, timeout=5: "24B83\n")
     assert system.os_info() == {"family": "macOS", "name": "macOS 15.1 Sequoia", "version": "15.1", "build": "24B83",
-                                "kernel": system.platform.release()}
+                                "kernel": "Darwin " + system.platform.release()}

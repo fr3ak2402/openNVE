@@ -155,7 +155,7 @@ def _system(args) -> int:
     system = info["os"]
     build = f", build {system['build']}" if system.get("build") else ""
     print(f"{system['name']} ({info['machine']}{build}), Python {info['python']}")
-    print(f"  kernel                {system['family']} {system['kernel']}")
+    print(f"  kernel                {system['kernel']}")
     if info["model"]:
         print(f"  model                 {info['model']}")
     print(f"  processor             {info['processor']}")
