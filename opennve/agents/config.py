@@ -156,7 +156,9 @@ class AgentConfig:
         are relative to the agent configuration file (base_dir).
     backend: "auto", "tflite" or "tensorflow".
     device: where the model runs: "cpu" (default), "gpu", "npu" or "auto" (NPU, else GPU, else
-        CPU). TensorFlow Lite models use the LiteRT CompiledModel API for GPU and NPU (see
+        CPU). A list, for instance ["gpu", "cpu"], uses several devices at the same time in a
+        workflow (some agent threads on the GPU, the others on the CPU); a single agent uses the
+        first device of the list that works. TensorFlow Lite models use the LiteRT CompiledModel API for GPU and NPU (see
         docs/accelerators.md); TensorFlow models are placed on the GPU with tf.device.
     fallback: if the device is not available or cannot run the model: true (default) runs it on
         the CPU (with a message), false raises an error.
@@ -177,7 +179,7 @@ class AgentConfig:
     model: str
     name: typing.Optional[str] = None
     backend: str = "auto"
-    device: typing.Optional[str] = None
+    device: typing.Union[str, list, None] = None
     fallback: bool = True
     gpu_precision: str = "fp16"
     delegate: typing.Union[str, dict, None] = None
@@ -210,8 +212,14 @@ class AgentConfig:
             raise ValueError("agent.name must be a non-empty string")
         if self.backend != "auto" and self.backend not in _BACKENDS:
             raise ValueError(f"agent.backend must be one of auto, {', '.join(sorted(_BACKENDS))}")
-        if self.device is not None and self.device not in DEVICES:
-            raise ValueError(f"agent.device must be one of {', '.join(DEVICES)} or null")
+        if isinstance(self.device, (list, tuple)):
+            if not self.device or len(set(self.device)) != len(self.device) or any(
+                device not in ("cpu", "gpu", "npu") for device in self.device
+            ):
+                raise ValueError("agent.device as a list holds different devices of cpu, gpu, npu, for instance [\"gpu\", \"cpu\"]")
+            self.device = list(self.device)
+        elif self.device is not None and self.device not in DEVICES:
+            raise ValueError(f"agent.device must be one of {', '.join(DEVICES)}, a list of them or null")
         if not isinstance(self.fallback, bool):
             raise ValueError("agent.fallback must be true or false")
         if self.gpu_precision not in GPU_PRECISIONS:

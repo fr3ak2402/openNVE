@@ -61,6 +61,7 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 | NPU | Intel Core Ultra (AI Boost), extra `npu-intel` | Intel Core Ultra, extra `npu-intel` | Qualcomm (Hexagon), extra `npu-qualcomm` | – |
 | TensorFlow Lite delegates | e.g. Coral Edge TPU (`"delegate"`) | ✓ | ✓ | ✓ |
 
+`"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
 Not supported: the Apple Neural Engine, Hailo accelerators (Raspberry Pi AI Kit / HAT).
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
 macOS). `opennve benchmark` compares CPU, GPU and NPU on your computer.

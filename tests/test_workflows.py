@@ -462,3 +462,41 @@ def test_os_info(monkeypatch):
     monkeypatch.setattr(system, "_run", lambda command, timeout=5: "24B83\n")
     assert system.os_info() == {"family": "macOS", "name": "macOS 15.1 Sequoia", "version": "15.1", "build": "24B83",
                                 "kernel": "Darwin " + system.platform.release()}
+
+
+@needs_tflite
+def test_mixed_devices(raw_file, monkeypatch):
+    tiles = {"name": "t16", "mode": "binary", "tiles": {"size": 16, "min_events": 1}}
+    agent = {"name": "tiles", "model": str(DATA / "agent_tiles.tflite"), "frame": "t16", "device": ["gpu", "cpu"]}
+    steps = [{"type": "raw", "path": str(raw_file), "block_ms": 250}, {"type": "windows", "count": 1},
+             {"type": "frames", "frame": "t16"}, {"type": "agent", "agent": "tiles"}, {"type": "collect"}]
+
+    def plan(cpus, threads=None, device=("gpu", "cpu")):
+        step = {**steps[3], **({"threads": threads} if threads else {})}
+        workflow = opennve.Workflow.from_steps("mixed", [*steps[:3], step, steps[4]], frames=[tiles],
+                                               agents=[{**agent, "device": list(device)}], cpus=cpus)
+        return workflow, {step["name"]: step for step in workflow.thread_plan()["steps"]}["agent"]
+
+    workflow, step = plan(8)
+    assert step["threads"] == 9 and step["device_threads"]["tiles"] == ["gpu"] * 2 + ["cpu"] * 7
+    assert step["interpreter_threads"]["tiles"] == 1
+    assert "tiles: gpu x2 + cpu x7" in workflow.thread_report()
+    assert plan(2)[1]["device_threads"]["tiles"] == ["gpu", "gpu", "cpu"]
+    assert plan(8, threads=2)[1]["device_threads"]["tiles"] == ["gpu", "cpu"]  # fixed threads: at least one CPU thread
+    assert plan(8, device=("npu", "gpu", "cpu"))[1]["device_threads"]["tiles"][:4] == ["npu", "gpu", "npu", "gpu"]
+    assert plan(8, device=("gpu", "npu"))[1]["device_threads"]["tiles"] == ["gpu", "npu", "gpu", "npu"]
+    # every thread gets its device; the statistics count the inputs per device
+    run = opennve.Workflow.from_steps("mixed", steps, frames=[tiles], agents=[agent], cpus=2).run()
+    assert len(run.results) == 4
+    agents = [instance for stage in run._stages for instance in stage.instances if type(instance).__name__ == "AgentStep"]
+    assert sorted(step.configs[0].device for step in agents) == ["cpu", "gpu", "gpu"]
+    counts = {step["name"]: step for step in run.statistics()["steps"]}["agent"]["inputs_per_device"]
+    assert sum(counts.values()) == sum(len(r.predictions) for item in run.results for res in item.results for r in res.values())
+    # a single agent uses the first device that works
+    monkeypatch.setenv("VK_ICD_FILENAMES", "/nonexistent.json")
+    single = opennve.Agent({"model": str(DATA / "agent_tiles.tflite"), "device": ["npu", "cpu"]}).load()
+    assert single.device == "cpu" and "NPU" in (single.backend.device_note or "")
+    for bad in (["gpu", "gpu"], [], ["tpu"], ["auto", "cpu"]):
+        with pytest.raises(ValueError, match="device"):
+            opennve.AgentConfig(model="m.tflite", device=bad)
+    assert opennve.AgentConfig.from_dict(opennve.AgentConfig(model="m.tflite", device=["gpu", "cpu"]).to_dict()).device == ["gpu", "cpu"]

@@ -142,6 +142,7 @@ class Step:
     ORDERED = False  # True: gets the items in their original order (like the sinks) if the workflow is "ordered"
     DEFAULT_THREADS: typing.Union[int, str] = 1
     HEAVY = False
+    thread_index = 0  # set by the workflow: which thread of the step this instance runs in
 
     def __init__(self, context: StepContext, **params):
         unknown = set(params) - set(self.PARAMETERS) - set(COMMON_PARAMETERS)
@@ -167,7 +168,12 @@ class Step:
         return {}
 
     def configure_threads(self, plan: dict[str, typing.Any]):
-        """Applies thread_plan() to this instance (called in each thread before setup())."""
+        """Applies thread_plan() to this instance (called in each thread before setup();
+        self.thread_index tells which thread)."""
+
+    def statistics_details(self) -> dict[str, typing.Any]:
+        """Extra numbers for the workflow statistics (added up over the threads of the step)."""
+        return {}
 
     def setup(self):
         """Called once in each thread before the first item (load models here)."""

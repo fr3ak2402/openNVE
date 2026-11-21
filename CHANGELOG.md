@@ -41,6 +41,9 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
   a test input checks the results against the CPU when the model is loaded
 - `gpu_precision` (`fp16` / `fp32`), `delegate` (TensorFlow Lite delegates, for instance the Coral
   Edge TPU); Keras / SavedModel agents use `tf.device` for `"device": "gpu"`
+- Several devices at the same time: `"device": ["gpu", "cpu"]` gives the agent step 2 threads per
+  accelerator and one CPU thread per remaining core; each thread takes the next window when it is
+  free. The statistics show the inputs per device
 - `opennve benchmark` / `opennve.benchmark_agent()`: speed and agreement of CPU, GPU and NPU
 - `opennve system` shows the GPU / NPU support of the installed LiteRT; agent steps with GPU / NPU
   agents use 2 threads with `"threads": "auto"`; workflows report where each agent runs

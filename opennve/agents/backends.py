@@ -336,13 +336,18 @@ def create_tflite_backend(config: AgentConfig) -> Backend:
     if config.delegate is not None:
         return TFLiteBackend(path, config.threads, config.delegate)
     device = config.device or "cpu"
-    if device == "cpu":
+    if isinstance(device, list):  # the first device of the list that works
+        candidates = device[: device.index("cpu")] if "cpu" in device else list(device)
+        device = "list"
+        if not candidates:
+            return TFLiteBackend(path, config.threads)
+    elif device == "cpu":
         return TFLiteBackend(path, config.threads)
-    threads = standalone_interpreter_threads() if is_auto(config.threads) else int(config.threads)
-    if device == "auto":  # only devices the operating system reports
+    elif device == "auto":  # only devices the operating system reports
         candidates = [kind for kind in ("npu", "gpu") if _accelerator_present(kind)]
     else:
         candidates = [device]
+    threads = standalone_interpreter_threads() if is_auto(config.threads) else int(config.threads)
     reasons = []
     for kind in candidates:
         batch_size = config.batch_size or (8 if kind == "gpu" else 1)
@@ -360,7 +365,7 @@ def create_tflite_backend(config: AgentConfig) -> Backend:
                 break
     if device == "auto" and not candidates:
         reasons.append("no GPU or NPU found")
-    if not config.fallback and device != "auto":
+    if not config.fallback and device != "auto" and not (isinstance(config.device, list) and "cpu" in config.device):
         raise RuntimeError(f"agent {config.name}: " + "; ".join(dict.fromkeys(reasons)))
     backend = TFLiteBackend(path, config.threads)
     backend.device_note = "; ".join(dict.fromkeys(reasons)) or None
@@ -371,7 +376,8 @@ register_backend("tflite", create_tflite_backend, [".tflite"])
 register_backend(
     "tensorflow",
     lambda config: TensorFlowBackend(config.model_path, config.call, config.signature, config.safe_mode,
-                                     config.device, config.fallback),
+                                     config.device[0] if isinstance(config.device, list) else config.device,
+                                     config.fallback),
     [".keras", ".h5", ".hdf5"],
 )
 

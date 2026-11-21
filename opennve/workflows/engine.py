@@ -213,11 +213,28 @@ class _Stage:
         self.statistics = StepStatistics(name, self.threads)
         self.lock = threading.Lock()
         self.finished = 0
+        self._created = 0
 
     def factory(self) -> Step:
         step = self._factory()
+        with self.lock:
+            step.thread_index = self._created  # which thread of the step (0, 1, ...)
+            self._created += 1
         step.configure_threads(self.plan)
         return step
+
+    def details(self) -> dict[str, typing.Any]:
+        """Step.statistics_details() of all threads, numbers added up."""
+        merged: dict[str, typing.Any] = {}
+        for instance in list(self.instances):
+            for key, value in instance.statistics_details().items():
+                if isinstance(value, dict):
+                    target = merged.setdefault(key, {})
+                    for name, number in value.items():
+                        target[name] = target.get(name, 0) + number
+                else:
+                    merged[key] = merged.get(key, 0) + value
+        return merged
 
 
 class Workflow:
@@ -376,7 +393,11 @@ class Workflow:
             extra = ""
             if step.get("interpreter_threads"):
                 extra = ", interpreter threads " + ", ".join(f"{k} {v}" for k, v in step["interpreter_threads"].items())
-            if step.get("devices"):
+            if step.get("device_threads"):
+                for name, assignment in step["device_threads"].items():
+                    counts = {device: assignment.count(device) for device in dict.fromkeys(assignment)}
+                    extra += f", {name}: " + " + ".join(f"{device} x{count}" for device, count in counts.items())
+            elif step.get("devices"):
                 extra += ", device " + ", ".join(f"{k} {v}" for k, v in step["devices"].items())
             lines.append(f"  {step['name']:<16} x{step['threads']}{' (auto)' if step['auto'] else ''}{extra}")
         return "\n".join(lines)
@@ -595,6 +616,7 @@ class Workflow:
                     "dropped": stage.statistics.dropped,
                     "seconds": stage.statistics.seconds,
                     "mean_ms": stage.statistics.mean_ms,
+                    **stage.details(),
                 }
                 for stage in self._stages
             ],
@@ -606,9 +628,12 @@ class Workflow:
         lines = [f"[{self.name}] {seconds:.1f} s"]
         for step in stats["steps"]:
             dropped = f", {step['dropped']} dropped" if step["dropped"] else ""
+            devices = ""
+            if step.get("inputs_per_device") and len(step["inputs_per_device"]) > 1:
+                devices = " (" + ", ".join(f"{name} {count} inputs" for name, count in step["inputs_per_device"].items()) + ")"
             lines.append(
                 f"  {step['name']:<16} x{step['threads']}  {step['items']} items{dropped}, "
-                f"{step['mean_ms']:.1f} ms per item"
+                f"{step['mean_ms']:.1f} ms per item{devices}"
             )
         return "\n".join(lines)
 
