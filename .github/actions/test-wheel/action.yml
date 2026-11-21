@@ -34,7 +34,7 @@ runs:
         "$VENV_BIN/opennve" models
         "$VENV_BIN/opennve" system
         "$VENV_BIN/python" -c "import opennve; info = opennve.system_info(); assert info['usable_cpus'] >= 1 and info['memory']['total'], info"
-        "$VENV_BIN/python" -c "import opennve; ok = opennve.litert_accelerators()['compiled_model']; print(opennve.benchmark_report(opennve.benchmark_agent(opennve.AgentConfig(model='$GITHUB_WORKSPACE/tests/data/agent_unet.tflite'), devices=('cpu', 'gpu', 'npu', 'auto'), count=32)) if ok else 'LiteRT 2.4 not installed: no GPU / NPU benchmark')"
+        "$VENV_BIN/python" -c "import os, opennve; ok = opennve.litert_accelerators()['compiled_model']; print(opennve.benchmark_report(opennve.benchmark_agent(opennve.AgentConfig(model=os.path.join(os.environ['GITHUB_WORKSPACE'], 'tests', 'data', 'agent_unet.tflite')), devices=('cpu', 'gpu', 'npu', 'auto'), count=32)) if ok else 'LiteRT 2.4 not installed: no GPU / NPU benchmark')"
         "$VENV_BIN/opennve" check "$GITHUB_WORKSPACE/examples/cameras.json" "$GITHUB_WORKSPACE/examples/frames.json" "$GITHUB_WORKSPACE/examples/agents.json" "$GITHUB_WORKSPACE/examples/workflows.json"
         cd "$GITHUB_WORKSPACE"
         "$VENV_BIN/pytest" -q -p no:cacheprovider tests
