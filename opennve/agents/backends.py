@@ -311,9 +311,20 @@ def _tensorflow_has_gpu() -> bool:
 
 
 def _accelerator_present(kind: str) -> bool:
-    from ..system import accelerators
+    """Is there a GPU / NPU that LiteRT can use? (for "device": "auto")"""
+    import platform
+    import sys
 
-    return any(device["type"] == kind for device in accelerators())
+    from ..system import accelerators
+    from ._litert import litert_accelerators
+
+    if kind == "npu":  # an NPU and the runtime of a vendor (the Apple Neural Engine has none)
+        return any(device["type"] == "npu" for device in accelerators()) and any(
+            npu["sdk_installed"] for npu in litert_accelerators()["npu"]
+        )
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        return True  # Metal
+    return any(device["type"] == "gpu" for device in accelerators())
 
 
 def create_tflite_backend(config: AgentConfig) -> Backend:

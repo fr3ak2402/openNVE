@@ -290,6 +290,8 @@ def _explain(device: str, model: str, error: str) -> str:
 
     text = " ".join(re.sub(r"ERROR: \[[^\]]*\]|└", " ", error).split())
     name = device.upper()
+    if "No NPU accelerator is registered" in text or "No GPU accelerator is registered" in text:
+        return f"{name}: no {name} runtime found for LiteRT" + (" (vendor SDK, see docs/accelerators.md)" if name == "NPU" else "")
     if "not accelerated" in text:
         return f"{name}: not available, or it does not support all operations of {model}"
     if "dynamic" in text.lower():
