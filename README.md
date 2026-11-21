@@ -14,7 +14,56 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 - Workflows: free chains of steps (camera / RAW → windows → frames → tiles → neural network → labeled events → files), multithreaded (`workflows.json`)
 - Neural networks: build (U-Net, own architectures), load, save, transfer weights and quantize models to TensorFlow Lite
 
-Supported models: SENSING SE1-S4-USB, Prophesee EVK4, EVK3 HD, EVK1 Gen4, iniVation DAVIS 346, DVXplorer, CenturyArks VGA, Lucid Triton (all devices of [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers)).
+## Supported hardware
+
+### Event cameras (EVS / DVS)
+
+All devices of [neuromorphic_drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (USB):
+
+| `model` | Camera | Sensor type | Resolution |
+|---|---|---|---|
+| `SE1-S4` | SENSING SE1-S4-USB | EVS | 1280 × 720 |
+| `EVK4` | Prophesee EVK4 | EVS | 1280 × 720 |
+| `EVK3-HD` | Prophesee EVK3 HD | EVS | 1280 × 720 |
+| `EVK1-GEN4` | Prophesee EVK1 Gen4 | EVS | 1280 × 720 |
+| `TRITON` | Lucid Triton | EVS | 1280 × 720 |
+| `CENTURYARKS-VGA` | CenturyArks VGA | EVS | 640 × 480 |
+| `DVXPLORER` | iniVation DVXplorer | DVS | 640 × 480 |
+| `DAVIS346` | iniVation DAVIS 346 | DVS | 346 × 260 |
+
+EVS = event-based vision sensor (Prophesee / Sony), DVS = dynamic vision sensor (iniVation). openNVE
+reads the events (x, y, polarity, time); `opennve models` lists the models, `opennve template
+<model>` shows their settings. Recordings work without a camera: `.raw` (EVT 2.0, 2.1, 3.0) and
+HDF5 files.
+
+### Operating systems
+
+| Operating system | Wheel | Camera access | Tested in CI |
+|---|---|---|---|
+| Windows 10 / 11 x64 | `win_amd64` | WinUSB driver: `opennve driver --install` | Windows Server 2025 |
+| Linux x64 (glibc 2.28 or newer: Ubuntu 20.04+, Debian 10+, ...) | `manylinux_2_28_x86_64` | udev rules: `neuromorphic-drivers-install-udev-rules` | Ubuntu 24.04, 26.04 |
+| Linux ARM64 (Raspberry Pi 5 with Raspberry Pi OS 64-bit, Jetson, ...) | `manylinux_2_28_aarch64` | udev rules | Ubuntu 24.04 ARM64 |
+| macOS 11+ Apple silicon | `macosx_11_0_arm64` | no driver needed | macOS 26 |
+| macOS Intel | `macosx_10_12_x86_64` | no driver needed | macOS 15 (no LiteRT: `.tflite` models need the `tensorflow` extra) |
+
+Python 3.14 and 3.15 (LiteRT, and with it GPU / NPU agents, is not yet available for 3.15).
+`opennve system` shows the operating system, processor, RAM, GPUs and NPUs of a computer.
+
+### GPU and NPU
+
+Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (`"device"` in
+`agents.json`, see [GPU and NPU](docs/accelerators.md)):
+
+| | Windows x64 | Linux x64 | Linux ARM64 | macOS Apple silicon |
+|---|---|---|---|---|
+| CPU | ✓ | ✓ | ✓ | ✓ |
+| GPU | WebGPU (Direct3D 12): NVIDIA, AMD, Intel | WebGPU (Vulkan): NVIDIA, AMD, Intel | WebGPU (Vulkan): Raspberry Pi 5, Mali, ... | Metal |
+| NPU | Intel Core Ultra (AI Boost), extra `npu-intel` | Intel Core Ultra, extra `npu-intel` | Qualcomm (Hexagon), extra `npu-qualcomm` | – |
+| TensorFlow Lite delegates | e.g. Coral Edge TPU (`"delegate"`) | ✓ | ✓ | ✓ |
+
+Not supported: the Apple Neural Engine, Hailo accelerators (Raspberry Pi AI Kit / HAT).
+Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
+macOS). `opennve benchmark` compares CPU, GPU and NPU on your computer.
 
 ## Installation
 

@@ -6,8 +6,8 @@ with openNVE):
 
 | Device | Windows | Linux | macOS |
 |---|---|---|---|
-| `gpu` | WebGPU (Direct3D 12): NVIDIA, AMD, Intel, Qualcomm Adreno | WebGPU (Vulkan): NVIDIA, AMD, Intel, Raspberry Pi 5 (V3D), Mali | Metal (Apple silicon) |
-| `npu` | Intel Core Ultra (AI Boost, extra `npu-intel`), Qualcomm Snapdragon X (Hexagon, extra `npu-qualcomm`) | Intel Core Ultra (extra `npu-intel`), Qualcomm (extra `npu-qualcomm`) | – (the Apple Neural Engine is not supported by LiteRT) |
+| `gpu` | WebGPU (Direct3D 12): NVIDIA, AMD, Intel | WebGPU (Vulkan): NVIDIA, AMD, Intel, Raspberry Pi 5 (V3D), Mali | Metal (Apple silicon) |
+| `npu` | Intel Core Ultra (AI Boost, extra `npu-intel`) | x64: Intel Core Ultra (extra `npu-intel`); ARM64: Qualcomm (Hexagon, extra `npu-qualcomm`) | – (the Apple Neural Engine is not supported by LiteRT) |
 | `delegate` | TensorFlow Lite delegate libraries, for instance the Coral Edge TPU (`libedgetpu`) | | |
 
 `opennve system` shows the GPUs and NPUs of the computer and what the installed LiteRT supports
@@ -106,7 +106,7 @@ The NPU needs the runtime of its vendor, installed as an extra:
 ```sh
 # Intel Core Ultra (AI Boost): the OpenVINO SDK comes from the OpenVINO nightly index
 pip install "opennve[npu-intel]" --extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
-# Qualcomm Snapdragon (Hexagon NPU)
+# Qualcomm (Hexagon NPU, Linux ARM64)
 pip install "opennve[npu-qualcomm]"
 ```
 
