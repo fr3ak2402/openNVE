@@ -2,6 +2,19 @@
 
 All notable changes to openNVE. Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Performance
+
+- Segmentation decoding vectorized over the whole batch (one NumPy pass instead of one per tile):
+  the decode takes ~0.2 ms instead of ~0.55 ms per tile, results unchanged
+- Softmax for segmentation applied lazily: the class maps come from the logits (same argmax), the
+  probabilities are computed only for the selected pixels; `Prediction.output` and
+  `AgentResult.outputs` are still the probabilities, computed on first access
+- Faster softmax (in place, float32)
+- New guide [docs/performance.md](docs/performance.md): int8 models (~2.4 × faster than float16),
+  fewer tiles, threads
+
 ## [1.0.0] - 2026-11-20
 
 First release of openNVE, the Open Neuromorphic Vision Engine: a Python library for event cameras

@@ -6,9 +6,12 @@ import numpy as np
 
 
 def _softmax(values: np.ndarray) -> np.ndarray:
-    shifted = values - values.max(axis=-1, keepdims=True)
-    exponent = np.exp(shifted)
-    return exponent / exponent.sum(axis=-1, keepdims=True)
+    """Softmax along the last axis (float32, computed in place on a copy)."""
+    result = np.array(values, dtype=np.float32, copy=True)
+    result -= result.max(axis=-1, keepdims=True)
+    np.exp(result, out=result)
+    result /= result.sum(axis=-1, keepdims=True)
+    return result
 
 
 def _resize(image: np.ndarray, width: int, height: int) -> np.ndarray:

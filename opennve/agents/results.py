@@ -206,3 +206,46 @@ class AgentResult:
             "inference_ms": self.inference_ms,
             "predictions": [prediction.to_dict() for prediction in predictions],
         }
+
+
+class _LazyOutputPrediction(Prediction):
+    """Prediction whose output (probabilities) is computed from the logits on first access.
+    Segmentation decodes from the logits directly (the class with the highest logit is the
+    class with the highest probability), so the full probability maps are only computed if used."""
+
+    def __getattr__(self, name):
+        state = self.__dict__
+        if name in ("output", "outputs") and "_logits" in state:
+            value = state["_activate"](state.pop("_logits"))
+            state["output"] = value
+            state["outputs"] = [value] + state.pop("_rest")
+            return state[name]
+        raise AttributeError(name)
+
+
+def lazy_output_prediction(logits: np.ndarray, activate, rest: list, **fields) -> Prediction:
+    prediction = _LazyOutputPrediction(output=None, outputs=[], **fields)
+    del prediction.__dict__["output"], prediction.__dict__["outputs"]
+    prediction.__dict__.update(_logits=logits, _activate=activate, _rest=list(rest))
+    return prediction
+
+
+class _LazyOutputsResult(AgentResult):
+    """AgentResult whose first output is activated on first access (see _LazyOutputPrediction)."""
+
+    def __getattr__(self, name):
+        state = self.__dict__
+        if name == "outputs" and "_raw_outputs" in state:
+            raw = state.pop("_raw_outputs")
+            value = [state["_activate"](raw[0])] + list(raw[1:]) if raw else []
+            state["outputs"] = value
+            return value
+        raise AttributeError(name)
+
+
+def lazy_outputs_result(raw_outputs: list, activate, **fields) -> AgentResult:
+    result = _LazyOutputsResult(outputs=None, **fields)
+    del result.__dict__["outputs"]
+    result.__dict__["_raw_outputs"] = raw_outputs
+    result.__dict__["_activate"] = activate
+    return result

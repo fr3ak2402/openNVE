@@ -8,10 +8,10 @@ import typing
 import numpy as np
 
 from ..frames import Frame, Tile
-from ._util import _resize
+from ._util import _resize, _softmax
 from .config import PredictionConfig
 from .registry import register_task
-from .results import Prediction
+from .results import Prediction, lazy_output_prediction
 
 if typing.TYPE_CHECKING:
     from .agent import Agent
@@ -22,7 +22,10 @@ if typing.TYPE_CHECKING:
 class TaskInput:
     """What a task decoder gets: the agent, the frame / tiles, the input images (before
     preprocessing, height x width x channels), the padded size and the model outputs (after the
-    activation, first dimension = inputs)."""
+    activation, first dimension = inputs).
+
+    logits: True if outputs[0] still holds the logits and the decoder applies the softmax itself
+    (only for decoders with the attribute accepts_logits = True, for instance segmentation)."""
 
     agent: "Agent"
     frame: typing.Optional[Frame]
@@ -31,6 +34,7 @@ class TaskInput:
     pad_to: typing.Optional[tuple[int, int]]
     outputs: list[np.ndarray]
     count: int
+    logits: bool = False
 
     @property
     def config(self) -> PredictionConfig:
@@ -85,11 +89,135 @@ _PIXEL_DTYPE = np.dtype([("x", "<u2"), ("y", "<u2"), ("class_id", "u1"), ("score
 
 @register_task("segmentation")
 def _segmentation(task: TaskInput) -> list[Prediction]:
-    """One class per pixel: output (height, width, classes) per input, for instance a U-Net."""
+    """One class per pixel: output (height, width, classes) per input, for instance a U-Net.
+
+    Inputs whose output has the size of the input (the usual case: full tiles, no resizing) are
+    decoded together with numpy operations over the whole batch; the others (smaller edge tiles,
+    resized inputs) one by one.
+    """
+    fast = _segmentation_batch_indices(task)
+    results: dict[int, Prediction] = _segmentation_batch(task, fast) if fast else {}
+    slow = [index for index in range(task.count) if index not in results]
+    if slow:
+        single = task
+        if task.logits:  # the per-input path works with probabilities
+            single = dataclasses.replace(task, outputs=[_softmax(task.outputs[0])] + list(task.outputs[1:]), logits=False)
+        results.update(_segmentation_single(single, slow))
+    return [results[index] for index in range(task.count)]
+
+
+_segmentation.accepts_logits = True
+
+
+def _segmentation_batch_indices(task: TaskInput) -> list[int]:
+    if not task.outputs or task.count == 0:
+        return []
+    output = task.outputs[0]
+    if output.ndim != 4:
+        return []
+    layout = task.agent.config.preprocess.layout
+    height, width, classes = (output.shape[2], output.shape[3], output.shape[1]) if layout == "nchw" else output.shape[1:4]
+    if classes < 2:
+        return []
+    indices = []
+    for index, image in enumerate(task.images):
+        if image.ndim == 3 and image.shape[:2] == (height, width):
+            indices.append(index)
+    return indices
+
+
+def _segmentation_batch(task: TaskInput, indices: list[int]) -> dict[int, Prediction]:
+    config = task.config
+    output = task.outputs[0][indices]
+    if task.agent.config.preprocess.layout == "nchw":
+        output = output.transpose(0, 2, 3, 1)
+    values = np.asarray(output, dtype=np.float32)  # probabilities, or logits if task.logits
+    classes = values.shape[3]
+    class_maps = np.argmax(values, axis=3).astype(np.uint8)  # the same for logits and probabilities
+    images = np.stack([task.images[index] for index in indices])
+    active = np.any(images > config.activity_threshold, axis=3)
+    class_counts = np.empty((len(indices), classes), np.int64)
+    active_counts = np.empty((len(indices), classes), np.int64)
+    for class_id in range(classes):
+        is_class = class_maps == class_id
+        class_counts[:, class_id] = is_class.sum(axis=(1, 2))
+        active_counts[:, class_id] = (is_class & active).sum(axis=(1, 2))
+    targets = config.target_classes if config.target_classes is not None else list(range(1, classes))
+    target_mask = np.isin(class_maps, targets)
+    if config.mask_inactive:
+        target_mask &= active
+    if config.threshold is not None:
+        if task.logits:  # probability of the most likely class: 1 / sum(exp(logit - max logit))
+            best = 1.0 / np.exp(values - values.max(axis=3, keepdims=True)).sum(axis=3)
+        else:
+            best = np.take_along_axis(values, class_maps[..., None].astype(np.intp), axis=3)[..., 0]
+        target_mask &= best >= config.threshold
+    batch_index, ys, xs = np.nonzero(target_mask)
+    pixel_classes = class_maps[batch_index, ys, xs]
+    all_scores = values[batch_index, ys, xs]
+    if task.logits:
+        all_scores = _softmax(all_scores)
+    bounds = np.searchsorted(batch_index, np.arange(len(indices) + 1))
+    results = {}
+    for position, index in enumerate(indices):
+        first, last = bounds[position], bounds[position + 1]
+        tile = task.tile(index)
+        offset_x, offset_y = (tile.x, tile.y) if tile is not None else (0, 0)
+        pixels = np.zeros(last - first, _PIXEL_DTYPE)
+        pixels["x"] = xs[first:last] + offset_x
+        pixels["y"] = ys[first:last] + offset_y
+        pixels["class_id"] = pixel_classes[first:last]
+        pixel_scores = all_scores[first:last]
+        if last > first:
+            pixels["score"] = pixel_scores[np.arange(last - first), pixels["class_id"]]
+        results[index] = _segmentation_prediction(
+            task,
+            index,
+            tile,
+            values[position],
+            class_maps[position],
+            pixels,
+            pixel_scores,
+            class_counts[position],
+            np.stack([class_counts[position] - active_counts[position], active_counts[position]]),
+        )
+    return results
+
+
+def _segmentation_prediction(task, index, tile, values, class_map, pixels, pixel_scores, class_counts, activity_counts):
+    """values: probabilities (height x width x classes), or logits if task.logits."""
+    config = task.config
+    class_id = label = score = None
+    if len(pixels):
+        class_id = int(np.bincount(pixels["class_id"]).argmax())
+        score = float(pixels["score"][pixels["class_id"] == class_id].mean())
+        if config.labels and class_id < len(config.labels):
+            label = config.labels[class_id]
+    fields = dict(
+        tile=tile,
+        outputs=[output[index] for output in task.outputs],
+        class_id=class_id,
+        label=label,
+        score=score,
+        selected=len(pixels) >= max(config.min_pixels, 1),
+        class_map=class_map,
+        pixels=pixels,
+        pixel_scores=pixel_scores,
+        class_counts=class_counts,
+        activity_counts=activity_counts,
+        labels=config.labels,
+    )
+    if task.logits:
+        rest = fields.pop("outputs")[1:]
+        return lazy_output_prediction(values, _softmax, rest, **fields)
+    return Prediction(output=values, **fields)
+
+
+def _segmentation_single(task: TaskInput, indices: list[int]) -> dict[int, Prediction]:
     config = task.config
     layout = task.agent.config.preprocess.layout
-    predictions = []
-    for index in range(task.count):
+    predictions = {}
+    for index in indices:
         per_input = [output[index] for output in task.outputs]
         probabilities = np.asarray(per_input[0], dtype=np.float32)
         if probabilities.ndim == 2:  # one class map channel
@@ -140,27 +268,7 @@ def _segmentation(task: TaskInput) -> list[Prediction]:
         pixel_scores = probabilities[ys, xs]
         pixels["score"] = pixel_scores[np.arange(len(ys)), pixels["class_id"]] if len(ys) else 0
 
-        class_id = label = score = None
-        if len(ys):
-            class_id = int(np.bincount(pixels["class_id"]).argmax())
-            score = float(pixels["score"][pixels["class_id"] == class_id].mean())
-            if config.labels and class_id < len(config.labels):
-                label = config.labels[class_id]
-        predictions.append(
-            Prediction(
-                tile=tile,
-                output=probabilities,
-                outputs=per_input,
-                class_id=class_id,
-                label=label,
-                score=score,
-                selected=len(ys) >= max(config.min_pixels, 1),
-                class_map=class_map,
-                pixels=pixels,
-                pixel_scores=pixel_scores,
-                class_counts=class_counts,
-                activity_counts=activity_counts,
-                labels=config.labels,
-            )
+        predictions[index] = _segmentation_prediction(
+            task, index, tile, probabilities, class_map, pixels, pixel_scores, class_counts, activity_counts
         )
     return predictions
