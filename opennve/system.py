@@ -2,6 +2,7 @@
 
     opennve.cpu_count()      CPU cores this process may use (affinity, container limits, OPENNVE_CPUS)
     opennve.system_info()    platform, processor, cores, RAM, GPUs and NPUs (also: opennve system)
+    opennve.os_info()        operating system: name, version, build, kernel
     opennve.memory_info()    RAM: total, available, container limit
     opennve.accelerators()   GPUs and NPUs found on the machine
 
@@ -426,10 +427,65 @@ def accelerators() -> list[dict[str, typing.Any]]:
     return [json.loads(device) for device in _accelerators()]
 
 
+_MACOS_NAMES = {"11": "Big Sur", "12": "Monterey", "13": "Ventura", "14": "Sonoma", "15": "Sequoia", "26": "Tahoe"}
+
+
+def _windows_registry(name: str) -> typing.Optional[str]:
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") as key:
+            return str(winreg.QueryValueEx(key, name)[0]).strip() or None
+    except (ImportError, OSError):
+        return None
+
+
+def os_info() -> dict[str, typing.Any]:
+    """Operating system: name (for example "Windows 11 Pro", "macOS 15.1 Sequoia",
+    "Ubuntu 24.04.1 LTS", "Debian GNU/Linux 12 (bookworm)"), version, build (Windows: build
+    number, macOS: build, Linux: None), kernel (the kernel release) and family ("Windows",
+    "macOS", "Linux")."""
+    system = platform.system()
+    kernel = platform.release()
+    if sys.platform == "win32":
+        release, version, _, _ = platform.win32_ver()
+        build = version.split(".")[-1] if version else None
+        number = "11" if build and build.isdigit() and int(build) >= 22000 else (release or "")
+        edition = (platform.win32_edition() or "").replace("Professional", "Pro").replace("Core", "Home")
+        product = _windows_registry("ProductName") or ""
+        if "Server" in product:
+            name = product
+        else:
+            name = f"Windows {number}" + (f" {edition}" if edition and edition not in ("ServerStandard", "ServerDatacenter") else "")
+        display = _windows_registry("DisplayVersion")
+        if display:
+            name += f" {display}"
+        revision = _windows_registry("UBR")
+        return {"family": "Windows", "name": name, "version": version or None,
+                "build": f"{build}.{revision}" if build and revision else build, "kernel": kernel}
+    if sys.platform == "darwin":
+        version = platform.mac_ver()[0] or ""
+        major = version.split(".")[0]
+        name = f"macOS {version}".strip() + (f" {_MACOS_NAMES[major]}" if major in _MACOS_NAMES else "")
+        build = _run(["sw_vers", "-buildVersion"], timeout=2).strip() or None
+        return {"family": "macOS", "name": name, "version": version or None, "build": build, "kernel": kernel}
+    if sys.platform.startswith("linux"):
+        release: dict[str, str] = {}
+        try:
+            release = platform.freedesktop_os_release()
+        except (OSError, AttributeError):
+            pass
+        name = release.get("PRETTY_NAME") or " ".join(filter(None, [release.get("NAME"), release.get("VERSION")])) or "Linux"
+        return {"family": "Linux", "name": name, "version": release.get("VERSION_ID"), "build": None, "kernel": kernel}
+    return {"family": system or None, "name": f"{system} {kernel}".strip(), "version": platform.version() or None,
+            "build": None, "kernel": kernel}
+
+
 def system_info(devices: bool = True) -> dict[str, typing.Any]:
     """Platform, processor, core counts, RAM and accelerators.
 
-    model: computer model (None if unknown); logical_cpus: logical processors of the machine;
+    os: os_info() (name, version, build, kernel, family); platform: system and kernel release
+    (for example "Linux 6.8.0"); model: computer model (None if unknown); logical_cpus: logical processors of the machine;
     physical_cores: cores without hyper-threading (None if unknown); usable_cpus: what openNVE
     uses for "auto" (cpu_count()); usable_cpus_source: "process" (affinity), "system", "container
     limit" or "OPENNVE_CPUS"; memory: memory_info(); gpus, npus: accelerators() (empty lists with
@@ -439,6 +495,7 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
     usable, source = _usable_cpus()
     found = accelerators() if devices else []
     return {
+        "os": os_info(),
         "platform": f"{platform.system()} {platform.release()}",
         "machine": platform.machine(),
         "model": _model(),

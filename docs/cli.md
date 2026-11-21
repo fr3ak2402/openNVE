@@ -69,10 +69,11 @@ The build number is `<day of year>.<year>` of the day the wheel was built (UTC),
 
 ## `opennve system`
 
-Shows the computer: processor, CPU cores (and how many openNVE uses for automatic threads), RAM, GPUs and NPUs (`--json` as JSON).
+Shows the computer: operating system, processor, CPU cores (and how many openNVE uses for automatic threads), RAM, GPUs and NPUs (`--json` as JSON).
 
 ```text
-Linux 6.8.0 (x86_64), Python 3.14.1
+Ubuntu 24.04.1 LTS (x86_64), Python 3.14.1
+  kernel                Linux 6.8.0-49-generic
   model                 LENOVO 21K5
   processor             AMD Ryzen 7 7840U w/ Radeon 780M Graphics
   logical CPUs          16

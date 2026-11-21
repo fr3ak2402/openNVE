@@ -139,7 +139,7 @@ from .workflows import (
 )
 
 # hardware (automatic threads)
-from .system import accelerators, cpu_count, memory_info, system_info
+from .system import accelerators, cpu_count, memory_info, os_info, system_info
 
 # version and build
 from ._version import (
@@ -156,6 +156,7 @@ __all__ = [
     "accelerators",
     "cpu_count",
     "memory_info",
+    "os_info",
     "system_info",
     "Hdf5Reader",
     "Hdf5Writer",

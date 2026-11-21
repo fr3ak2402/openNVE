@@ -449,3 +449,16 @@ def test_gpu_agents_get_two_threads(raw_file):
     assert "device tiles gpu" in workflow.thread_report()
     run = opennve.Workflow.from_steps("gpu", steps, frames=[tiles], agents=[agent], cpus=2).run()
     assert len(run.results) == 4  # runs on the GPU or falls back to the CPU
+
+
+def test_os_info(monkeypatch):
+    from opennve import system
+
+    info = opennve.os_info()
+    assert info["name"] and info["family"] in ("Linux", "macOS", "Windows") and info["kernel"]
+    assert opennve.system_info(devices=False)["os"] == info
+    monkeypatch.setattr(system.sys, "platform", "darwin")
+    monkeypatch.setattr(system.platform, "mac_ver", lambda: ("15.1", ("", "", ""), "arm64"))
+    monkeypatch.setattr(system, "_run", lambda command, timeout=5: "24B83\n")
+    assert system.os_info() == {"family": "macOS", "name": "macOS 15.1 Sequoia", "version": "15.1", "build": "24B83",
+                                "kernel": system.platform.release()}

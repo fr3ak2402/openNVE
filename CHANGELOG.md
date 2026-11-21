@@ -49,7 +49,8 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
 
 ### System information
 
-- `opennve system` / `system_info()` show the computer model, RAM (total, available, container
+- `opennve system` / `system_info()` show the operating system (name, version, build, kernel;
+  `opennve.os_info()`), the computer model, RAM (total, available, container
   limit) and the GPUs and NPUs (Intel AI Boost, AMD Ryzen AI, Apple Neural Engine, Hailo, Coral,
   Rockchip, Qualcomm Hexagon, ...), found through the operating system without extra packages
 - `opennve.memory_info()`, `opennve.accelerators()`

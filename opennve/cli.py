@@ -152,7 +152,10 @@ def _system(args) -> int:
             lines.append(item["name"] + (f" ({', '.join(details)})" if details else ""))
         return lines
 
-    print(f"{info['platform']} ({info['machine']}), Python {info['python']}")
+    system = info["os"]
+    build = f", build {system['build']}" if system.get("build") else ""
+    print(f"{system['name']} ({info['machine']}{build}), Python {info['python']}")
+    print(f"  kernel                {system['family']} {system['kernel']}")
     if info["model"]:
         print(f"  model                 {info['model']}")
     print(f"  processor             {info['processor']}")
