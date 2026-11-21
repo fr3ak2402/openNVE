@@ -14,6 +14,7 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Agents (TensorFlow models)](agents.md) | Running TensorFlow and TensorFlow Lite models on tiles and frames, configured in `agents.json` |
 | [Workflows](workflows.md) | Free chains of steps (camera / RAW → windows → frames → tiles → agent → labels → files), multithreaded, configured in `workflows.json` |
 | [Performance](performance.md) | Where the time goes, int8 models, fewer tiles, threads |
+| [GPU and NPU](accelerators.md) | Agents on the GPU or an NPU, `opennve benchmark` |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
 | [HDF5 files](hdf5-files.md) | Reading and writing HDF5 event files (`.h5`) with x, y, p, t and labels (l) |
 | [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |

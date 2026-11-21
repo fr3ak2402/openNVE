@@ -79,8 +79,14 @@ def _workflow(args) -> int:
     config = load_workflow_config(args.path, args.name)
     if args.debug:
         config.debug = True
+    if args.cpus is not None:
+        config.cpus = args.cpus
     workflow = Workflow(config)
+    if args.action == "threads":
+        print(workflow.thread_report())
+        return 0
     print(workflow.describe())
+    print(workflow.thread_report())
     if not args.no_input:
         import sys
         import threading
@@ -120,6 +126,87 @@ def _version(args) -> int:
         ("tensorflow", "TensorFlow"),
     ):
         print(f"  {label:<21} {info[key] or '-'}")
+    return 0
+
+
+def _system(args) -> int:
+    from .system import format_bytes, system_info
+
+    info = system_info()
+    if args.json:
+        print(json.dumps(info, indent=4))
+        return 0
+    memory = info["memory"]
+    ram = format_bytes(memory["total"])
+    if memory["available"] is not None:
+        ram += f" ({format_bytes(memory['available'])} available)"
+    if memory["limit"] is not None:
+        ram += f", limit {format_bytes(memory['limit'])}"
+
+    def devices(items):
+        if not items:
+            return ["none found"]
+        lines = []
+        for item in items:
+            details = [value for value in (format_bytes(item["memory"]) if item["memory"] else None, item["driver"]) if value]
+            lines.append(item["name"] + (f" ({', '.join(details)})" if details else ""))
+        return lines
+
+    system = info["os"]
+    build = f", build {system['build']}" if system.get("build") else ""
+    print(f"{system['name']} ({info['machine']}{build}), Python {info['python']}")
+    print(f"  kernel                {system['kernel']}")
+    if info["model"]:
+        print(f"  model                 {info['model']}")
+    print(f"  processor             {info['processor']}")
+    print(f"  logical CPUs          {info['logical_cpus']}")
+    print(f"  physical cores        {info['physical_cores'] or '-'}")
+    print(f"  usable by openNVE     {info['usable_cpus']} ({info['usable_cpus_source']})")
+    print(f"  RAM                   {ram}")
+    for label, items in (("GPU", info["gpus"]), ("NPU", info["npus"])):
+        for number, line in enumerate(devices(items)):
+            print(f"  {label if number == 0 else '':<22}{line}")
+    litert = info.get("litert") or {}
+    if litert.get("version"):
+        parts = [f"GPU via {litert['gpu']}" if litert.get("gpu") else "no GPU accelerator"]
+        for npu in litert.get("npu", []):
+            parts.append(f"NPU {npu['name']}" + ("" if npu["sdk_installed"] else f" (needs pip install {npu['install']})"))
+        if not litert.get("compiled_model"):
+            parts = ["CPU only (GPU / NPU need ai-edge-litert 2.4 or newer)"]
+        print(f"  LiteRT {litert['version']:<15}{', '.join(parts)}")
+    else:
+        print("  LiteRT                not installed")
+    return 0
+
+
+def _benchmark(args) -> int:
+    from .agents import benchmark_agent, benchmark_report, load_agent_config
+    from .frames import load_frame_config
+
+    config = load_agent_config(args.agents, args.agent)
+    frames = None
+    if args.recording:
+        if not args.frames:
+            print("--recording needs --frames (the frame configuration file)", file=sys.stderr)
+            return 2
+        from .recordings import open_recording
+
+        frame_config = load_frame_config(args.frames, args.frame or config.frame)
+        frames = []
+        with open_recording(args.recording, window={"duration_ms": args.window_ms}) as recording:
+            for window in recording.windows():
+                frame = window.frame(frame_config)
+                if config.input != "tiles" or frame.tiles:
+                    frames.append(frame)
+                if len(frames) >= args.windows:
+                    break
+    devices = [device.strip() for device in args.devices.split(",") if device.strip()]
+    print(f"agent {config.name}: {config.model_path.name}")
+    results = benchmark_agent(config, devices, frames=frames, count=args.inputs)
+    if args.json:
+        print(json.dumps(results, indent=4))
+    else:
+        print(benchmark_report(results))
     return 0
 
 
@@ -260,6 +347,23 @@ def main(argv=None) -> int:
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_version)
 
+    command = commands.add_parser("system", help="show processor, CPU cores, RAM, GPUs and NPUs")
+    command.add_argument("--json", action="store_true", help="output as JSON")
+    command.set_defaults(function=_system)
+
+    command = commands.add_parser("benchmark", help="compare CPU, GPU and NPU for an agent (speed and results)")
+    command.add_argument("agents", help="agent configuration file (agents.json)")
+    command.add_argument("--agent", help="agent name (default: the first)")
+    command.add_argument("--devices", default="cpu,gpu,npu", help="devices to compare (default cpu,gpu,npu)")
+    command.add_argument("--recording", help="take the inputs from this recording (.h5, .hdf5, .raw)")
+    command.add_argument("--frames", help="frame configuration file (with --recording)")
+    command.add_argument("--frame", help="frame configuration name (default: the agent's \"frame\")")
+    command.add_argument("--windows", type=int, default=20, help="time windows to read from the recording (default 20)")
+    command.add_argument("--window-ms", type=float, default=40.0, help="window length in ms (default 40)")
+    command.add_argument("--inputs", type=int, default=0, help="number of inputs (default: all of the windows, or 64 random)")
+    command.add_argument("--json", action="store_true", help="output as JSON")
+    command.set_defaults(function=_benchmark)
+
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")
     command.add_argument("--config", help="configuration file, adds the camera names")
@@ -280,13 +384,14 @@ def main(argv=None) -> int:
     command.add_argument("--tiles", type=int, help="tile size in pixels, for instance 80 (default: no tiles)")
     command.set_defaults(function=_frame_template)
 
-    command = commands.add_parser("workflow", help="list or run workflows")
-    command.add_argument("action", choices=("run", "list"))
+    command = commands.add_parser("workflow", help="list or run workflows, or show their threads")
+    command.add_argument("action", choices=("run", "list", "threads"))
     command.add_argument("path", help="workflow configuration file")
     command.add_argument("--name", help="workflow name (default: the default workflow)")
     command.add_argument("--duration", type=float, help="stop after this many seconds")
     command.add_argument("--debug", action="store_true", help="print step timings")
     command.add_argument("--no-input", action="store_true", help="do not read 'stop' from the console")
+    command.add_argument("--cpus", type=int, help="size the automatic threads for this many CPU cores")
     command.set_defaults(function=_workflow)
 
     command = commands.add_parser("check", help="validate camera, frame and agent configuration files")

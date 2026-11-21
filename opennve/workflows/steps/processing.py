@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import math
+import threading
 
 import numpy as np
 
 from ...events.window import EventWindow
+from ...system import MAX_AUTO_AGENT_THREADS, is_auto
 from .base import Step, _positive_number, register_step
+
+
+def _light_threads(cpus: int) -> int:
+    """Threads of light steps (frames, tiles): ~0.1 ms per tile against ~4 ms in the agent, and
+    mostly Python (GIL), so one thread is enough up to 8 cores, then two."""
+    return 1 if cpus < 8 else 2
 
 
 
@@ -99,6 +107,10 @@ class FramesStep(Step):
     """
 
     PARAMETERS = {"frame": None, "min_events_per_ms": None}
+    DEFAULT_THREADS = "auto"
+
+    def auto_threads(self, cpus):
+        return _light_threads(cpus)
 
     def validate(self):
         frames = self.params["frame"]
@@ -132,6 +144,10 @@ class TilesStep(Step):
     """
 
     PARAMETERS = {"frame": None, "size": 80, "min_events": 1, "min_events_per_ms": None}
+    DEFAULT_THREADS = "auto"
+
+    def auto_threads(self, cpus):
+        return _light_threads(cpus)
 
     def validate(self):
         _positive_number(self, "size", allow_none=False, integer=True)
@@ -160,9 +176,63 @@ class AgentStep(Step):
     frame: frame configuration name the agent uses (default: the agent's "frame" setting, else
         the only frame of the window).
     Each thread loads its own copy of the model.
+
+    Threads ("auto" by default): TensorFlow Lite agents get one thread per core with one
+    interpreter thread each (several interpreters in parallel are faster than one with several
+    threads). With a fixed number of step threads, agents with "threads": "auto" share the cores:
+    interpreter threads = cores / step threads. TensorFlow models run in one thread (TensorFlow
+    uses all cores itself).
     """
 
     PARAMETERS = {"agent": None, "frame": None}
+    DEFAULT_THREADS = "auto"
+    HEAVY = True
+
+    def _tflite(self):
+        return [config for config in self.configs if config.resolved_backend == "tflite"]
+
+    @staticmethod
+    def _accelerated(config) -> bool:
+        """The agent runs on a GPU / NPU (device "auto": if the machine has one)."""
+        if config.device in ("gpu", "npu") or config.delegate is not None:
+            return True
+        if config.device == "auto":
+            from ...system import accelerators
+
+            return bool(accelerators())
+        return False
+
+    def auto_threads(self, cpus):
+        tflite = self._tflite()
+        if not tflite:  # TensorFlow (or own backends): the backend parallelizes itself
+            return 1
+        if all(self._accelerated(config) for config in tflite):
+            # GPU / NPU: one model per thread on the same accelerator; two threads overlap the
+            # preparation and decoding (CPU) with the inference
+            return max(1, min(cpus, 2))
+        fixed = [config.threads for config in tflite if not is_auto(config.threads)]
+        if fixed:
+            return max(1, cpus // max(fixed))
+        return max(1, min(cpus, MAX_AUTO_AGENT_THREADS))
+
+    def thread_plan(self, threads, cpus):
+        plan = {}
+        devices = {config.name: config.device for config in self.configs if config.device is not None}
+        if devices:
+            plan["devices"] = devices
+        if self._tflite():
+            auto = max(1, cpus // threads)
+            plan["interpreter_threads"] = {
+                config.name: auto if is_auto(config.threads) else config.threads for config in self._tflite()
+            }
+        return plan
+
+    def configure_threads(self, plan):
+        threads = plan.get("interpreter_threads") or {}
+        self.configs = [
+            config.copy(threads=threads[config.name]) if is_auto(config.threads) and config.name in threads else config
+            for config in self.configs
+        ]
 
     def validate(self):
         agents = self.params["agent"]
@@ -170,10 +240,24 @@ class AgentStep(Step):
             raise ValueError("step agent: agent is required")
         self.configs = [self.context.agent_config(value) for value in (agents if isinstance(agents, list) else [agents])]
 
+    _reported: set = set()
+    _report_lock = threading.Lock()
+
     def setup(self):
         from ...agents import Agent
 
         self.agents = [Agent(config).load() for config in self.configs]
+        for agent in self.agents:  # where the agent runs, once per workflow and agent
+            backend = agent.backend
+            if agent.config.device is None and backend.device == "cpu" and not backend.device_note:
+                continue
+            key = (id(self.context), agent.name)
+            with AgentStep._report_lock:
+                if key in AgentStep._reported:
+                    continue
+                AgentStep._reported.add(key)
+            message = f"[{self.name}] agent {agent.name} runs on {agent.device_description()}"
+            self.context.log(message)
 
     def _frame(self, agent, frames: dict):
         name = self.params["frame"] or agent.config.frame
