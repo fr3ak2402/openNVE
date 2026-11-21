@@ -54,7 +54,7 @@ opennve recording recording.raw --json
 Shows the version, the build number and the versions of the dependencies (`--json` as JSON). `opennve --version` prints only the first line.
 
 ```text
-openNVE 1.0.0 (build 324.2026)
+openNVE 1.1.0 (build 324.2026)
   build date            2026-11-20T13:43:21+00:00
   neuromorphic_drivers  0.19.2
   Python                3.14.1
@@ -67,11 +67,53 @@ openNVE 1.0.0 (build 324.2026)
 
 The build number is `<day of year>.<year>` of the day the wheel was built (UTC), for instance `324.2026` for 20 November 2026.
 
-## `opennve workflow run|list <file>`
+## `opennve system`
 
-Runs or lists the [workflows](workflows.md) of a workflow configuration file.
+Shows the computer: operating system, processor, CPU cores (and how many openNVE uses for automatic threads), RAM, GPUs and NPUs (`--json` as JSON).
+
+```text
+Ubuntu 24.04.1 LTS (x86_64), Python 3.14.1
+  kernel                Linux 6.8.0-49-generic
+  model                 LENOVO 21K5
+  processor             AMD Ryzen 7 7840U w/ Radeon 780M Graphics
+  logical CPUs          16
+  physical cores        8
+  usable by openNVE     16 (process)
+  RAM                   30.6 GB (21.2 GB available)
+  GPU                   AMD GPU (amdgpu) (512.0 MB, amdgpu)
+  NPU                   AMD NPU (Ryzen AI) (amdxdna)
+```
+
+- `usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
+- RAM: installed and available memory, plus the memory limit of a container.
+- GPUs and NPUs are found through the operating system, without extra packages: on Linux `nvidia-smi`, `/sys/class/drm` (also Raspberry Pi, Mali, Jetson) and NPUs in `/sys/class/accel` (Intel AI Boost, AMD Ryzen AI), Hailo (Raspberry Pi AI Kit / HAT), Coral Edge TPU and Rockchip NPU; on macOS the GPU of the Mac and the Apple Neural Engine; on Windows the graphics adapters and the "compute accelerators" of the device manager (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon).
+- The last line shows what the installed LiteRT can use: the GPU (WebGPU, Metal) and the NPU runtimes, see [GPU and NPU](accelerators.md).
+
+## `opennve benchmark <agents.json>`
+
+Runs an agent on the CPU, the GPU and the NPU with the same inputs and compares speed and results (see [GPU and NPU](accelerators.md)).
 
 ```sh
+opennve benchmark config/agents.json --agent prototyp --recording data/rec.h5 --frames config/frames.json
+opennve benchmark config/agents.json --devices cpu,gpu --inputs 256      # random inputs of the model's size
+```
+
+| Option | Description |
+|---|---|
+| `--agent` | Agent name (default: the first) |
+| `--devices` | Devices to compare (default `cpu,gpu,npu`) |
+| `--recording`, `--frames`, `--frame` | Take the inputs from a recording (tiles of its frames) |
+| `--windows`, `--window-ms` | Number and length of the time windows read (default 20 × 40 ms) |
+| `--inputs` | Number of inputs (default: all tiles of the windows, or 64 random inputs) |
+| `--json` | Output as JSON |
+
+## `opennve workflow run|list|threads <file>`
+
+Runs or lists the [workflows](workflows.md) of a workflow configuration file, or shows the threads of every step on this machine.
+
+```sh
+opennve workflow threads workflows.json --name main_mh    # threads for the CPU cores of this machine
+opennve workflow threads workflows.json --cpus 4          # ... for a machine with 4 cores
 opennve workflow list workflows.json
 opennve workflow run workflows.json                       # default workflow; 'stop' + Enter or Ctrl+C stops
 opennve workflow run workflows.json --name insects_raw --duration 60 --debug
@@ -83,6 +125,7 @@ opennve workflow run workflows.json --name insects_raw --duration 60 --debug
 | `--duration` | Stop after this many seconds |
 | `--debug` | Print the steps and the statistics |
 | `--no-input` | Do not read `stop` from the console (for scripts and services) |
+| `--cpus` | Size the automatic threads for this many CPU cores (instead of the detected ones) |
 
 ## `opennve check <file> [<file> ...]`
 

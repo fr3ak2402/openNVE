@@ -26,21 +26,33 @@ All names described here are available directly as `opennve.<name>`.
 
 | Name | Description |
 |---|---|
-| `__version__` | Version, for instance `"1.0.0"` |
+| `__version__` | Version, for instance `"1.1.0"` |
 | `BUILD_NUMBER` / `build_number()` | Build number `<day of year>.<year>` of the build (UTC), for instance `"324.2026"` for 20 November 2026 |
 | `BUILD_DATE` | Build date and time (`datetime`, UTC) |
 | `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded neuromorphic_drivers |
 | `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `litert`, `tensorflow` |
-| `version_string()` | `"openNVE 1.0.0 (build 324.2026)"` |
+| `version_string()` | `"openNVE 1.1.0 (build 324.2026)"` |
 
 ```python
 import opennve
 
-print(opennve.__version__, opennve.BUILD_NUMBER)   # 1.0.0 324.2026
+print(opennve.__version__, opennve.BUILD_NUMBER)   # 1.1.0 324.2026
 print(opennve.version_info())
 ```
 
 The build number is written into the wheel when it is built (`tools/bundle_wheel.py`). In a source checkout or an editable install it is the date of the last git commit (`build_source` `"git"`), without git the current date (`"today"`); in a wheel `build_source` is `"wheel"`. On the command line: `opennve version`.
+
+## Hardware
+
+| Name | Description |
+|---|---|
+| `cpu_count()` | CPU cores this process may use (affinity, container CPU limits, environment variable `OPENNVE_CPUS`); the basis of `"threads": "auto"` |
+| `system_info(devices=True)` | `os`, `platform`, `machine`, `model`, `processor`, `logical_cpus`, `physical_cores`, `usable_cpus`, `usable_cpus_source`, `memory`, `gpus`, `npus`, `python` (also: `opennve system`); `devices=False` skips the GPU / NPU search |
+| `os_info()` | Operating system: `{"family", "name", "version", "build", "kernel"}`, for example `"Windows 11 Pro 24H2"` (build `26100.2454`), `"macOS 15.1 Sequoia"`, `"Ubuntu 24.04.1 LTS"`, `"Debian GNU/Linux 12 (bookworm)"` (Raspberry Pi OS) |
+| `memory_info()` | RAM in bytes: `{"total", "available", "limit"}` (`limit`: container memory limit, else `None`) |
+| `accelerators()` | GPUs and NPUs: list of `{"type": "gpu" or "npu", "name", "vendor", "memory", "driver"}` (`memory` in bytes, `None` if unknown or shared) |
+| `litert_accelerators()` | What the installed LiteRT supports: `{"version", "compiled_model", "gpu", "npu"}` |
+| `benchmark_agent(config, devices, frames=None, count=0)` | Runs an agent on several devices, returns speed and agreement per device; `benchmark_report(results)` formats them ([GPU and NPU](accelerators.md)) |
 
 ---
 
@@ -423,7 +435,7 @@ Configurable chains of steps in threads, see [Workflows](workflows.md).
 |---|---|
 | `load_workflow(path, name=None)` | Workflow of a file (default workflow without a name) |
 | `load_workflow_configs(path)` / `load_workflow_config(path, name=None)` / `save_workflow_configs(path, configs)` | Workflow configurations |
-| `Workflow(config)` / `Workflow.from_steps(name, steps, **settings)` | `run(duration_s=None)`, `start()`, `stop()`, `join(timeout=None)`, `add_step(...)`, `results`, `statistics()`, `statistics_report()`, `describe()` |
+| `Workflow(config)` / `Workflow.from_steps(name, steps, **settings)` | `run(duration_s=None)`, `start()`, `stop()`, `join(timeout=None)`, `add_step(...)`, `results`, `statistics()`, `statistics_report()`, `describe()`, `cpus`, `queue_size`, `thread_plan()`, `thread_report()` |
 | `WorkItem` | `index`, `camera`, `block`, `windows`, `frames`, `results`, `events`, `data`, `timings`, `summary()` |
 | `Step`, `register_step(name)`, `list_steps()` | Own step types |
 

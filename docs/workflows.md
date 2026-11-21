@@ -23,13 +23,12 @@ Workflows are defined in a JSON file (`workflows.json`) next to the [camera](con
             "cameras": "cameras.json",
             "frames": "frames.json",
             "agents": "agents.json",
-            "queue_size": 8,
             "ordered": true,
             "steps": [
                 {"type": "camera", "cameras": ["left"], "block_ms": 1000},
                 {"type": "windows", "count": 3, "overlap_ms": 200},
-                {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15, "threads": 2},
-                {"type": "agent", "agent": "insects", "threads": 4},
+                {"type": "frames", "frame": "tiles80", "min_events_per_ms": 0.15},
+                {"type": "agent", "agent": "insects"},
                 {"type": "require", "agent": "insects", "min_windows": 1},
                 {"type": "label_events", "agent": "insects", "label": 2},
                 {"type": "log", "agent": "insects"},
@@ -66,11 +65,12 @@ print(workflow.statistics_report())
 | `description` | `""` | Free text |
 | `cameras`, `frames`, `agents` | `null` | Configuration files (relative to the workflow file) or the configurations themselves (lists) |
 | `steps` | – | The steps, in order. The first step is a source |
-| `queue_size` | `8` | Maximum number of items waiting between two steps. A full queue slows the step before it down (back pressure) |
+| `queue_size` | `null` | Maximum number of items waiting between two steps. A full queue slows the step before it down (back pressure). `null`: automatic, 8 or twice the threads of the busiest step |
+| `cpus` | `"auto"` | CPU cores the automatic threads are sized for. `"auto"`/`null`: detected (`opennve.cpu_count()`); a number, for instance to leave cores free for other programs |
 | `ordered` | `true` | Sinks (`write`, `collect`) receive the items in the order they were read, also if threads finish them in another order |
 | `debug` | `false` | Prints the steps at the start and the statistics at the end |
 
-Every step has `type`, optionally `name` (for the statistics) and `threads` (default 1).
+Every step has `type`, optionally `name` (for the statistics) and `threads`: a number or `"auto"` (default for `frames`, `tiles` and `agent`; the other steps default to 1). See [Multithreading](#multithreading).
 
 ## How items flow through the steps
 
@@ -189,10 +189,15 @@ Several sinks are possible, for instance a CSV and a JSON lines file.
 ## Multithreading
 
 - Every step runs in its own thread; `"threads": n` starts n threads for that step. Each thread has its own step instance, so every `agent` thread has its own model.
+- **Automatic threads:** `"threads": "auto"` (the default of `frames`, `tiles` and `agent`) sizes the step to the hardware. openNVE reads the CPU cores this process may use (`opennve.cpu_count()`: affinity, container limits, environment variable `OPENNVE_CPUS`, or the workflow's `cpus`):
+  - `agent`: one thread per core (at most 16) with **one TensorFlow Lite interpreter thread each** — several interpreters in parallel are faster than one interpreter with several threads, and *agent threads × interpreter threads* never exceeds the cores. Above 16 cores, the remaining cores go to the interpreters. Several agent steps share the cores equally. TensorFlow (Keras) models run in one thread, TensorFlow uses all cores itself.
+  - With a fixed number of agent threads, agents with `"threads": "auto"` get *cores / agent threads* interpreter threads; with fixed interpreter threads in `agents.json`, the agent step gets *cores / interpreter threads* threads.
+  - `frames`, `tiles`: 1 thread up to 7 cores, 2 from 8 cores (they need ~0.1 ms per tile against ~4 ms in the agent).
+  - `opennve workflow threads workflows.json` (or `workflow.thread_report()`, `workflow.thread_plan()`) shows the threads for this machine; `--cpus 8` shows them for another one.
 - Sources and `write` / `collect` run in one thread.
 - The steps are connected by queues of `queue_size` items. When a step is slower than the source, the queue fills up and the source waits; for live cameras the camera buffer then grows, so give slow steps enough threads.
 - With `"ordered": true`, the sinks write the items in the original order.
-- Threads help where the work releases Python's global interpreter lock: numpy, OpenCV, LiteRT and TensorFlow do. On a 2-core machine, 2 `agent` threads ran a U-Net about 1.8 times as fast as one.
+- Threads help where the work releases Python's global interpreter lock: numpy, OpenCV, LiteRT and TensorFlow do. On a 2-core machine, 2 `agent` threads with 1 interpreter thread each ran a U-Net (80 × 80 tiles) at 3.7 ms per tile, 1 agent thread with 2 interpreter threads at 4.7 ms, 1 × 1 at 6.9 ms; 2 × 2 (more threads than cores) made an int8 model 4 times slower.
 - `workflow.statistics()` / `statistics_report()` show the items, dropped items and time per item of every step: the step with the highest time per item is the one to give more threads.
 
 ## Stopping and errors

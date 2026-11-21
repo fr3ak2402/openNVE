@@ -127,6 +127,12 @@ class Step:
     kind: "source" (creates items: items()), "process" (process(item) -> item or None) or
         "sink" (process(item), at the end of the workflow).
     PARAMETERS: allowed parameters with their defaults (plus "type", "name", "threads").
+    DEFAULT_THREADS: threads without "threads" in the step configuration: a number or "auto".
+    HEAVY: steps that keep the CPU cores busy (agents); the workflow splits the cores between them.
+
+    Automatic threads ("threads": "auto"): auto_threads(cpus) gives the number of threads,
+    thread_plan(threads, cpus) further settings (for instance the interpreter threads of the
+    agents), which every instance gets through configure_threads(plan) before setup().
     """
 
     TYPE = "step"
@@ -134,6 +140,8 @@ class Step:
     PARAMETERS: dict[str, typing.Any] = {}
     MAX_THREADS: typing.Optional[int] = None
     ORDERED = False  # True: gets the items in their original order (like the sinks) if the workflow is "ordered"
+    DEFAULT_THREADS: typing.Union[int, str] = 1
+    HEAVY = False
 
     def __init__(self, context: StepContext, **params):
         unknown = set(params) - set(self.PARAMETERS) - set(COMMON_PARAMETERS)
@@ -149,6 +157,17 @@ class Step:
 
     def validate(self):
         """Checks the parameters (called when the workflow is created)."""
+
+    def auto_threads(self, cpus: int) -> int:
+        """Threads for "threads": "auto" (cpus: cores available to this step)."""
+        return 1
+
+    def thread_plan(self, threads: int, cpus: int) -> dict[str, typing.Any]:
+        """Further settings for the given number of threads (shown by Workflow.thread_plan())."""
+        return {}
+
+    def configure_threads(self, plan: dict[str, typing.Any]):
+        """Applies thread_plan() to this instance (called in each thread before setup())."""
 
     def setup(self):
         """Called once in each thread before the first item (load models here)."""

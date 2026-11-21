@@ -31,12 +31,9 @@ def _has_tflite() -> bool:
 
 
 def _has_tensorflow() -> bool:
-    try:
-        import tensorflow  # noqa: F401
+    import importlib.util
 
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("tensorflow") is not None  # without importing it (slow, and no GPU tests after it)
 
 
 needs_tflite = pytest.mark.skipif(not _has_tflite(), reason="LiteRT (ai-edge-litert) is not installed")
@@ -369,3 +366,102 @@ def test_keras_model_object():
     agent = opennve.Agent.from_model(model, name="keras")
     frame = _random_window(8).frame(TILES16)
     assert len(agent.predict(frame)) == len(frame.tiles)
+
+
+# ------------------------------------------------------------------ GPU / NPU (LiteRT CompiledModel)
+
+needs_compiled_model = pytest.mark.skipif(
+    not __import__("opennve.agents._litert", fromlist=["x"]).compiled_model_available(),
+    reason="needs ai-edge-litert 2.4 or newer",
+)
+
+
+def _interpreter_outputs(path, batch):
+    agent = opennve.Agent({"model": str(path), "device": "cpu"})
+    return agent.predict_batch(batch)[0]
+
+
+@needs_compiled_model
+def test_static_model_matches_the_original():
+    from ai_edge_litert import schema_py_generated as schema
+
+    from opennve.agents import CompiledModelBackend, static_model
+
+    data = (DATA / "agent_unet.tflite").read_bytes()
+    static = static_model(data, 4)
+    model = schema.ModelT.InitFromObj(schema.Model.GetRootAsModel(static, 0))
+    names = {value: key for key, value in vars(schema.BuiltinOperator).items() if not key.startswith("_")}
+    codes = [names[max(code.builtinCode, code.deprecatedBuiltinCode)] for code in model.operatorCodes]
+    used = {codes[op.opcodeIndex] for op in model.subgraphs[0].operators}
+    assert "TRANSPOSE_CONV" in used and not used & {"SHAPE", "STRIDED_SLICE", "PACK"}  # computed shape -> constant
+    assert all(tensor.shapeSignature is None for tensor in model.subgraphs[0].tensors)
+    assert list(model.subgraphs[0].tensors[model.subgraphs[0].inputs[0]].shape) == [4, 16, 16, 2]
+
+    batch = np.random.default_rng(2).random((6, 16, 16, 2)).astype(np.float32)
+    expected = _interpreter_outputs(DATA / "agent_unet.tflite", batch)
+    for size in (1, 4):
+        backend = CompiledModelBackend(DATA / "agent_unet.tflite", "cpu", batch_size=size)
+        assert backend.device == "cpu" and backend.input.shape == (None, 16, 16, 2)
+        np.testing.assert_allclose(backend.predict(batch)[0], expected, rtol=1e-4, atol=1e-5)  # 6 inputs: padded chunks
+        backend.close()
+    # quantized model (int8 input and output)
+    batch = np.random.default_rng(3).random((5, 16, 16, 2)).astype(np.float32)
+    backend = CompiledModelBackend(DATA / "agent_tiles_int8.tflite", "cpu", batch_size=2)
+    np.testing.assert_allclose(backend.predict(batch)[0], _interpreter_outputs(DATA / "agent_tiles_int8.tflite", batch), atol=1e-6)
+
+
+@needs_compiled_model
+def test_device_fallback_and_errors(monkeypatch):
+    from opennve.agents import _litert, backends
+
+    def unavailable(*args, **kwargs):
+        raise _litert.AcceleratorUnavailable("GPU: not available or cannot run agent_unet.tflite")
+
+    monkeypatch.setattr(_litert, "CompiledModelBackend", unavailable)
+    agent = opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "device": "gpu"}).load()
+    assert agent.device == "cpu" and "GPU: not available" in agent.backend.device_note
+    assert "CPU (GPU: not available" in agent.device_description()
+    with pytest.raises(RuntimeError, match="GPU: not available"):
+        opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "device": "gpu", "fallback": False}).load()
+    # "auto" only tries what the operating system reports
+    monkeypatch.setattr(backends, "_accelerator_present", lambda kind: False)
+    agent = opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "device": "auto"}).load()
+    assert agent.device == "cpu" and agent.backend.device_note == "no GPU or NPU found"
+    assert opennve.Agent({"model": str(DATA / "agent_unet.tflite")}).load().device == "cpu"
+    for bad in ({"device": "tpu"}, {"gpu_precision": "fp8"}, {"fallback": "yes"}, {"delegate": {"path": "x"}}):
+        with pytest.raises(ValueError):
+            opennve.AgentConfig(model="m.tflite", **bad)
+    config = opennve.AgentConfig(model="m.tflite", device="gpu", delegate={"library": "libedgetpu.so.1", "options": {"device": "usb"}})
+    assert config.to_dict()["device"] == "gpu" and opennve.AgentConfig.from_dict(config.to_dict()) == config
+    with pytest.raises(RuntimeError, match="delegate"):
+        opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "delegate": "/nonexistent/libdelegate.so"}).load()
+
+
+@needs_compiled_model
+def test_gpu_or_npu_if_available():
+    """Runs on the GPU / NPU where the machine has one (else the agent falls back to the CPU);
+    the classes must agree with the CPU."""
+    batch = np.random.default_rng(4).random((9, 16, 16, 2)).astype(np.float32)
+    expected = _interpreter_outputs(DATA / "agent_unet.tflite", batch)
+    for device in ("gpu", "npu"):
+        agent = opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "device": device}).load()
+        output = agent.predict_batch(batch)[0]
+        assert output.shape == expected.shape
+        if agent.device == "cpu":
+            assert agent.backend.device_note
+        assert np.mean(output.argmax(-1) == expected.argmax(-1)) > 0.97, agent.device_description()
+        agent.close()
+
+
+@needs_compiled_model
+def test_benchmark_agent(tmp_path):
+    config = opennve.AgentConfig(model=str(DATA / "agent_unet.tflite"))
+    results = opennve.benchmark_agent(config, devices=("cpu", "gpu"), count=8, repeat=1)
+    assert [result["requested"] for result in results] == ["cpu", "gpu"]
+    assert results[0]["device"] == "cpu" and results[0]["agreement"] == 1.0 and results[0]["ms_per_input"] > 0
+    assert results[1]["agreement"] > 0.97
+    report = opennve.benchmark_report(results)
+    assert "agreement" in report and "cpu" in report
+    json.dumps(results)
+    info = opennve.litert_accelerators()
+    assert info["version"] and info["compiled_model"] is True and isinstance(info["npu"], list)

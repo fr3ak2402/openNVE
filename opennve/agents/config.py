@@ -141,9 +141,11 @@ class PredictionConfig:
 
 
 _AGENT_FIELDS = (
-    "name", "model", "backend", "input", "frame", "batch_size", "threads", "call", "signature",
-    "safe_mode", "preprocess", "prediction",
+    "name", "model", "backend", "device", "fallback", "gpu_precision", "delegate", "input", "frame", "batch_size",
+    "threads", "call", "signature", "safe_mode", "preprocess", "prediction",
 )
+DEVICES = ("cpu", "gpu", "npu", "auto")
+GPU_PRECISIONS = ("fp16", "fp32")
 
 
 @dataclasses.dataclass
@@ -153,10 +155,20 @@ class AgentConfig:
     model: path of the model (.tflite, .keras, .h5 or a SavedModel directory). Relative paths
         are relative to the agent configuration file (base_dir).
     backend: "auto", "tflite" or "tensorflow".
+    device: where the model runs: "cpu" (default), "gpu", "npu" or "auto" (NPU, else GPU, else
+        CPU). TensorFlow Lite models use the LiteRT CompiledModel API for GPU and NPU (see
+        docs/accelerators.md); TensorFlow models are placed on the GPU with tf.device.
+    fallback: if the device is not available or cannot run the model: true (default) runs it on
+        the CPU (with a message), false raises an error.
+    gpu_precision: "fp16" (default, faster) or "fp32" (GPU only).
+    delegate: TensorFlow Lite delegate library for other accelerators (for instance the Coral
+        Edge TPU): {"library": "libedgetpu.so.1", "options": {...}} or just the library path.
     input: "tiles" (one model input per tile) or "frame" (the whole frame).
     frame: name of the frame configuration that builds the input (see run_agents), or None.
     batch_size: inputs per model call (None: all tiles of a frame at once).
-    threads: CPU threads of the TensorFlow Lite interpreter (None: default).
+    threads: CPU threads of the TensorFlow Lite interpreter: a number, or "auto" / null (default):
+        sized to the hardware (opennve.cpu_count()): all cores up to 4 for a single agent; in
+        workflows the agent step splits the cores between its threads (see docs/performance.md).
     call: TensorFlow (Keras) models: "predict" (model.predict) or "call" (model(x), lower latency
         for small batches).
     signature: SavedModel signature (default "serving_default").
@@ -165,10 +177,14 @@ class AgentConfig:
     model: str
     name: typing.Optional[str] = None
     backend: str = "auto"
+    device: typing.Optional[str] = None
+    fallback: bool = True
+    gpu_precision: str = "fp16"
+    delegate: typing.Union[str, dict, None] = None
     input: str = "tiles"
     frame: typing.Optional[str] = None
     batch_size: typing.Optional[int] = None
-    threads: typing.Optional[int] = None
+    threads: typing.Union[int, str, None] = None
     call: str = "predict"
     signature: str = "serving_default"
     safe_mode: bool = True
@@ -194,16 +210,34 @@ class AgentConfig:
             raise ValueError("agent.name must be a non-empty string")
         if self.backend != "auto" and self.backend not in _BACKENDS:
             raise ValueError(f"agent.backend must be one of auto, {', '.join(sorted(_BACKENDS))}")
+        if self.device is not None and self.device not in DEVICES:
+            raise ValueError(f"agent.device must be one of {', '.join(DEVICES)} or null")
+        if not isinstance(self.fallback, bool):
+            raise ValueError("agent.fallback must be true or false")
+        if self.gpu_precision not in GPU_PRECISIONS:
+            raise ValueError(f"agent.gpu_precision must be one of {', '.join(GPU_PRECISIONS)}")
+        if self.delegate is not None:
+            library = self.delegate.get("library") if isinstance(self.delegate, dict) else self.delegate
+            if not isinstance(library, str) or not library:
+                raise ValueError("agent.delegate must be a library path or {\"library\": ..., \"options\": {...}}")
+            if isinstance(self.delegate, dict) and (
+                set(self.delegate) - {"library", "options"} or not isinstance(self.delegate.get("options", {}), dict)
+            ):
+                raise ValueError("agent.delegate supports \"library\" and \"options\" (an object)")
         if not isinstance(self.safe_mode, bool):
             raise ValueError("agent.safe_mode must be true or false")
         if self.input not in INPUTS:
             raise ValueError(f"agent.input must be one of {', '.join(INPUTS)}")
         if self.frame is not None and (not isinstance(self.frame, str) or not self.frame):
             raise ValueError("agent.frame must be the name of a frame configuration or null")
-        for name in ("batch_size", "threads"):
-            value = getattr(self, name)
-            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value <= 0):
-                raise ValueError(f"agent.{name} must be a positive integer or null")
+        if self.batch_size is not None and (
+            isinstance(self.batch_size, bool) or not isinstance(self.batch_size, int) or self.batch_size <= 0
+        ):
+            raise ValueError("agent.batch_size must be a positive integer or null")
+        if self.threads is not None and self.threads != "auto" and (
+            isinstance(self.threads, bool) or not isinstance(self.threads, int) or self.threads <= 0
+        ):
+            raise ValueError("agent.threads must be a positive integer, \"auto\" or null")
         if self.call not in CALLS:
             raise ValueError(f"agent.call must be one of {', '.join(CALLS)}")
         if not isinstance(self.signature, str) or not self.signature:
@@ -240,6 +274,10 @@ class AgentConfig:
             "name": self.name,
             "model": self.model,
             "backend": self.backend,
+            "device": self.device,
+            "fallback": self.fallback,
+            "gpu_precision": self.gpu_precision,
+            "delegate": self.delegate,
             "input": self.input,
             "frame": self.frame,
             "batch_size": self.batch_size,

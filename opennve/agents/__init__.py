@@ -44,7 +44,9 @@ runner (run_agents), registry (register_backend, register_task).
 """
 
 from .agent import Agent, load_agent, load_agents
+from ._litert import AcceleratorUnavailable, CompiledModelBackend, litert_accelerators, static_model
 from .backends import Backend, ModelBackend, ModelInput, TensorFlowBackend, TFLiteBackend, create_backend
+from .benchmark import benchmark_agent, benchmark_report
 from .config import (
     AgentConfig,
     PredictionConfig,
@@ -60,6 +62,12 @@ from .runner import AgentStep, as_agents, process_window, run_agents
 from .tasks import TaskInput
 
 __all__ = [
+    "AcceleratorUnavailable",
+    "CompiledModelBackend",
+    "benchmark_agent",
+    "benchmark_report",
+    "litert_accelerators",
+    "static_model",
     "Agent",
     "AgentConfig",
     "AgentResult",

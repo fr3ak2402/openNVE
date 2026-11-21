@@ -282,3 +282,183 @@ def test_windows_align_first_event_and_ordered_log(raw_file, capsys):
     assert [int(line.split()[2]) for line in lines] == list(range(10))  # log in order
     with pytest.raises(ValueError, match="align must be"):
         opennve.Workflow.from_steps("x", [{"type": "raw", "path": "a.raw"}, {"type": "windows", "count": 2, "align": "end"}])
+
+
+# ------------------------------------------------------------------ automatic threads
+
+
+def test_cpu_count_and_system_info(monkeypatch):
+    monkeypatch.setenv("OPENNVE_CPUS", "6")
+    assert opennve.cpu_count() == 6
+    info = opennve.system_info()
+    assert info["usable_cpus"] == 6 and info["usable_cpus_source"] == "OPENNVE_CPUS" and info["logical_cpus"] >= 1
+    monkeypatch.setenv("OPENNVE_CPUS", "nonsense")
+    assert opennve.cpu_count() >= 1 and opennve.system_info()["usable_cpus_source"] != "OPENNVE_CPUS"
+    json.dumps(info)
+
+
+def _thread_steps(workflow):
+    return {step["name"]: step for step in workflow.thread_plan()["steps"]}
+
+
+@needs_tflite
+def test_automatic_threads(raw_file):
+    tiles = {"name": "t16", "mode": "binary", "tiles": {"size": 16, "min_events": 1}}
+    agent = {"name": "tiles", "model": str(DATA / "agent_tiles.tflite"), "frame": "t16"}
+    steps = [{"type": "raw", "path": str(raw_file), "block_ms": 250}, {"type": "windows", "count": 1},
+             {"type": "frames", "frame": "t16"}, {"type": "agent", "agent": "tiles"}, {"type": "collect"}]
+
+    def workflow(cpus, agents=(agent,), step_threads=None, extra=()):
+        agent_step = {**steps[3], **({"threads": step_threads} if step_threads else {})}
+        return opennve.Workflow.from_steps("auto", [*steps[:3], agent_step, *extra, steps[4]], frames=[tiles],
+                                           agents=list(agents), cpus=cpus)
+
+    # defaults ("auto"): the agent gets all cores with one interpreter thread each
+    plan = _thread_steps(workflow(12))
+    assert plan["raw"]["threads"] == 1 and plan["frames"]["threads"] == 2 and plan["frames"]["auto"]
+    assert plan["agent"]["threads"] == 12 and plan["agent"]["interpreter_threads"] == {"tiles": 1}
+    assert workflow(12).queue_size == 24 and workflow(2).queue_size == 8
+    assert _thread_steps(workflow(4))["frames"]["threads"] == 1
+    assert _thread_steps(workflow(64))["agent"]["threads"] == 16  # capped, ...
+    assert _thread_steps(workflow(64))["agent"]["interpreter_threads"] == {"tiles": 4}  # ... the rest to the interpreters
+    # fixed step threads: the interpreters share the cores
+    plan = _thread_steps(workflow(8, step_threads=2))
+    assert plan["agent"]["threads"] == 2 and not plan["agent"]["auto"] and plan["agent"]["interpreter_threads"] == {"tiles": 4}
+    # fixed interpreter threads: the step threads follow
+    plan = _thread_steps(workflow(8, agents=[{**agent, "threads": 2}]))
+    assert plan["agent"]["threads"] == 4 and plan["agent"]["interpreter_threads"] == {"tiles": 2}
+    # two agent steps share the cores
+    second = {"type": "agent", "agent": "tiles", "name": "second"}
+    plan = _thread_steps(workflow(8, extra=[second]))
+    assert plan["agent"]["threads"] == 4 and plan["second"]["threads"] == 4
+    # single-thread steps stay at one thread with "auto"
+    assert _thread_steps(opennve.Workflow.from_steps("w", [{**steps[0], "threads": "auto"}, steps[4]]))["raw"]["threads"] == 1
+    assert "agent            x12 (auto), interpreter threads tiles 1" in workflow(12).thread_report()
+    # the workflow runs with the planned threads and every agent instance has its interpreter threads
+    run = workflow(3).run()
+    assert len(run.results) == 4 and run.statistics()["cpus"] == 3
+    agents = [instance for stage in run._stages for instance in stage.instances if type(instance).__name__ == "AgentStep"]
+    assert len(agents) == 3 and all(step.configs[0].threads == 1 for step in agents)
+    with pytest.raises(ValueError, match="threads"):
+        opennve.Workflow.from_steps("w", [steps[0], {"type": "frames", "frame": "t16", "threads": "many"}, steps[4]], frames=[tiles])
+    with pytest.raises(ValueError, match="cpus"):
+        opennve.Workflow.from_steps("w", [steps[0], steps[4]], cpus=0)
+
+
+@needs_tflite
+def test_agent_threads_auto(monkeypatch):
+    monkeypatch.setenv("OPENNVE_CPUS", "3")
+    agent = opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"), threads="auto")).load()
+    assert agent.backend.threads == 3
+    monkeypatch.setenv("OPENNVE_CPUS", "32")
+    assert opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"))).load().backend.threads == 4
+    assert opennve.Agent(opennve.AgentConfig(model=str(DATA / "agent_tiles.tflite"), threads=2)).load().backend.threads == 2
+    assert opennve.AgentConfig(model="m.tflite", threads="auto").to_dict()["threads"] == "auto"
+    with pytest.raises(ValueError, match="threads"):
+        opennve.AgentConfig(model="m.tflite", threads="all")
+
+
+def test_system_info_memory_and_devices(tmp_path, monkeypatch):
+    from opennve import system
+
+    info = opennve.system_info()
+    for key in ("memory", "gpus", "npus", "model"):
+        assert key in info
+    assert info["memory"]["total"] is None or info["memory"]["total"] > 0
+    assert opennve.system_info(devices=False)["gpus"] == []
+    json.dumps(info)
+    assert system.format_bytes(16 * 1024**3) == "16.0 GB" and system.format_bytes(None) == "-"
+
+    # Linux: PCI GPU (AMD with VRAM), Raspberry Pi GPU, Intel NPU, Hailo
+    monkeypatch.setattr(system, "_nvidia_smi", lambda: [])
+
+    def device(name, driver, vendor=None, **files):
+        path = tmp_path / "devices" / name
+        (path / "drivers").mkdir(parents=True)
+        (path / "uevent").write_text(f"DRIVER={driver}\n")
+        if vendor:
+            (path / "vendor").write_text(vendor + "\n")
+        for key, value in files.items():
+            (path / key).write_text(value)
+        return path
+
+    def link(cls, name, target):
+        (tmp_path / "sys/class" / cls).mkdir(parents=True, exist_ok=True)
+        (tmp_path / "sys/class" / cls / name).mkdir()
+        (tmp_path / "sys/class" / cls / name / "device").symlink_to(target)
+
+    link("drm", "card0", device("amd", "amdgpu", "0x1002", mem_info_vram_total=str(8 * 1024**3)))
+    (tmp_path / "sys/class/drm/card0-HDMI-A-1").mkdir()
+    link("drm", "card1", device("v3d", "v3d"))
+    link("accel", "accel0", device("npu", "intel_vpu", "0x8086"))
+    (tmp_path / "dev").mkdir()
+    (tmp_path / "dev/hailo0").write_text("")
+    found = system._linux_devices(tmp_path)
+    assert [(d["type"], d["name"], d["vendor"]) for d in found] == [
+        ("gpu", "AMD GPU (amdgpu)", "AMD"),
+        ("gpu", "VideoCore GPU (V3D)", "Broadcom"),
+        ("npu", "Hailo AI accelerator", "Hailo"),
+        ("npu", "Intel NPU (AI Boost)", "Intel"),
+    ]
+    assert found[0]["memory"] == 8 * 1024**3
+
+    # Windows: graphics adapters and compute accelerators (WMI as JSON)
+    monkeypatch.setattr(system, "_powershell", lambda script: json.dumps({
+        "gpus": [{"Name": "Intel(R) Arc(TM) Graphics", "AdapterCompatibility": "Intel Corporation", "AdapterRAM": 2147483648},
+                 {"Name": "Microsoft Basic Display Adapter", "AdapterCompatibility": "Microsoft", "AdapterRAM": 0}],
+        "npus": {"Name": "Intel(R) AI Boost", "Manufacturer": "Intel Corporation"},
+    }))
+    found = system._windows_devices()
+    assert [(d["type"], d["name"]) for d in found] == [("gpu", "Intel(R) Arc(TM) Graphics"), ("npu", "Intel(R) AI Boost")]
+
+    # macOS (Apple silicon): GPU from system_profiler, Neural Engine
+    monkeypatch.setattr(system, "_run", lambda command, timeout=5: json.dumps({"SPDisplaysDataType": [
+        {"_name": "Apple M2", "sppci_model": "Apple M2", "sppci_cores": "10", "spdisplays_vendor": "sppci_vendor_Apple"}]}))
+    monkeypatch.setattr(system.platform, "machine", lambda: "arm64")
+    found = system._macos_devices()
+    assert [(d["type"], d["name"]) for d in found] == [("gpu", "Apple M2 (10 cores)"), ("npu", "Apple Neural Engine")]
+
+
+def test_system_processor_names_and_virtual_gpus(tmp_path, monkeypatch):
+    from opennve import system
+
+    cpuinfo = "processor\t: 0\nCPU implementer\t: 0x41\nCPU part\t: 0xd0b\n\nprocessor\t: 1\nCPU implementer\t: 0x41\nCPU part\t: 0xd05\nModel\t: Raspberry Pi 5\n"
+    monkeypatch.setattr(system, "_read", lambda path: cpuinfo if "cpuinfo" in str(path) else "")
+    assert system._linux_processor() == "ARM Cortex-A76 + ARM Cortex-A55"
+    monkeypatch.undo()
+    monkeypatch.setattr(system, "_nvidia_smi", lambda: [])
+    path = tmp_path / "devices/hyperv"
+    path.mkdir(parents=True)
+    (path / "uevent").write_text("DRIVER=hyperv_drm\n")
+    (tmp_path / "sys/class/drm/card0").mkdir(parents=True)
+    (tmp_path / "sys/class/drm/card0/device").symlink_to(path)
+    assert system._linux_devices(tmp_path) == []
+    monkeypatch.setattr(system, "_powershell", lambda script: json.dumps({"gpus": {"Name": "Microsoft Hyper-V Video"}, "npus": None}))
+    assert system._windows_devices() == []
+
+
+@needs_tflite
+def test_gpu_agents_get_two_threads(raw_file):
+    tiles = {"name": "t16", "mode": "binary", "tiles": {"size": 16, "min_events": 1}}
+    agent = {"name": "tiles", "model": str(DATA / "agent_tiles.tflite"), "frame": "t16", "device": "gpu"}
+    steps = [{"type": "raw", "path": str(raw_file), "block_ms": 250}, {"type": "windows", "count": 1},
+             {"type": "frames", "frame": "t16"}, {"type": "agent", "agent": "tiles"}, {"type": "collect"}]
+    workflow = opennve.Workflow.from_steps("gpu", steps, frames=[tiles], agents=[agent], cpus=8)
+    plan = {step["name"]: step for step in workflow.thread_plan()["steps"]}
+    assert plan["agent"]["threads"] == 2 and plan["agent"]["devices"] == {"tiles": "gpu"}
+    assert "device tiles gpu" in workflow.thread_report()
+    run = opennve.Workflow.from_steps("gpu", steps, frames=[tiles], agents=[agent], cpus=2).run()
+    assert len(run.results) == 4  # runs on the GPU or falls back to the CPU
+
+
+def test_os_info(monkeypatch):
+    from opennve import system
+
+    info = opennve.os_info()
+    assert info["name"] and info["family"] in ("Linux", "macOS", "Windows") and info["kernel"]
+    assert opennve.system_info(devices=False)["os"] == info
+    monkeypatch.setattr(system.sys, "platform", "darwin")
+    monkeypatch.setattr(system.platform, "mac_ver", lambda: ("15.1", ("", "", ""), "arm64"))
+    monkeypatch.setattr(system, "_run", lambda command, timeout=5: "24B83\n")
+    assert system.os_info() == {"family": "macOS", "name": "macOS 15.1 Sequoia", "version": "15.1", "build": "24B83",
+                                "kernel": "Darwin " + system.platform.release()}

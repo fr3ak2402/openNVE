@@ -60,6 +60,25 @@ class Agent:
         return self.load()._backend
 
     @property
+    def device(self) -> str:
+        """Where the model runs: "cpu", "gpu", "npu", "gpu+cpu", "delegate" (loads the model)."""
+        return self.backend.device
+
+    def device_description(self) -> str:
+        """For example "GPU (batch 8)" or "CPU (GPU: not available or cannot run model.tflite)"."""
+        backend = self.backend
+        text = backend.device.upper().replace("+CPU", " + CPU")
+        if backend.device == "delegate":
+            library = self.config.delegate["library"] if isinstance(self.config.delegate, dict) else self.config.delegate
+            text = f"delegate {library}"
+        batch = getattr(backend, "batch_size", None)
+        if backend.device != "cpu" and batch:
+            text += f" (batch {batch})"
+        if backend.device_note:
+            text += f" ({backend.device_note})"
+        return text
+
+    @property
     def input(self) -> ModelInput:
         """Model input (shape and dtype)."""
         return self.backend.input

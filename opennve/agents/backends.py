@@ -24,9 +24,15 @@ class ModelInput:
 
 
 class Backend:
-    """Runs a model on a batch: predict(batch) -> list of output arrays (first dimension = batch)."""
+    """Runs a model on a batch: predict(batch) -> list of output arrays (first dimension = batch).
+
+    device: where the model runs ("cpu", "gpu", "npu", "gpu+cpu" / "npu+cpu" if some operations
+    run on the CPU, "delegate"); device_note: why another device than the requested one is used.
+    """
 
     input: ModelInput
+    device: str = "cpu"
+    device_note: typing.Optional[str] = None
 
     def predict(self, batch: np.ndarray) -> list[np.ndarray]:  # pragma: no cover - interface
         raise NotImplementedError
@@ -61,6 +67,23 @@ def _tflite_interpreter_class():
     )
 
 
+def _load_delegate(delegate):
+    """Loads a TensorFlow Lite delegate library ({"library": ..., "options": {...}} or a path)."""
+    library = delegate["library"] if isinstance(delegate, dict) else delegate
+    options = {str(key): str(value) for key, value in (delegate.get("options") or {}).items()} if isinstance(delegate, dict) else {}
+    try:
+        from ai_edge_litert.interpreter import load_delegate
+    except ImportError:
+        try:
+            from tflite_runtime.interpreter import load_delegate  # type: ignore
+        except ImportError:
+            load_delegate = _import_tensorflow().lite.experimental.load_delegate
+    try:
+        return load_delegate(library, options)
+    except (ValueError, OSError, RuntimeError) as error:
+        raise RuntimeError(f"cannot load the TensorFlow Lite delegate {library!r}: {error}") from error
+
+
 class TFLiteBackend(Backend):
     """TensorFlow Lite model (.tflite), run with LiteRT, tflite_runtime or tf.lite.
 
@@ -69,11 +92,15 @@ class TFLiteBackend(Backend):
     dimension are resized to the batch.
     """
 
-    def __init__(self, path: PathLike, threads: typing.Optional[int] = None):
+    def __init__(self, path: PathLike, threads: typing.Union[int, str, None] = None, delegate=None):
+        from ..system import is_auto, standalone_interpreter_threads
+
         Interpreter = _tflite_interpreter_class()
-        kwargs = {"model_path": os.fspath(path)}
-        if threads is not None:
-            kwargs["num_threads"] = threads
+        self.threads = standalone_interpreter_threads() if is_auto(threads) else int(threads)
+        kwargs = {"model_path": os.fspath(path), "num_threads": self.threads}
+        if delegate is not None:
+            kwargs["experimental_delegates"] = [_load_delegate(delegate)]
+            self.device = "delegate"
         self.interpreter = Interpreter(**kwargs)
         self.interpreter.allocate_tensors()
         details = self.interpreter.get_input_details()
@@ -163,10 +190,31 @@ class TensorFlowBackend(Backend):
     call="call"), SavedModel directories run with their serving signature."""
 
     def __init__(
-        self, path: PathLike, call: str = "predict", signature: str = "serving_default", safe_mode: bool = True
+        self, path: PathLike, call: str = "predict", signature: str = "serving_default", safe_mode: bool = True,
+        device: typing.Optional[str] = None, fallback: bool = True,
     ):
         path = pathlib.Path(path)
         self.call = call
+        self._device_name = None
+        if device is not None:
+            tf = _import_tensorflow()
+            gpus = tf.config.list_physical_devices("GPU")
+            wanted = "gpu" if device == "auto" and gpus else ("cpu" if device == "auto" else device)
+            if wanted == "npu":
+                reason = "TensorFlow models cannot run on an NPU (convert the model to .tflite)"
+                if not fallback:
+                    raise RuntimeError(reason)
+                wanted, self.device_note = "cpu", reason
+            if wanted == "gpu" and not gpus:
+                reason = "TensorFlow finds no GPU (CUDA on Linux, tensorflow-metal on macOS)"
+                if not fallback:
+                    raise RuntimeError(reason)
+                wanted, self.device_note = "cpu", reason
+            self.device = wanted
+            self._device_name = "/GPU:0" if wanted == "gpu" else "/CPU:0"
+        else:
+            tf = None
+            self.device = "gpu" if _tensorflow_has_gpu() else "cpu"
         self.model = None
         self._function = None
         if path.is_dir():
@@ -197,6 +245,12 @@ class TensorFlowBackend(Backend):
             self.input = ModelInput(shape=tuple(inputs[0].shape), dtype=np.dtype(dtype), name=getattr(inputs[0], "name", ""))
 
     def predict(self, batch: np.ndarray) -> list[np.ndarray]:
+        if self._device_name is None:
+            return self._predict(batch)
+        with _import_tensorflow().device(self._device_name):
+            return self._predict(batch)
+
+    def _predict(self, batch: np.ndarray) -> list[np.ndarray]:
         if len(batch) == 0:
             return []
         batch = np.ascontiguousarray(batch, dtype=self.input.dtype)
@@ -249,10 +303,75 @@ class ModelBackend(Backend):
         return [np.asarray(outputs)]
 
 
-register_backend("tflite", lambda config: TFLiteBackend(config.model_path, config.threads), [".tflite"])
+def _tensorflow_has_gpu() -> bool:
+    try:
+        return bool(_import_tensorflow().config.list_physical_devices("GPU"))
+    except Exception:
+        return False
+
+
+def _accelerator_present(kind: str) -> bool:
+    """Is there a GPU / NPU that LiteRT can use? (for "device": "auto")"""
+    import platform
+    import sys
+
+    from ..system import accelerators
+    from ._litert import litert_accelerators
+
+    if kind == "npu":  # an NPU and the runtime of a vendor (the Apple Neural Engine has none)
+        return any(device["type"] == "npu" for device in accelerators()) and any(
+            npu["sdk_installed"] for npu in litert_accelerators()["npu"]
+        )
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        return True  # Metal
+    return any(device["type"] == "gpu" for device in accelerators())
+
+
+def create_tflite_backend(config: AgentConfig) -> Backend:
+    """TensorFlow Lite backend for the device of the configuration (see AgentConfig.device)."""
+    from ..system import is_auto, standalone_interpreter_threads
+    from ._litert import AcceleratorUnavailable, CompiledModelBackend
+
+    path = config.model_path
+    if config.delegate is not None:
+        return TFLiteBackend(path, config.threads, config.delegate)
+    device = config.device or "cpu"
+    if device == "cpu":
+        return TFLiteBackend(path, config.threads)
+    threads = standalone_interpreter_threads() if is_auto(config.threads) else int(config.threads)
+    if device == "auto":  # only devices the operating system reports
+        candidates = [kind for kind in ("npu", "gpu") if _accelerator_present(kind)]
+    else:
+        candidates = [device]
+    reasons = []
+    for kind in candidates:
+        batch_size = config.batch_size or (8 if kind == "gpu" else 1)
+        # first everything on the accelerator; a GPU may also share the model with the CPU (not
+        # with "auto"). An NPU is only used for the whole model: with the CPU in the set, LiteRT
+        # cannot tell whether the NPU runs anything at all.
+        attempts = [False, True] if kind == "gpu" and device != "auto" else [False]
+        for cpu_fallback in attempts:
+            try:
+                return CompiledModelBackend(path, kind, batch_size, threads, config.gpu_precision, cpu_fallback)
+            except AcceleratorUnavailable as error:
+                reasons.append(str(error))
+            except ImportError as error:
+                reasons.append(str(error))
+                break
+    if device == "auto" and not candidates:
+        reasons.append("no GPU or NPU found")
+    if not config.fallback and device != "auto":
+        raise RuntimeError(f"agent {config.name}: " + "; ".join(dict.fromkeys(reasons)))
+    backend = TFLiteBackend(path, config.threads)
+    backend.device_note = "; ".join(dict.fromkeys(reasons)) or None
+    return backend
+
+
+register_backend("tflite", create_tflite_backend, [".tflite"])
 register_backend(
     "tensorflow",
-    lambda config: TensorFlowBackend(config.model_path, config.call, config.signature, config.safe_mode),
+    lambda config: TensorFlowBackend(config.model_path, config.call, config.signature, config.safe_mode,
+                                     config.device, config.fallback),
     [".keras", ".h5", ".hdf5"],
 )
 

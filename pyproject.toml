@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennve"
-version = "1.0.0"
+version = "1.1.0"
 description = "Open Neuromorphic Vision Engine: event cameras, .raw and HDF5 recordings, filters, time windows, frames and tiles, TensorFlow agents and multithreaded workflows"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -32,10 +32,11 @@ dependencies = [
     "h5py>=3.12; python_version < '3.15'",
     # Display (frame.to_image, examples), resizing of agent inputs
     "opencv-python>=4.10",
-    # Agents: TensorFlow Lite models (.tflite) with LiteRT. LiteRT has wheels for Windows x64,
-    # Linux x64 / ARM64 and macOS ARM64 (Python 3.14); elsewhere it is skipped and .tflite models
-    # run with TensorFlow (extra "tensorflow")
-    "ai-edge-litert>=2.3; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')",
+    # Agents: TensorFlow Lite models (.tflite) with LiteRT, on the CPU, the GPU (2.4: WebGPU on
+    # Windows / Linux, Metal on macOS) or an NPU (vendor SDK, extras "npu-intel" / "npu-qualcomm").
+    # LiteRT has wheels for Windows x64 / ARM64, Linux x64 / ARM64 and macOS ARM64 (Python 3.14);
+    # elsewhere it is skipped and .tflite models run with TensorFlow (extra "tensorflow")
+    "ai-edge-litert>=2.4; python_version < '3.15' and (sys_platform != 'darwin' or platform_machine == 'arm64')",
 ]
 
 [project.urls]
@@ -52,7 +53,13 @@ pandas = ["pandas>=2.2", "tables>=3.10"]
 # the nightly build (tf-nightly, includes Keras 3); see docs/agents.md
 tensorflow = ["tf-nightly"]
 # LiteRT on its own (already a dependency where wheels exist)
-tflite = ["ai-edge-litert>=2.3"]
+tflite = ["ai-edge-litert>=2.4"]
+# NPU runtimes for agents with "device": "npu" (see docs/accelerators.md).
+# Intel Core Ultra (AI Boost, OpenVINO): the SDK needs the OpenVINO nightly index:
+#   pip install "opennve[npu-intel]" --extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
+npu-intel = ["ai-edge-litert[npu-intel]>=2.4"]
+# Qualcomm (Hexagon NPU) on Linux ARM64
+npu-qualcomm = ["ai-edge-litert-sdk-qualcomm"]
 test = ["pytest"]
 all = ["pandas>=2.2", "tables>=3.10", "tf-nightly", "pytest"]
 
