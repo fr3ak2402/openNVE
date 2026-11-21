@@ -16,6 +16,9 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
   probabilities are computed only for the selected pixels; `Prediction.output` and
   `AgentResult.outputs` are still the probabilities, computed on first access
 - Faster softmax (in place, float32)
+- Frames about 4.5 × faster (1.4 instead of 6.2 ms for a 1280 × 720 time surface with 80 × 80
+  tiles): the time surface is computed for the events only, not for every pixel, and the selected
+  tiles are cut out with one copy; results unchanged
 - New guide [docs/performance.md](docs/performance.md): int8 models (~2.4 × faster than float16),
   fewer tiles, threads
 

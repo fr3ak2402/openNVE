@@ -6,7 +6,7 @@ agent → labels → CSV, U-Net on 80 × 80 tiles, measured on an x86 CPU):
 | Part | Time per tile |
 |---|---|
 | Reading the events | ~0.01 ms |
-| Frame and tiles | ~0.1 ms |
+| Frame and tiles | ~0.01 ms (openNVE 1.0.0: ~0.05 ms) |
 | Preparing the input | ~0.01 ms |
 | **Inference (TensorFlow Lite, float16 model)** | **~4 ms** |
 | Decoding the segmentation | ~0.2 ms (openNVE 1.0.0: ~0.55 ms) |
