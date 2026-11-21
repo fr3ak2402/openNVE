@@ -417,3 +417,21 @@ def test_system_info_memory_and_devices(tmp_path, monkeypatch):
     monkeypatch.setattr(system.platform, "machine", lambda: "arm64")
     found = system._macos_devices()
     assert [(d["type"], d["name"]) for d in found] == [("gpu", "Apple M2 (10 cores)"), ("npu", "Apple Neural Engine")]
+
+
+def test_system_processor_names_and_virtual_gpus(tmp_path, monkeypatch):
+    from opennve import system
+
+    cpuinfo = "processor\t: 0\nCPU implementer\t: 0x41\nCPU part\t: 0xd0b\n\nprocessor\t: 1\nCPU implementer\t: 0x41\nCPU part\t: 0xd05\nModel\t: Raspberry Pi 5\n"
+    monkeypatch.setattr(system, "_read", lambda path: cpuinfo if "cpuinfo" in str(path) else "")
+    assert system._linux_processor() == "ARM Cortex-A76 + ARM Cortex-A55"
+    monkeypatch.undo()
+    monkeypatch.setattr(system, "_nvidia_smi", lambda: [])
+    path = tmp_path / "devices/hyperv"
+    path.mkdir(parents=True)
+    (path / "uevent").write_text("DRIVER=hyperv_drm\n")
+    (tmp_path / "sys/class/drm/card0").mkdir(parents=True)
+    (tmp_path / "sys/class/drm/card0/device").symlink_to(path)
+    assert system._linux_devices(tmp_path) == []
+    monkeypatch.setattr(system, "_powershell", lambda script: json.dumps({"gpus": {"Name": "Microsoft Hyper-V Video"}, "npus": None}))
+    assert system._windows_devices() == []

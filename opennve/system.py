@@ -103,18 +103,50 @@ def _physical_cores() -> typing.Optional[int]:
     return None
 
 
+# ARM CPU parts (/proc/cpuinfo "CPU part" of implementer 0x41)
+_ARM_PARTS = {"0xd03": "Cortex-A53", "0xd04": "Cortex-A35", "0xd05": "Cortex-A55", "0xd07": "Cortex-A57",
+              "0xd08": "Cortex-A72", "0xd09": "Cortex-A73", "0xd0a": "Cortex-A75", "0xd0b": "Cortex-A76",
+              "0xd0c": "Neoverse-N1", "0xd0d": "Cortex-A77", "0xd40": "Neoverse-V1", "0xd41": "Cortex-A78",
+              "0xd44": "Cortex-X1", "0xd46": "Cortex-A510", "0xd47": "Cortex-A710", "0xd48": "Cortex-X2",
+              "0xd49": "Neoverse-N2", "0xd4b": "Cortex-A78C", "0xd4d": "Cortex-A715", "0xd4e": "Cortex-X3",
+              "0xd4f": "Neoverse-V2", "0xd80": "Cortex-A520", "0xd81": "Cortex-A720", "0xd82": "Cortex-X4",
+              "0xd84": "Neoverse-V3", "0xd8e": "Neoverse-N3", "0xd87": "Cortex-A725"}
+
+
+def _linux_processor() -> str:
+    parts: list[str] = []
+    implementer = None
+    for line in _read("/proc/cpuinfo").splitlines():
+        key, _, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if key == "model name" and value:
+            return value
+        if key == "CPU implementer":
+            implementer = value
+        if key == "CPU part" and value.lower() in _ARM_PARTS and implementer == "0x41":
+            name = "ARM " + _ARM_PARTS[value.lower()]
+            if name not in parts:
+                parts.append(name)
+    if parts:  # big.LITTLE: all core types
+        return " + ".join(parts)
+    output = _run(["lscpu"], timeout=2)
+    match = re.search(r"^Model name:\s*(.+)$", output, re.M)
+    return match.group(1).strip() if match and match.group(1).strip() != "-" else ""
+
+
 def _processor() -> str:
     name = platform.processor()
     try:
         if sys.platform == "darwin":
             output = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=2)
             name = output.stdout.strip() or name
+        elif sys.platform == "win32":
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as key:
+                name = str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip() or name
         elif sys.platform.startswith("linux"):
-            for line in pathlib.Path("/proc/cpuinfo").read_text().splitlines():
-                key, _, value = line.partition(":")
-                if key.strip() in ("model name", "Model", "Hardware"):
-                    name = value.strip()
-                    break
+            name = _linux_processor() or name
     except (OSError, subprocess.SubprocessError):
         pass
     return name or platform.machine()
@@ -225,6 +257,14 @@ _SOC_GPUS = {
 }
 
 
+# display adapters of virtual machines and server management controllers: not listed
+_VIRTUAL_GPU_DRIVERS = {"simple-framebuffer", "simpledrm", "vkms", "virtio_gpu", "virtio-pci", "bochs-drm", "bochs",
+                        "qxl", "hyperv_drm", "hyperv_fb", "vmwgfx", "vboxvideo", "cirrus", "cirrus-qemu", "ast",
+                        "mgag200", "xen-fbfront"}
+_VIRTUAL_GPU_NAMES = ("Microsoft Basic", "Remote Display", "Hyper-V", "VMware SVGA", "VirtualBox", "Parallels Display",
+                      "Paravirtualized", "Red Hat QXL", "Citrix Indirect")
+
+
 def _device(kind: str, name: str, vendor: typing.Optional[str] = None, memory: typing.Optional[int] = None,
              driver: typing.Optional[str] = None) -> dict[str, typing.Any]:
     return {"type": kind, "name": name, "vendor": vendor, "memory": memory, "driver": driver}
@@ -276,6 +316,8 @@ def _linux_devices(root: pathlib.Path = pathlib.Path("/")) -> list[dict[str, typ
             continue
         if vendor == "NVIDIA" and any(item["vendor"] == "NVIDIA" for item in devices):
             continue  # already listed by nvidia-smi
+        if driver in _VIRTUAL_GPU_DRIVERS:
+            continue
         if vendor:
             memory = _read(device / "mem_info_vram_total")
             name = f"{vendor} GPU ({driver})" if driver else f"{vendor} GPU"
@@ -283,7 +325,7 @@ def _linux_devices(root: pathlib.Path = pathlib.Path("/")) -> list[dict[str, typ
         elif driver in _SOC_GPUS:
             vendor, name = _SOC_GPUS[driver]
             devices.append(_device("gpu", name, vendor, None, driver))
-        elif driver and driver not in ("simple-framebuffer", "simpledrm", "vkms", "virtio_gpu", "bochs-drm", "qxl"):
+        elif driver and driver not in _VIRTUAL_GPU_DRIVERS:
             devices.append(_device("gpu", f"GPU ({driver})", None, None, driver))
     npu_drivers = set()
     for accel in sorted((root / "sys/class/accel").glob("accel*")):
@@ -309,6 +351,8 @@ def _macos_devices() -> list[dict[str, typing.Any]]:
         data = {}
     for item in data.get("SPDisplaysDataType", []):
         name = item.get("sppci_model") or item.get("_name") or "GPU"
+        if any(virtual in name for virtual in _VIRTUAL_GPU_NAMES):
+            continue
         cores = item.get("sppci_cores")
         vendor = str(item.get("spdisplays_vendor", "")).replace("sppci_vendor_", "").capitalize() or None
         memory = None
@@ -342,7 +386,7 @@ def _windows_devices() -> list[dict[str, typing.Any]]:
     devices.extend(nvidia)
     for item in items(data.get("gpus")):
         name = item.get("Name") or "GPU"
-        if "Microsoft Basic" in name or "Remote Display" in name:
+        if any(virtual in name for virtual in _VIRTUAL_GPU_NAMES):
             continue
         if nvidia and "NVIDIA" in name:
             continue
