@@ -1,6 +1,6 @@
 """Version and build information.
 
-    opennve.__version__        "1.1.0"
+    opennve.__version__        "1.2.0"
     opennve.BUILD_NUMBER       "324.2026"  (<day of year>.<year> of the build, UTC)
     opennve.version_info()     everything as a dictionary (also: opennve version on the command line)
 
@@ -19,7 +19,7 @@ import subprocess
 import sys
 import typing
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 def format_build_number(date: typing.Union[datetime.date, datetime.datetime]) -> str:
@@ -111,5 +111,5 @@ def version_info() -> dict[str, typing.Any]:
 
 
 def version_string() -> str:
-    """For instance "openNVE 1.1.0 (build 324.2026)"."""
+    """For instance "openNVE 1.2.0 (build 324.2026)"."""
     return f"openNVE {__version__} (build {BUILD_NUMBER})"
