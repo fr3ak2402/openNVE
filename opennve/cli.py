@@ -131,13 +131,15 @@ def _version(args) -> int:
     for key, label, extra in (
         ("tensorflow", "TensorFlow", "tensorflow"),
         ("pytorch", "PyTorch", "pytorch"),
+        ("hailo", "HailoRT (Hailo)", "tools/build_hailort_python.sh"),
         ("pandas", "pandas", "pandas"),
         ("tables", "PyTables", "pandas"),
         ("hdf5plugin", "hdf5plugin", "hdf5"),
         ("npu_intel", "NPU Intel SDK", "npu-intel"),
         ("npu_qualcomm", "NPU Qualcomm SDK", "npu-qualcomm"),
     ):
-        print(f"  {label:<21} {info[key] or f'- (extra {extra})'}")
+        hint = extra if extra.endswith(".sh") else f"extra {extra}"
+        print(f"  {label:<21} {info[key] or f'- ({hint})'}")
     return 0
 
 
@@ -194,6 +196,14 @@ def _system(args) -> int:
         if pytorch.get("gpu_name"):
             gpu += f" ({pytorch['gpu_name']})"
         print(f"  PyTorch {pytorch['version']:<14}{'GPU via ' + gpu if gpu else 'CPU only (no GPU found)'}")
+    hailo = info.get("hailo") or {}
+    has_hailo = any(device.get("vendor") == "Hailo" for device in info.get("npus", []))
+    if hailo.get("installed"):
+        devices = len(hailo.get("devices") or [])
+        state = f"{devices} Hailo device{'s' if devices != 1 else ''}" if devices else "no Hailo device found"
+        print(f"  HailoRT {str(hailo.get('version')):<14}{state} (.hef models)")
+    elif has_hailo:
+        print("  HailoRT               Python API not installed: tools/build_hailort_python.sh (docs/accelerators.md)")
     return 0
 
 

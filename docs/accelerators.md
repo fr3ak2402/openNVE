@@ -10,6 +10,9 @@ with openNVE):
 | `npu` | Intel Core Ultra (AI Boost, extra `npu-intel`) | x64: Intel Core Ultra (extra `npu-intel`); ARM64: Qualcomm (Hexagon, extra `npu-qualcomm`) | – (the Apple Neural Engine is not supported by LiteRT) |
 | `delegate` | TensorFlow Lite delegate libraries, for instance the Coral Edge TPU (`libedgetpu`) | | |
 
+Hailo accelerators (Raspberry Pi AI Kit / AI HAT+: Hailo-8L, Hailo-8) run compiled Hailo models
+(`.hef`) with HailoRT, see [Hailo](#hailo).
+
 `opennve system` shows the GPUs and NPUs of the computer and what the installed LiteRT supports
 (example):
 
@@ -144,6 +147,57 @@ pip install "opennve[npu-qualcomm]"
 and the NPU driver of the operating system (Windows: device manager → *Neural processors*;
 Linux: Intel `intel_vpu` / `/dev/accel`).
 
+## Hailo
+
+The Raspberry Pi AI Kit and AI HAT+ (Hailo-8L 13 TOPS, Hailo-8 26 TOPS) run agents with compiled
+Hailo models (`.hef`). openNVE runs them with HailoRT, Hailo's runtime; LiteRT and PyTorch cannot
+use Hailo accelerators.
+
+```json
+{"name": "prototyp", "model": "../models/unet_hailo8l.hef", "frame": "tiles80",
+ "prediction": {"task": "segmentation", "activation": "softmax", "target_classes": [2]}}
+```
+
+`"backend": "auto"` picks the `hailo` backend for `.hef` files; `"device"` can be left out (or
+`"npu"`): a `.hef` runs only on the Hailo accelerator. `batch_size` (default 8) is the Hailo batch.
+
+**The model.** A `.hef` is compiled from a `.tflite` or ONNX model with the Hailo Dataflow
+Compiler (Hailo AI Software Suite, Linux x86 only, free account at the Hailo Developer Zone),
+for the chip of the board (`hailo8l` for the AI Kit / AI HAT+ 13 TOPS, `hailo8` for 26 TOPS).
+The compiler quantizes the model (8 bit, single layers 16 bit) with calibration data: use
+tiles of your recordings (for instance `agent.prepare(frame.tiles)` of a few hundred windows,
+saved with `numpy.save`), and compare the results with the `.tflite` model
+(`opennve benchmark`, or the CSV of a workflow) – quantization can change results. HailoRT
+converts the float32 inputs and outputs of openNVE to the quantized values and back, so the
+`preprocess` and `prediction` settings stay the same as for the `.tflite` model. Inputs and
+outputs are channels last (`nhwc`).
+
+**Installation on the Raspberry Pi 5.** HailoRT comes with Raspberry Pi OS, its Python API
+(`hailo_platform`) only for the system Python. For the Python 3.14 of openNVE, build the Python API
+with `tools/build_hailort_python.sh` (in the openNVE repository; takes a few minutes):
+
+```sh
+sudo apt install hailo-all                     # driver, firmware and HailoRT (reboot afterwards)
+sudo apt install git cmake g++                 # build tools; plus the headers of your Python 3.14
+source ~/opennve/.venv/bin/activate            # the environment openNVE is installed in
+bash tools/build_hailort_python.sh             # builds and installs hailo_platform for this Python
+opennve system
+```
+
+```text
+  NPU                   Hailo AI accelerator (hailo_pci)
+  HailoRT 4.23.0        1 Hailo device (.hef models)
+```
+
+The script compiles the Python bindings of the installed HailoRT version (from the HailoRT
+source code on GitHub) with pybind11 3 and installs them as a wheel (`hailort`). Run it again after
+a HailoRT update: the Python API must have the same version as the library. HailoRT 4.x supports
+the Hailo-8L and Hailo-8 (HailoRT 5 is for the Hailo-10H of the AI HAT+ 2).
+
+**Workflows.** Hailo agents get 2 workflow threads (like GPU agents); all Hailo agents and threads
+of a program share the device, HailoRT switches between them. `opennve benchmark agents.json
+--devices npu` measures the model on the Hailo.
+
 ## Limits
 
 - **TensorFlow in the same program:** the LiteRT GPU accelerator crashes in a program that has
@@ -155,7 +209,8 @@ Linux: Intel `intel_vpu` / `/dev/accel`).
   CUDA (NVIDIA; AMD with the ROCm build), Apple MPS or Intel XPU, whichever the installed PyTorch
   supports (`opennve system` shows it). `"gpu_precision": "fp16"` runs with `torch.autocast`.
   PyTorch has no NPU support. See [Agents](agents.md#pytorch-models).
-- **Hailo** (Raspberry Pi AI Kit / HAT) needs models compiled with Hailo's tools (`.hef`) and is
-  not supported. The **Apple Neural Engine** needs Core ML models.
+- **Hailo**: only compiled `.hef` models; openNVE does not compile them (Hailo Dataflow
+  Compiler, see [Hailo](#hailo)). The Hailo-10H (AI HAT+ 2, HailoRT 5) is not tested. The
+  **Apple Neural Engine** needs Core ML models.
 - `fp16` on the GPU can change the class of single pixels close to a decision boundary;
   `"gpu_precision": "fp32"` gives the results of the CPU.

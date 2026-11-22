@@ -95,7 +95,7 @@ Ubuntu 24.04.1 LTS (x86_64), Python 3.14.1
 - `usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
 - RAM: installed and available memory, plus the memory limit of a container.
 - GPUs and NPUs are found through the operating system, without extra packages: on Linux `nvidia-smi`, `/sys/class/drm` (also Raspberry Pi, Mali, Jetson) and NPUs in `/sys/class/accel` (Intel AI Boost, AMD Ryzen AI), Hailo (Raspberry Pi AI Kit / HAT), Coral Edge TPU and Rockchip NPU; on macOS the GPU of the Mac and the Apple Neural Engine; on Windows the graphics adapters and the "compute accelerators" of the device manager (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon).
-- The last line shows what the installed LiteRT can use: the GPU (WebGPU, Metal) and the NPU runtimes, see [GPU and NPU](accelerators.md).
+- The last lines show what the installed LiteRT can use (the GPU via WebGPU / Metal and the NPU runtimes), PyTorch (CUDA, Apple MPS, Intel XPU) and HailoRT (Hailo devices for `.hef` models), see [GPU and NPU](accelerators.md).
 
 ## `opennve benchmark <agents.json>`
 

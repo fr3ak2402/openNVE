@@ -69,6 +69,8 @@ class Agent:
         """For example "GPU (batch 8)" or "CPU (GPU: not available or cannot run model.tflite)"."""
         backend = self.backend
         text = backend.device.upper().replace("+CPU", " + CPU")
+        if getattr(backend, "device_label", None):
+            text += f" {backend.device_label}"
         if backend.device == "delegate":
             library = self.config.delegate["library"] if isinstance(self.config.delegate, dict) else self.config.delegate
             text = f"delegate {library}"

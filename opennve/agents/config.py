@@ -153,10 +153,10 @@ GPU_PRECISIONS = ("fp16", "fp32")
 class AgentConfig:
     """Configuration of one agent (see the module documentation for the JSON format).
 
-    model: path of the model (.tflite, .keras, .h5, a SavedModel directory, or PyTorch: .pt2
-        from torch.export, .pt / .pth TorchScript). Relative paths
+    model: path of the model (.tflite, .keras, .h5, a SavedModel directory, PyTorch: .pt2
+        from torch.export, .pt / .pth TorchScript, or Hailo: .hef). Relative paths
         are relative to the agent configuration file (base_dir).
-    backend: "auto", "tflite", "tensorflow" or "pytorch".
+    backend: "auto", "tflite", "tensorflow", "pytorch" or "hailo".
     device: where the model runs: "cpu" (default), "gpu", "npu" or "auto" (NPU, else GPU, else
         CPU). A list, for instance ["gpu", "cpu"], uses several devices at the same time in a
         workflow (some agent threads on the GPU, the others on the CPU); a single agent uses the
@@ -277,7 +277,7 @@ class AgentConfig:
             return "tensorflow"
         raise ValueError(
             f"agent {self.name}: cannot choose a backend for {self.model!r} "
-            "(.tflite, .keras, .h5, .pt2, .pt, .pth or a SavedModel directory), set \"backend\""
+            "(.tflite, .keras, .h5, .pt2, .pt, .pth, .hef or a SavedModel directory), set \"backend\""
         )
 
     # JSON

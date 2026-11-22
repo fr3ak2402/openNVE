@@ -25,10 +25,10 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 - Display frames and tiles as images (`frame.to_image`).
 
 ### Neural networks (agents)
-- **Run models** on the tiles or the whole frame of every window: TensorFlow Lite (`.tflite`, LiteRT), TensorFlow / Keras (`.keras`, `.h5`, SavedModel) and PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`), configured in `agents.json`.
+- **Run models** on the tiles or the whole frame of every window: TensorFlow Lite (`.tflite`, LiteRT), TensorFlow / Keras (`.keras`, `.h5`, SavedModel) PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`) and compiled Hailo models (`.hef`), configured in `agents.json`.
 - **Tasks:** classification and segmentation (class map, pixels and events of the target classes, thresholds, labels), own tasks can be registered.
 - **Preprocessing:** channels, padding, resizing, input quantization for int8 models — automatic.
-- **Devices:** CPU, GPU (WebGPU, Metal), NPU (Intel, Qualcomm), TensorFlow Lite delegates (Coral Edge TPU), several devices at the same time (`"device": ["gpu", "cpu"]`), automatic fallback to the CPU.
+- **Devices:** CPU, GPU (WebGPU, Metal), NPU (Intel, Qualcomm), Hailo (Raspberry Pi AI Kit / AI HAT+, `.hef`), TensorFlow Lite delegates (Coral Edge TPU), several devices at the same time (`"device": ["gpu", "cpu"]`), automatic fallback to the CPU.
 - **Benchmark:** compare CPU, GPU and NPU for a model — speed and agreement of the results (`opennve benchmark`).
 
 ### Building and converting networks
@@ -95,7 +95,8 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 | TensorFlow Lite delegates | e.g. Coral Edge TPU (`"delegate"`) | ✓ | ✓ | ✓ |
 
 `"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
-Not supported: the Apple Neural Engine, Hailo accelerators (Raspberry Pi AI Kit / HAT).
+Raspberry Pi 5 with AI Kit / AI HAT+ (Hailo-8L, Hailo-8): compiled Hailo models (`.hef`) with
+HailoRT, see [Hailo](docs/accelerators.md#hailo). Not supported: the Apple Neural Engine.
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
 macOS), PyTorch agents through PyTorch (CUDA / ROCm, Apple MPS, Intel XPU). `opennve benchmark` compares CPU, GPU and NPU on your computer.
 

@@ -19,6 +19,16 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   otherwise (unchanged for existing configurations)
 - `opennve system` and `opennve version` show PyTorch and its GPU; `opennve.agents.torch_info()`
 
+### Hailo (Raspberry Pi AI Kit / AI HAT+)
+
+- New backend `hailo`: agents run compiled Hailo models (`.hef`) on a Hailo-8L / Hailo-8 with
+  HailoRT; `"backend": "auto"` picks it for `.hef` files. HailoRT converts the float32 inputs and
+  outputs, so `preprocess` / `prediction` stay as for the `.tflite` model. All Hailo agents and
+  workflow threads share one device (HailoRT scheduler); workflows give Hailo agents 2 threads
+- `tools/build_hailort_python.sh` builds the HailoRT Python API (`hailo_platform`) for Python 3.14
+  from the HailoRT source of the installed version (Hailo publishes it only for other Python versions)
+- `opennve system` / `opennve version` show HailoRT and its devices; `opennve.agents.hailo_info()`
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class

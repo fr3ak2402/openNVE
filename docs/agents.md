@@ -15,6 +15,7 @@ agents.json   ──►  agent "insects" (model.tflite) ──► predict(tiles)
 | TensorFlow Lite (`.tflite`) | [LiteRT](https://ai.google.dev/edge/litert) (TensorFlow Lite runtime) | Installed with openNVE (dependency `ai-edge-litert`) |
 | TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | Extra `opennve[tensorflow]` (installs `tf-nightly`, see below) |
 | PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`) | [PyTorch](https://pytorch.org) | Extra `opennve[pytorch]` (installs `torch`, see [PyTorch models](#pytorch-models)) |
+| Hailo (`.hef`, compiled for Hailo-8L / Hailo-8) | HailoRT | Raspberry Pi OS `hailo-all` + `tools/build_hailort_python.sh`, see [Hailo](accelerators.md#hailo) |
 
 LiteRT is small (about 15 MB) and has wheels for Python 3.14 on Windows x64, Linux x64 and ARM64 (Raspberry Pi 5) and macOS Apple Silicon. It is the recommended runtime for live cameras.
 
@@ -66,8 +67,8 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | Field | Default | Description |
 |---|---|---|
 | `name` | model file name | Name of the agent (key of the results) |
-| `model` | – | Model path: `.tflite`, `.keras`, `.h5`, a SavedModel directory, or a PyTorch model (`.pt2`, `.pt`, `.pth`). Relative paths are relative to the agent file |
-| `backend` | `"auto"` | `tflite`, `tensorflow`, `pytorch`, or `auto` (by the file name: `.tflite` → `tflite`, `.pt2` / `.pt` / `.pth` → `pytorch`, otherwise `tensorflow`) |
+| `model` | – | Model path: `.tflite`, `.keras`, `.h5`, a SavedModel directory, a PyTorch model (`.pt2`, `.pt`, `.pth`) or a compiled Hailo model (`.hef`). Relative paths are relative to the agent file |
+| `backend` | `"auto"` | `tflite`, `tensorflow`, `pytorch`, `hailo`, or `auto` (by the file name: `.tflite` → `tflite`, `.pt2` / `.pt` / `.pth` → `pytorch`, `.hef` → `hailo`, otherwise `tensorflow`) |
 | `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto`: where the model runs; a list such as `["gpu", "cpu"]` uses several devices at the same time in workflows. See [GPU and NPU](accelerators.md) |
 | `fallback` | `true` | Device not available: `true` runs on the CPU (with a message), `false` raises an error |
 | `gpu_precision` | `"fp16"` | GPU: `fp16` (faster) or `fp32` (the same results as the CPU) |
@@ -315,9 +316,10 @@ The example prints the selected tiles of every agent and draws them on the frame
 | `Agent(config, model=None)` | `load()`, `predict(frame / tiles / array)`, `predict_batch(batch)`, `prepare(images)`, `input` (model input shape and dtype), `close()`; context manager |
 | `Agent.from_model(model, name="model", **settings)` | Agent for a model object: `torch.nn.Module`, or an object with `predict(batch)` / a callable |
 | `TorchBackend(model, threads=None, device=None, ...)`, `torch_info()` | PyTorch runtime (`opennve.agents`), PyTorch version and GPU |
+| `HailoBackend(path, device=None, batch_size=None)`, `hailo_info()` | Hailo runtime (`opennve.agents`), HailoRT version and devices |
 | `run_agents(source, agents, frame_configs=None, duration_ms=None)` | Yields one `AgentStep` per time window of a camera or RAW file |
 | `process_window(window, agents, frame_configs=None)` | One `AgentStep` for one window |
 | `AgentStep` | `window`, `frames`, `results`, `step[agent name]` |
 | `AgentResult`, `Prediction` | See [Results](#results) and [Segmentation](#segmentation) |
 | `register_task(name)`, `list_tasks()`, `TaskInput` | Output decoders (`classification`, `segmentation`) |
-| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`, `pytorch`) |
+| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`, `pytorch`, `hailo`) |
