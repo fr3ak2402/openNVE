@@ -122,10 +122,21 @@ def _version(args) -> int:
         ("platform", "platform"),
         ("numpy", "numpy"),
         ("opencv", "OpenCV"),
+        ("h5py", "h5py"),
         ("litert", "LiteRT"),
-        ("tensorflow", "TensorFlow"),
+        ("flatbuffers", "flatbuffers"),
     ):
         print(f"  {label:<21} {info[key] or '-'}")
+    print("  optional (extras):")
+    for key, label, extra in (
+        ("tensorflow", "TensorFlow", "tensorflow"),
+        ("pandas", "pandas", "pandas"),
+        ("tables", "PyTables", "pandas"),
+        ("hdf5plugin", "hdf5plugin", "hdf5"),
+        ("npu_intel", "NPU Intel SDK", "npu-intel"),
+        ("npu_qualcomm", "NPU Qualcomm SDK", "npu-qualcomm"),
+    ):
+        print(f"  {label:<21} {info[key] or f'- (extra {extra})'}")
     return 0
 
 

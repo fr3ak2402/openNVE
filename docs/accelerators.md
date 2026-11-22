@@ -34,7 +34,7 @@ In `agents.json`:
 
 | Setting | Default | Description |
 |---|---|---|
-| `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto` (the NPU, else the GPU, else the CPU — only devices the operating system reports are tried) |
+| `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto` (the NPU, else the GPU, else the CPU — only devices the operating system reports are tried), or a list such as `["gpu", "cpu"]` (several devices at the same time, see below) |
 | `fallback` | `true` | If the device is not available or cannot run the model: `true` runs it on the CPU (with a message), `false` stops with an error |
 | `batch_size` | GPU 8, NPU 1 | Inputs per call. The model is compiled for this batch size; larger batches use the GPU better |
 | `gpu_precision` | `"fp16"` | `fp16` (faster) or `fp32` (the same results as the CPU) |
@@ -50,6 +50,37 @@ When a workflow starts, it reports where each agent runs:
 
 In Python: `agent.device` (`"cpu"`, `"gpu"`, `"npu"`, `"gpu+cpu"`, `"delegate"`) and
 `agent.device_description()`.
+
+## GPU and CPU together
+
+With a list, a workflow uses several devices at the same time:
+
+```json
+"device": ["gpu", "cpu"]
+```
+
+The agent step then gets 2 threads per accelerator and one thread per remaining CPU core (one core
+per accelerator stays free to prepare its inputs). Every thread takes the next time window as soon
+as it is free, so a fast GPU gets more windows than a slow one — the step is at least as fast as the
+better device alone. For example on 8 cores:
+
+```text
+  agent            x9 (auto), interpreter threads prototyp 1, prototyp: gpu x2 + cpu x7
+```
+
+At the end the statistics show how many inputs (tiles) each device ran, here from a machine with
+2 cores and a software GPU (which is why it is slow):
+
+```text
+  agent            x3  26 items, 25955.7 ms per item (gpu 6485 inputs, cpu 4320 inputs)
+```
+
+- `["npu", "gpu", "cpu"]` uses all three; `["gpu", "npu"]` only the accelerators.
+- With a fixed number of threads (`"threads": 4` in the step) the first threads go to the
+  accelerators (2 each), at least one to the CPU.
+- If an accelerator is not available, its threads run on the CPU (with a message).
+- Use `"gpu_precision": "fp32"` if the results must not depend on which device ran a window.
+- A single agent outside a workflow uses the first device of the list that works.
 
 ## Is it faster? `opennve benchmark`
 

@@ -313,3 +313,39 @@ def test_pandas_dataframe_input():
     assert frame.event_count == 3 and [t.id for t in frame.tiles] == [1, 2]
     tiles = opennve.FrameEngine(frame_width=160, frame_height=80, frame_tile_size=80).generate_frame(frame_data)
     assert [t["tile_id"] for t in tiles] == [1, 2]
+
+
+def _reference_time_surface(events, start, end, width, height, decay="linear", tau=1000.0):
+    """Pixel by pixel: the latest event of each pixel and polarity."""
+    data = np.zeros((height, width, 2), np.float32)
+    latest = {}
+    for x, y, t, p in zip(events["x"], events["y"], events["t"], events["p"]):
+        if start <= t < end:
+            key = (int(y), int(x), int(p))
+            latest[key] = max(latest.get(key, -1.0), float(t) - start)
+    for (y, x, p), last in latest.items():
+        data[y, x, p] = last / (end - start) if decay == "linear" else np.exp((last - (end - start)) / tau)
+    return data
+
+
+@pytest.mark.parametrize("decay", ["linear", "exponential"])
+def test_time_surface_matches_reference_and_ignores_event_order(decay):
+    rng = np.random.default_rng(5)
+    events = np.zeros(4000, dtype=[("t", "<u8"), ("x", "<u2"), ("y", "<u2"), ("p", "u1")])
+    events["t"] = np.sort(rng.integers(1000, 6000, len(events)))
+    events["x"], events["y"], events["p"] = rng.integers(0, 40, len(events)), rng.integers(0, 24, len(events)), rng.integers(0, 2, len(events))
+    engine = opennve.FrameEngine(40, 24, 8, decay=decay, tau_us=1000)
+    frame = engine.build(events, 1000, 5000)
+    np.testing.assert_array_equal(frame.data, _reference_time_surface(events, 1000, 5000, 40, 24, decay, 1000))
+    shuffled = events.copy()
+    rng.shuffle(shuffled)
+    np.testing.assert_array_equal(engine.build(shuffled, 1000, 5000).data, frame.data)
+    # tiles: one copy of the selected tiles, each the matching part of the frame
+    for tile in frame.tiles:
+        np.testing.assert_array_equal(tile.data, frame.data[tile.y : tile.y + tile.height, tile.x : tile.x + tile.width])
+        assert tile.data.flags["C_CONTIGUOUS"] and not np.shares_memory(tile.data, frame.data)
+    # frame size not a multiple of the tile size: edge tiles are smaller
+    edge = opennve.FrameEngine(42, 25, 8, min_events=0).build(events, 1000, 5000)
+    assert {(tile.width, tile.height) for tile in edge.tiles} >= {(8, 8), (2, 8), (8, 1), (2, 1)}
+    for tile in edge.tiles:
+        np.testing.assert_array_equal(tile.data, edge.data[tile.y : tile.y + tile.height, tile.x : tile.x + tile.width])

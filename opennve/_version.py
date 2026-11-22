@@ -97,8 +97,16 @@ def version_info() -> dict[str, typing.Any]:
         "platform": f"{sys.platform} {platform.machine()}",
         "numpy": installed("numpy"),
         "opencv": installed("opencv-python") or installed("opencv-python-headless"),
+        "h5py": installed("h5py"),
         "litert": installed("ai-edge-litert"),
+        "flatbuffers": installed("flatbuffers"),
+        # optional (extras)
         "tensorflow": installed("tf-nightly") or installed("tensorflow") or installed("tensorflow-cpu"),
+        "pandas": installed("pandas"),
+        "tables": installed("tables"),
+        "hdf5plugin": installed("hdf5plugin"),
+        "npu_intel": installed("ai-edge-litert-sdk-intel-nightly") or installed("ai-edge-litert-sdk-intel"),
+        "npu_qualcomm": installed("ai-edge-litert-sdk-qualcomm"),
     }
 
 

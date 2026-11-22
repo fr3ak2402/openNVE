@@ -74,10 +74,14 @@ def benchmark_agent(
             agent.predict_batch(batch[: max(1, getattr(agent.backend, "batch_size", 1))])  # warm up
             best = None
             outputs = None
+            # in chunks like the frames of a workflow: one call with thousands of inputs would
+            # need gigabytes for the intermediate tensors
+            chunk = config.batch_size or 128
             for _ in range(max(1, repeat)):
                 start = time.perf_counter()
-                outputs = agent.predict_batch(batch)
+                parts = [agent.predict_batch(batch[index : index + chunk])[0] for index in range(0, len(batch), chunk)]
                 elapsed = time.perf_counter() - start
+                outputs = [np.concatenate(parts)]
                 best = elapsed if best is None else min(best, elapsed)
             result["ms_per_input"] = best * 1000 / len(batch)
             result["inputs_per_second"] = len(batch) / best if best else None

@@ -175,15 +175,17 @@ class FrameEngine:
         size = self.height * self.width * 2
         index = (y * self.width + x) * 2 + p
         if mode == "time_surface":
-            last = np.full(size, -1.0, dtype=np.float64)
-            np.maximum.at(last, index, t - start_t)  # latest event, also for unsorted events
-            present = last >= 0
+            # value of every event, then the largest per pixel = the latest event (also for
+            # unsorted events: both decays grow with t). Only the events are computed, not the
+            # whole frame; pixels without events stay 0.
+            relative = t - start_t
             if decay == "linear":
-                values = last / duration
+                values = (relative / duration).astype(np.float32)
             else:
                 # exp(-(end_t - t_last) / tau): 1 for an event at the end of the window
-                values = np.exp((last - duration) / self.tau_us)
-            data = np.where(present, values, 0.0).astype(np.float32)
+                values = np.exp((relative - duration) / self.tau_us).astype(np.float32)
+            data = np.zeros(size, dtype=np.float32)
+            np.maximum.at(data, index, values)
         elif mode == "binary":
             data = np.zeros(size, dtype=np.float32)
             data[index] = 1.0

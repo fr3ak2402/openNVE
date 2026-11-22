@@ -4,15 +4,48 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 
 📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
 
-- List all connected cameras (as objects or JSON)
-- Describe each camera with a JSON configuration: name, model, serial number, hardware settings and software filters
-- Open one or several cameras from that configuration (with clock synchronization)
-- Read filtered events, or collect them in time windows (default 40 ms) to build frames
-- Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px)
-- Read `.raw` recordings (EVT 2.0, 2.1, 3.0) and HDF5 files (x, y, p, t, optional label l) with the same interface as a live camera; write labeled events as HDF5
-- Agents: run TensorFlow and TensorFlow Lite models on the tiles or frames of every window (`agents.json`), classification or segmentation
-- Workflows: free chains of steps (camera / RAW → windows → frames → tiles → neural network → labeled events → files), multithreaded (`workflows.json`)
-- Neural networks: build (U-Net, own architectures), load, save, transfer weights and quantize models to TensorFlow Lite
+## Features
+
+### Cameras
+- **Find cameras:** list all connected event cameras with model and serial number (`opennve list`, `opennve.list_cameras()`), as objects or JSON; each gets the name of its configuration.
+- **Configure them with JSON:** name, model, serial number, hardware settings and software filters per camera (`cameras.json`); templates for every model (`opennve template <model>`).
+- **Open one or several cameras** from the configuration, several cameras with clock synchronization.
+- **Read events** live (x, y, polarity, time), with software filters: polarity, background activity (noise) filter — changeable while the camera runs.
+- **USB driver:** check and install the WinUSB driver on Windows (`opennve driver --install`), udev rules on Linux.
+
+### Recordings
+- **RAW files** (`.raw`, Prophesee EVT 2.0, 2.1, 3.0) and **HDF5 files** (`.h5`, `.hdf5`: columns x, y, p, t and an optional label l; column, compound, matrix and pandas layouts, time units, sorting) — read with the same interface as a live camera.
+- **Information and statistics** of a recording: `opennve recording <file>`.
+- **Write** events with labels as HDF5 (`write_hdf5`, `Hdf5Writer`).
+
+### Time windows, frames and tiles
+- **Time windows:** collect events in windows by duration and step (default 40 ms) or as several overlapping windows per block, aligned to the block or the first event.
+- **Frames** per window: time surface (linear or exponential decay), binary or count, per polarity; `frames.json` with several named frame configurations.
+- **Tiles:** split frames into tiles (for instance 80 × 80 px), keep only tiles with enough events (`min_events`, `min_events_per_ms`).
+- Display frames and tiles as images (`frame.to_image`).
+
+### Neural networks (agents)
+- **Run models** on the tiles or the whole frame of every window: TensorFlow Lite (`.tflite`, LiteRT) and TensorFlow / Keras (`.keras`, `.h5`, SavedModel), configured in `agents.json`.
+- **Tasks:** classification and segmentation (class map, pixels and events of the target classes, thresholds, labels), own tasks can be registered.
+- **Preprocessing:** channels, padding, resizing, input quantization for int8 models — automatic.
+- **Devices:** CPU, GPU (WebGPU, Metal), NPU (Intel, Qualcomm), TensorFlow Lite delegates (Coral Edge TPU), several devices at the same time (`"device": ["gpu", "cpu"]`), automatic fallback to the CPU.
+- **Benchmark:** compare CPU, GPU and NPU for a model — speed and agreement of the results (`opennve benchmark`).
+
+### Building and converting networks
+- **Build networks:** U-Net (configurable depth, filters, batch normalization) and own architectures through a registry.
+- **Load, save, transfer weights** between models (by name or U-Net layout), compare weights.
+- **Export to TensorFlow Lite** with quantization: none, float16, dynamic, int8 (with representative data from your recordings).
+
+### Workflows
+- **Free chains of steps** in `workflows.json`: camera / recording → time windows → frames → tiles → agents → filter → label events → log / callback / write (CSV, HDF5, JSONL) or collect; own steps can be registered.
+- **Multithreaded:** every step in its own threads, results in the original order; threads sized automatically to the CPU cores (`"threads": "auto"`), several agent instances in parallel.
+- **Run** from Python or the command line (`opennve workflow run workflows.json`), stop with `stop`; statistics per step at the end, thread overview (`opennve workflow threads`).
+
+### System and tools
+- **System information:** operating system, processor, CPU cores, RAM, GPUs and NPUs (`opennve system`, `opennve.system_info()`).
+- **Version and build number** of openNVE and its dependencies (`opennve version`).
+- **Check configuration files** (`opennve check`).
+- Wheels for Windows, Linux (x64, ARM64 / Raspberry Pi 5) and macOS with the camera driver included.
 
 ## Supported hardware
 
@@ -61,6 +94,7 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 | NPU | Intel Core Ultra (AI Boost), extra `npu-intel` | Intel Core Ultra, extra `npu-intel` | Qualcomm (Hexagon), extra `npu-qualcomm` | – |
 | TensorFlow Lite delegates | e.g. Coral Edge TPU (`"delegate"`) | ✓ | ✓ | ✓ |
 
+`"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
 Not supported: the Apple Neural Engine, Hailo accelerators (Raspberry Pi AI Kit / HAT).
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
 macOS). `opennve benchmark` compares CPU, GPU and NPU on your computer.

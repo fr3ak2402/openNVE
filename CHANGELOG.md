@@ -15,7 +15,13 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
 - Softmax for segmentation applied lazily: the class maps come from the logits (same argmax), the
   probabilities are computed only for the selected pixels; `Prediction.output` and
   `AgentResult.outputs` are still the probabilities, computed on first access
+- CPU inference about 25 % faster: models with a dynamic batch size are made static in memory
+  (chunks of `batch_size`, default 8), so XNNPACK runs the whole model including the up-sampling
+  of a U-Net (Conv2DTranspose); results unchanged
 - Faster softmax (in place, float32)
+- Frames about 4.5 × faster (1.4 instead of 6.2 ms for a 1280 × 720 time surface with 80 × 80
+  tiles): the time surface is computed for the events only, not for every pixel, and the selected
+  tiles are cut out with one copy; results unchanged
 - New guide [docs/performance.md](docs/performance.md): int8 models (~2.4 × faster than float16),
   fewer tiles, threads
 
@@ -41,10 +47,16 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
   a test input checks the results against the CPU when the model is loaded
 - `gpu_precision` (`fp16` / `fp32`), `delegate` (TensorFlow Lite delegates, for instance the Coral
   Edge TPU); Keras / SavedModel agents use `tf.device` for `"device": "gpu"`
+- Several devices at the same time: `"device": ["gpu", "cpu"]` gives the agent step 2 threads per
+  accelerator and one CPU thread per remaining core; each thread takes the next window when it is
+  free. The statistics show the inputs per device
 - `opennve benchmark` / `opennve.benchmark_agent()`: speed and agreement of CPU, GPU and NPU
 - `opennve system` shows the GPU / NPU support of the installed LiteRT; agent steps with GPU / NPU
   agents use 2 threads with `"threads": "auto"`; workflows report where each agent runs
 - Extras `npu-intel`, `npu-qualcomm`; dependency `ai-edge-litert>=2.4`
+- Dependencies completed: `flatbuffers` (used directly for GPU / NPU models), extras `hdf5`
+  (hdf5plugin for compressed HDF5 files), `dev` (pytest, build, packaging); `all` includes
+  hdf5plugin
 - New guide [docs/accelerators.md](docs/accelerators.md)
 
 ### System information

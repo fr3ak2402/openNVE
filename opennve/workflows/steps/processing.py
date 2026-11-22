@@ -181,7 +181,11 @@ class AgentStep(Step):
     interpreter thread each (several interpreters in parallel are faster than one with several
     threads). With a fixed number of step threads, agents with "threads": "auto" share the cores:
     interpreter threads = cores / step threads. TensorFlow models run in one thread (TensorFlow
-    uses all cores itself).
+    uses all cores itself). GPU / NPU agents get 2 threads.
+
+    Several devices ("device": ["gpu", "cpu"]): 2 threads per accelerator, the other cores run
+    the model on the CPU (one thread each); every thread takes the next window when it is free,
+    so fast devices get more work. The statistics show how many inputs each device ran.
     """
 
     PARAMETERS = {"agent": None, "frame": None}
@@ -192,8 +196,28 @@ class AgentStep(Step):
         return [config for config in self.configs if config.resolved_backend == "tflite"]
 
     @staticmethod
+    def _devices(config) -> list:
+        return list(config.device) if isinstance(config.device, list) else []
+
+    def _mixed(self):
+        return [config for config in self._tflite() if len(self._devices(config)) > 1 and config.delegate is None]
+
+    @staticmethod
+    def _mixed_threads(devices: list, cpus: int) -> tuple[int, int]:
+        """(accelerator threads, CPU threads) for a device list: 2 per accelerator, one core per
+        accelerator to feed it, the other cores for CPU threads."""
+        accelerators = [device for device in devices if device != "cpu"]
+        accelerator_threads = 2 * len(accelerators)
+        cpu_threads = 0
+        if "cpu" in devices:
+            cpu_threads = max(1, min(cpus - len(accelerators), MAX_AUTO_AGENT_THREADS))
+        return accelerator_threads, cpu_threads
+
+    @staticmethod
     def _accelerated(config) -> bool:
         """The agent runs on a GPU / NPU (device "auto": if the machine has one)."""
+        if isinstance(config.device, list):
+            return "cpu" not in config.device or len(config.device) == 1 and config.device[0] != "cpu"
         if config.device in ("gpu", "npu") or config.delegate is not None:
             return True
         if config.device == "auto":
@@ -206,6 +230,9 @@ class AgentStep(Step):
         tflite = self._tflite()
         if not tflite:  # TensorFlow (or own backends): the backend parallelizes itself
             return 1
+        mixed = self._mixed()
+        if mixed:
+            return max(sum(self._mixed_threads(self._devices(config), cpus)) for config in mixed)
         if all(self._accelerated(config) for config in tflite):
             # GPU / NPU: one model per thread on the same accelerator; two threads overlap the
             # preparation and decoding (CPU) with the inference
@@ -225,14 +252,40 @@ class AgentStep(Step):
             plan["interpreter_threads"] = {
                 config.name: auto if is_auto(config.threads) else config.threads for config in self._tflite()
             }
+        mixed = self._mixed()
+        if mixed:
+            plan["device_threads"] = {}
+            for config in mixed:
+                devices = self._devices(config)
+                accelerators = [device for device in devices if device != "cpu"]
+                accelerator_threads, _ = self._mixed_threads(devices, cpus)
+                if "cpu" in devices:  # at least one CPU thread
+                    accelerator_threads = min(accelerator_threads, max(0, threads - 1))
+                else:
+                    accelerator_threads = threads
+                assignment = [accelerators[index % len(accelerators)] for index in range(accelerator_threads)]
+                assignment += ["cpu"] * (threads - accelerator_threads)
+                plan["device_threads"][config.name] = assignment
+                cpu_threads = assignment.count("cpu")
+                if is_auto(config.threads) and cpu_threads:
+                    plan["interpreter_threads"][config.name] = max(1, (cpus - len(accelerators)) // cpu_threads)
         return plan
 
     def configure_threads(self, plan):
         threads = plan.get("interpreter_threads") or {}
-        self.configs = [
-            config.copy(threads=threads[config.name]) if is_auto(config.threads) and config.name in threads else config
-            for config in self.configs
-        ]
+        devices = plan.get("device_threads") or {}
+        configs = []
+        for config in self.configs:
+            changes = {}
+            if config.name in devices:
+                device = devices[config.name][self.thread_index % len(devices[config.name])]
+                changes["device"] = device
+                if is_auto(config.threads):
+                    changes["threads"] = threads.get(config.name, 1) if device == "cpu" else 1
+            elif is_auto(config.threads) and config.name in threads:
+                changes["threads"] = threads[config.name]
+            configs.append(config.copy(**changes) if changes else config)
+        self.configs = configs
 
     def validate(self):
         agents = self.params["agent"]
@@ -247,11 +300,12 @@ class AgentStep(Step):
         from ...agents import Agent
 
         self.agents = [Agent(config).load() for config in self.configs]
-        for agent in self.agents:  # where the agent runs, once per workflow and agent
+        self.inputs_per_device: dict[str, int] = {}
+        for agent in self.agents:  # where the agent runs, once per workflow, agent and device
             backend = agent.backend
             if agent.config.device is None and backend.device == "cpu" and not backend.device_note:
                 continue
-            key = (id(self.context), agent.name)
+            key = (id(self.context), agent.name, agent.config.device if isinstance(agent.config.device, str) else None)
             with AgentStep._report_lock:
                 if key in AgentStep._reported:
                     continue
@@ -276,8 +330,14 @@ class AgentStep(Step):
             item.results = [{} for _ in item.windows]
         for frames, results in zip(item.frames, item.results):
             for agent in self.agents:
-                results[agent.name] = agent.predict(self._frame(agent, frames))
+                result = agent.predict(self._frame(agent, frames))
+                results[agent.name] = result
+                device = agent.device
+                self.inputs_per_device[device] = self.inputs_per_device.get(device, 0) + max(1, len(result.predictions))
         return item
+
+    def statistics_details(self):
+        return {"inputs_per_device": dict(getattr(self, "inputs_per_device", {}))}
 
     def close(self):
         for agent in getattr(self, "agents", []):

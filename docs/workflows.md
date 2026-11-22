@@ -193,6 +193,7 @@ Several sinks are possible, for instance a CSV and a JSON lines file.
   - `agent`: one thread per core (at most 16) with **one TensorFlow Lite interpreter thread each** — several interpreters in parallel are faster than one interpreter with several threads, and *agent threads × interpreter threads* never exceeds the cores. Above 16 cores, the remaining cores go to the interpreters. Several agent steps share the cores equally. TensorFlow (Keras) models run in one thread, TensorFlow uses all cores itself.
   - With a fixed number of agent threads, agents with `"threads": "auto"` get *cores / agent threads* interpreter threads; with fixed interpreter threads in `agents.json`, the agent step gets *cores / interpreter threads* threads.
   - `frames`, `tiles`: 1 thread up to 7 cores, 2 from 8 cores (they need ~0.1 ms per tile against ~4 ms in the agent).
+  - Agents with several devices (`"device": ["gpu", "cpu"]`): 2 threads per accelerator, the other cores on the CPU; see [GPU and NPU](accelerators.md#gpu-and-cpu-together).
   - `opennve workflow threads workflows.json` (or `workflow.thread_report()`, `workflow.thread_plan()`) shows the threads for this machine; `--cpus 8` shows them for another one.
 - Sources and `write` / `collect` run in one thread.
 - The steps are connected by queues of `queue_size` items. When a step is slower than the source, the queue fills up and the source waits; for live cameras the camera buffer then grows, so give slow steps enough threads.

@@ -199,8 +199,16 @@ def split_into_tiles(
         raise ValueError("min_events needs event_counts (use Frame.split to count the events of a frame)")
     else:
         selected = np.arange(rows * cols)
+    blocks = None
+    if height % tile_size == 0 and width % tile_size == 0 and len(selected):
+        # all selected tiles with one copy: (rows, size, cols, size, ...) -> (tiles, size, size, ...)
+        grid = data.reshape((rows, tile_size, cols, tile_size) + data.shape[2:])
+        order = (0, 2, 1, 3) + tuple(range(4, grid.ndim))
+        row_index, col_index = np.divmod(selected, cols)
+        blocks = grid.transpose(order)[row_index, col_index]
+    counts = None if event_counts is None else event_counts.reshape(-1)
     tiles = []
-    for index in selected:
+    for number, index in enumerate(selected):
         row, col = divmod(int(index), cols)
         y_start, x_start = row * tile_size, col * tile_size
         y_end, x_end = min(y_start + tile_size, height), min(x_start + tile_size, width)
@@ -213,8 +221,8 @@ def split_into_tiles(
                 y=y_start,
                 width=x_end - x_start,
                 height=y_end - y_start,
-                event_count=None if event_counts is None else int(event_counts.reshape(-1)[index]),
-                data=data[y_start:y_end, x_start:x_end].copy(),
+                event_count=None if counts is None else int(counts[index]),
+                data=blocks[number] if blocks is not None else data[y_start:y_end, x_start:x_end].copy(),
             )
         )
     return tiles
