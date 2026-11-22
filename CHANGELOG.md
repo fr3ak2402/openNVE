@@ -15,6 +15,9 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
 - Softmax for segmentation applied lazily: the class maps come from the logits (same argmax), the
   probabilities are computed only for the selected pixels; `Prediction.output` and
   `AgentResult.outputs` are still the probabilities, computed on first access
+- CPU inference about 25 % faster: models with a dynamic batch size are made static in memory
+  (chunks of `batch_size`, default 8), so XNNPACK runs the whole model including the up-sampling
+  of a U-Net (Conv2DTranspose); results unchanged
 - Faster softmax (in place, float32)
 - Frames about 4.5 × faster (1.4 instead of 6.2 ms for a 1280 × 720 time surface with 80 × 80
   tiles): the time surface is computed for the events only, not for every pixel, and the selected

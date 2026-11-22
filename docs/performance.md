@@ -8,11 +8,16 @@ agent → labels → CSV, U-Net on 80 × 80 tiles, measured on an x86 CPU):
 | Reading the events | ~0.01 ms |
 | Frame and tiles | ~0.01 ms (openNVE 1.0.0: ~0.05 ms) |
 | Preparing the input | ~0.01 ms |
-| **Inference (TensorFlow Lite, float16 model)** | **~4 ms** |
+| **Inference (LiteRT, float16 model, one thread)** | **~5 ms** (openNVE 1.0.0: ~6.5 ms) |
 | Decoding the segmentation | ~0.2 ms (openNVE 1.0.0: ~0.55 ms) |
 
 The neural network takes more than 90 % of the time. The biggest gains therefore come from the
 model and from the number of tiles that go through it.
+
+openNVE already makes models with a dynamic batch size (from Keras) static in memory for the CPU
+(chunks of `batch_size`, default 8): then XNNPACK runs the whole model, also the up-sampling of a
+U-Net, which is about 25 % faster. The example workflow `main_mh` took 31 s instead of 41 s on a
+2-core machine (results identical).
 
 ## 1. Use an int8 model
 

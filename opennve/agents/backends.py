@@ -90,9 +90,16 @@ class TFLiteBackend(Backend):
     Quantized models (int8 / uint8 inputs and outputs) are quantized and dequantized automatically.
     Models with a fixed batch size are called several times, models with a dynamic batch
     dimension are resized to the batch.
+
+    static_batch: models with a dynamic batch dimension (from Keras) are made static for this
+    batch size in memory (opennve.agents.static_model) and called in chunks of it. XNNPACK then
+    runs all operations itself, also the up-sampling of a U-Net (Conv2DTranspose), which it
+    otherwise leaves to the slower reference kernels: about 25 % faster. None keeps the dynamic
+    model (resized to every batch).
     """
 
-    def __init__(self, path: PathLike, threads: typing.Union[int, str, None] = None, delegate=None):
+    def __init__(self, path: PathLike, threads: typing.Union[int, str, None] = None, delegate=None,
+                 static_batch: typing.Optional[int] = None):
         from ..system import is_auto, standalone_interpreter_threads
 
         Interpreter = _tflite_interpreter_class()
@@ -115,6 +122,26 @@ class TFLiteBackend(Backend):
             name=self._input.get("name", ""),
         )
         self._batch = int(self._input["shape"][0]) if len(self._input["shape"]) else 1
+        self.static = False
+        if static_batch and self._dynamic_batch and delegate is None:
+            self._make_static(path, Interpreter, int(static_batch))
+
+    def _make_static(self, path, Interpreter, batch_size: int):
+        try:
+            from ._litert import static_model
+
+            with open(os.fspath(path), "rb") as file:
+                data = static_model(file.read(), batch_size, valid_transpose_conv=False)
+            interpreter = Interpreter(model_content=data, num_threads=self.threads)
+            interpreter.allocate_tensors()
+        except Exception:  # no LiteRT schema (tflite_runtime, tf.lite) or an unusual model: stay dynamic
+            return
+        self.interpreter = interpreter
+        self._input = interpreter.get_input_details()[0]
+        self._dynamic_batch = False
+        self._batch = batch_size
+        self.batch_size = batch_size
+        self.static = True
 
     def _resize(self, batch_size: int):
         if self._batch != batch_size:
@@ -327,6 +354,10 @@ def _accelerator_present(kind: str) -> bool:
     return any(device["type"] == "gpu" for device in accelerators())
 
 
+# inputs per call of CPU agents with a dynamic batch dimension (static model, see TFLiteBackend)
+CPU_STATIC_BATCH = 8
+
+
 def create_tflite_backend(config: AgentConfig) -> Backend:
     """TensorFlow Lite backend for the device of the configuration (see AgentConfig.device)."""
     from ..system import is_auto, standalone_interpreter_threads
@@ -340,9 +371,9 @@ def create_tflite_backend(config: AgentConfig) -> Backend:
         candidates = device[: device.index("cpu")] if "cpu" in device else list(device)
         device = "list"
         if not candidates:
-            return TFLiteBackend(path, config.threads)
+            return TFLiteBackend(path, config.threads, static_batch=config.batch_size or CPU_STATIC_BATCH)
     elif device == "cpu":
-        return TFLiteBackend(path, config.threads)
+        return TFLiteBackend(path, config.threads, static_batch=config.batch_size or CPU_STATIC_BATCH)
     elif device == "auto":  # only devices the operating system reports
         candidates = [kind for kind in ("npu", "gpu") if _accelerator_present(kind)]
     else:
@@ -367,7 +398,7 @@ def create_tflite_backend(config: AgentConfig) -> Backend:
         reasons.append("no GPU or NPU found")
     if not config.fallback and device != "auto" and not (isinstance(config.device, list) and "cpu" in config.device):
         raise RuntimeError(f"agent {config.name}: " + "; ".join(dict.fromkeys(reasons)))
-    backend = TFLiteBackend(path, config.threads)
+    backend = TFLiteBackend(path, config.threads, static_batch=config.batch_size or CPU_STATIC_BATCH)
     backend.device_note = "; ".join(dict.fromkeys(reasons)) or None
     return backend
 

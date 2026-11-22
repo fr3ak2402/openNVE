@@ -465,3 +465,20 @@ def test_benchmark_agent(tmp_path):
     json.dumps(results)
     info = opennve.litert_accelerators()
     assert info["version"] and info["compiled_model"] is True and isinstance(info["npu"], list)
+
+
+@needs_compiled_model
+def test_cpu_backend_uses_static_shapes():
+    from opennve.agents.backends import TFLiteBackend
+
+    batch = np.random.default_rng(6).random((11, 16, 16, 2)).astype(np.float32)
+    dynamic = TFLiteBackend(DATA / "agent_unet.tflite", 1)
+    static = TFLiteBackend(DATA / "agent_unet.tflite", 1, static_batch=4)
+    assert not dynamic.static and static.static and static.batch_size == 4
+    assert static.input.shape == dynamic.input.shape == (None, 16, 16, 2)
+    np.testing.assert_allclose(static.predict(batch)[0], dynamic.predict(batch)[0], rtol=1e-5, atol=1e-5)
+    # agents on the CPU use it (batch_size, else 8); models with a fixed batch size stay as they are
+    agent = opennve.Agent({"model": str(DATA / "agent_unet.tflite")}).load()
+    assert agent.backend.static and agent.backend.batch_size == 8
+    assert opennve.Agent({"model": str(DATA / "agent_unet.tflite"), "batch_size": 16}).load().backend.batch_size == 16
+    assert not opennve.Agent({"model": str(DATA / "agent_frame.tflite")}).load().backend.static
