@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,9 @@ name = "opennve"
 version = "1.1.0"
 description = "Open Neuromorphic Vision Engine: event cameras, .raw and HDF5 recordings, filters, time windows, frames and tiles, TensorFlow agents and multithreaded workflows"
 readme = "README.md"
+# Free for personal use; commercial and academic use only with permission (see LICENSE)
+license = "LicenseRef-openNVE-Personal-Use-1.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 classifiers = [
     "Development Status :: 5 - Production/Stable",

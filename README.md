@@ -2,7 +2,7 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
 
 ## Features
 
@@ -246,6 +246,14 @@ opennve workflow run examples/workflows.json                                   #
 GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)) builds neuromorphic_drivers from [fr3ak2402/neuromorphic-drivers](https://github.com/fr3ak2402/neuromorphic-drivers) (`NEUROMORPHIC_DRIVERS_REF`, default `main`) and embeds it into the openNVE wheels with [tools/bundle_wheel.py](tools/bundle_wheel.py): one wheel per platform (Windows x64, Linux x64/ARM64, macOS Apple Silicon/Intel) and Python version (3.14, 3.15). Each wheel is tested before upload. The wheels are artifacts of each run; for tags starting with `v` (`git tag v1.1.0 && git push --tags`) they are attached to a GitHub release.
 
 neuromorphic_drivers is distributed under the MIT License, its license is included in the wheels (`opennve-*.dist-info/licenses/neuromorphic_drivers/LICENSE`).
+
+## License
+
+openNVE is **free for personal use**: private persons may use, copy and modify it for their own private purposes (hobby projects, experiments, self-study).
+
+**Commercial use** (companies, self-employed persons, public authorities and other organizations, products, services, contract work, internal tools) and **academic use** (research, teaching and studies at universities, schools and research institutes, including theses and student projects) are **only allowed with prior written permission**. To ask for permission, open an issue or contact the author through [GitHub](https://github.com/fr3ak2402/openNVE).
+
+See [LICENSE](LICENSE) for the full terms. openNVE is source-available, not open source in the sense of the OSI. Third-party components (neuromorphic_drivers: MIT License; the dependencies installed by pip) keep their own licenses.
 
 ## Tests
 

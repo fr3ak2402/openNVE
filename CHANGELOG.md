@@ -8,6 +8,11 @@ Faster processing: vectorized segmentation decoding with lazy softmax, threads s
 automatically to the CPU cores of the machine, and agents on the GPU or an NPU. Configurations of
 1.0.0 work unchanged.
 
+### License
+
+- openNVE is now under the openNVE Personal Use License 1.0 ([LICENSE](LICENSE)): free for
+  personal use; commercial and academic use only with prior written permission
+
 ### Performance
 
 - Segmentation decoding vectorized over the whole batch (one NumPy pass instead of one per tile):

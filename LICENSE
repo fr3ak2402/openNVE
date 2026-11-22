@@ -1,0 +1,89 @@
+openNVE Personal Use License
+Version 1.0
+
+Copyright (c) 2026 Tim Juhnke. All rights reserved.
+
+This license applies to openNVE (Open Neuromorphic Vision Engine): the source code, the built
+packages (wheels), the documentation, the examples and all other files in this repository
+(the "Software"), except the third-party components named in section 8.
+
+1. Definitions
+
+   "Licensor" means the copyright holder named above.
+
+   "You" means the natural person using the Software under this license.
+
+   "Personal Use" means use by a natural person for their own private purposes — for instance
+   hobby projects, private experiments and self-study — that is not Commercial Use and not
+   Academic Use.
+
+   "Commercial Use" means any use by or for a company, a self-employed person, a public
+   authority or any other organization, and any use that is directly or indirectly intended to
+   earn money or another economic advantage. This includes in particular: use in products,
+   services, prototypes, consulting, contract work, internal tools of an organization, sale,
+   rental and paid support, and use as a basis for any of these.
+
+   "Academic Use" means any use in or for research, teaching or studies, in particular by or at
+   universities, universities of applied sciences, schools, research institutes and their
+   members, employees and students — for instance in research projects, publications, theses
+   (bachelor, master, doctoral), student projects, lectures, exercises and courses — whether paid
+   or not.
+
+2. License for Personal Use
+
+   The Licensor grants You a free, non-exclusive, non-transferable, revocable license to use,
+   copy and modify the Software for Personal Use only.
+
+   You may pass on unmodified copies of the Software to other natural persons for their Personal
+   Use, free of charge, together with this license and all copyright notices.
+
+   Modified versions of the Software may only be used by You for Personal Use; publishing or
+   passing them on requires the prior written permission of the Licensor.
+
+3. Commercial Use and Academic Use only with permission
+
+   Commercial Use and Academic Use of the Software, in whole or in part, are not permitted
+   without the prior written permission of the Licensor. Permission may be granted on terms set
+   by the Licensor, for instance by a separate license agreement. To ask for permission, contact
+   the Licensor through https://github.com/fr3ak2402/openNVE.
+
+4. Other restrictions
+
+   Without the prior written permission of the Licensor You may not:
+   a) sell, rent, lease or sublicense the Software or offer it as a service to third parties;
+   b) use the Software, its parts or its outputs to build or train a competing product;
+   c) remove or change copyright notices, this license or the notices of third parties.
+
+5. Contributions
+
+   If You send contributions to the Software (for instance pull requests, patches or
+   suggestions), You grant the Licensor a perpetual, worldwide, free, non-exclusive, irrevocable
+   license to use, modify, publish and sublicense them under any license, including commercial
+   licenses, and You confirm that You have the right to grant this license.
+
+6. Termination
+
+   This license ends automatically if You violate it. On termination You must stop using the
+   Software and delete all copies. The Licensor may grant a new license on request.
+
+7. No warranty, limitation of liability
+
+   The Software is provided "as is", free of charge, without warranty of any kind, express or
+   implied, including the warranties of merchantability, fitness for a particular purpose and
+   non-infringement. To the extent permitted by law, the Licensor is not liable for any damages
+   arising from the use of the Software. This does not limit liability for intent, gross
+   negligence, injury to life, body or health, or where liability cannot be excluded by law.
+
+8. Third-party components
+
+   The Software uses or contains components of third parties under their own licenses, which
+   remain unaffected by this license. In particular, the openNVE wheels contain
+   neuromorphic_drivers (MIT License, see opennve-*.dist-info/licenses/neuromorphic_drivers/).
+   Dependencies installed by pip (numpy, OpenCV, h5py, LiteRT, flatbuffers, TensorFlow, pandas
+   and others) are under their own licenses.
+
+9. Applicable law
+
+   This license is governed by the law of the Federal Republic of Germany, excluding the UN
+   Convention on Contracts for the International Sale of Goods. If a provision of this license is
+   invalid, the remaining provisions remain in force.

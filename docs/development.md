@@ -123,3 +123,9 @@ The driver is written in Rust and compiled separately for each Python version. F
 ## Licenses
 
 `neuromorphic_drivers` is distributed under the MIT License. Its license is included in every wheel at `opennve-*.dist-info/licenses/neuromorphic_drivers/LICENSE`. The WinUSB installer (`winusb_installer.exe`, LGPL-3.0) is not distributed with openNVE, it is downloaded on demand.
+
+## Contributions and license
+
+openNVE is under the [openNVE Personal Use License](../LICENSE). By sending a contribution
+(pull request, patch, suggestion) you grant the author the rights described in section 5 of the
+license, so that contributions can also be used in permitted commercial and academic versions.
