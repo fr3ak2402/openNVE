@@ -130,6 +130,7 @@ def _version(args) -> int:
     print("  optional (extras):")
     for key, label, extra in (
         ("tensorflow", "TensorFlow", "tensorflow"),
+        ("pytorch", "PyTorch", "pytorch"),
         ("pandas", "pandas", "pandas"),
         ("tables", "PyTables", "pandas"),
         ("hdf5plugin", "hdf5plugin", "hdf5"),
@@ -187,6 +188,12 @@ def _system(args) -> int:
         print(f"  LiteRT {litert['version']:<15}{', '.join(parts)}")
     else:
         print("  LiteRT                not installed")
+    pytorch = info.get("pytorch") or {}
+    if pytorch.get("installed"):
+        gpu = {"cuda": "CUDA", "mps": "Apple MPS", "xpu": "Intel XPU"}.get(pytorch.get("gpu"), "")
+        if pytorch.get("gpu_name"):
+            gpu += f" ({pytorch['gpu_name']})"
+        print(f"  PyTorch {pytorch['version']:<14}{'GPU via ' + gpu if gpu else 'CPU only (no GPU found)'}")
     return 0
 
 

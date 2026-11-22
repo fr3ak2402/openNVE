@@ -85,7 +85,8 @@ def benchmark_agent(
                 best = elapsed if best is None else min(best, elapsed)
             result["ms_per_input"] = best * 1000 / len(batch)
             result["inputs_per_second"] = len(batch) / best if best else None
-            classes = np.argmax(outputs[0], axis=-1) if outputs and outputs[0].ndim > 1 else None
+            axis = 1 if agent.layout == "nchw" and outputs and outputs[0].ndim == 4 else -1  # class axis
+            classes = np.argmax(outputs[0], axis=axis) if outputs and outputs[0].ndim > 1 else None
             if reference is None:
                 reference = classes
                 result["agreement"] = 1.0 if classes is not None else None

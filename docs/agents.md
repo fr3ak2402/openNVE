@@ -1,6 +1,6 @@
-# Agents (TensorFlow models)
+# Agents (TensorFlow and PyTorch models)
 
-An **agent** runs a TensorFlow or TensorFlow Lite model on the frames of a camera or a RAW file, for instance to classify every 80 × 80 tile of each 40 ms frame with the model's predict function. Agents are configured in their own JSON file, next to the [camera](configuration.md) and [frame](frames.md) configurations:
+An **agent** runs a TensorFlow, TensorFlow Lite or PyTorch model on the frames of a camera or a RAW file, for instance to classify every 80 × 80 tile of each 40 ms frame with the model's predict function. Agents are configured in their own JSON file, next to the [camera](configuration.md) and [frame](frames.md) configurations:
 
 ```text
 cameras.json  ──►  camera / RAW file ──► time window (40 ms)
@@ -14,6 +14,7 @@ agents.json   ──►  agent "insects" (model.tflite) ──► predict(tiles)
 |---|---|---|
 | TensorFlow Lite (`.tflite`) | [LiteRT](https://ai.google.dev/edge/litert) (TensorFlow Lite runtime) | Installed with openNVE (dependency `ai-edge-litert`) |
 | TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | Extra `opennve[tensorflow]` (installs `tf-nightly`, see below) |
+| PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`) | [PyTorch](https://pytorch.org) | Extra `opennve[pytorch]` (installs `torch`, see [PyTorch models](#pytorch-models)) |
 
 LiteRT is small (about 15 MB) and has wheels for Python 3.14 on Windows x64, Linux x64 and ARM64 (Raspberry Pi 5) and macOS Apple Silicon. It is the recommended runtime for live cameras.
 
@@ -44,7 +45,7 @@ open("insects.tflite", "wb").write(converter.convert())
             "frame": "tiles80",
             "batch_size": 64,
             "threads": 2,
-            "preprocess": {"channels": "both", "pad": true, "resize": null, "layout": "nhwc", "scale": 1.0},
+            "preprocess": {"channels": "both", "pad": true, "resize": null, "layout": "auto", "scale": 1.0},
             "prediction": {"activation": "none", "labels": ["background", "insect"], "threshold": 0.5}
         },
         {
@@ -65,8 +66,8 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | Field | Default | Description |
 |---|---|---|
 | `name` | model file name | Name of the agent (key of the results) |
-| `model` | – | Model path: `.tflite`, `.keras`, `.h5` or a SavedModel directory. Relative paths are relative to the agent file |
-| `backend` | `"auto"` | `tflite`, `tensorflow`, or `auto` (by the file name: `.tflite` → `tflite`, otherwise `tensorflow`) |
+| `model` | – | Model path: `.tflite`, `.keras`, `.h5`, a SavedModel directory, or a PyTorch model (`.pt2`, `.pt`, `.pth`). Relative paths are relative to the agent file |
+| `backend` | `"auto"` | `tflite`, `tensorflow`, `pytorch`, or `auto` (by the file name: `.tflite` → `tflite`, `.pt2` / `.pt` / `.pth` → `pytorch`, otherwise `tensorflow`) |
 | `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto`: where the model runs; a list such as `["gpu", "cpu"]` uses several devices at the same time in workflows. See [GPU and NPU](accelerators.md) |
 | `fallback` | `true` | Device not available: `true` runs on the CPU (with a message), `false` raises an error |
 | `gpu_precision` | `"fp16"` | GPU: `fp16` (faster) or `fp32` (the same results as the CPU) |
@@ -74,10 +75,10 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | `input` | `"tiles"` | `tiles`: one model input per tile of the frame. `frame`: the whole frame is one input |
 | `frame` | `null` | Name of the [frame configuration](frames.md) that builds the input (from `frames.json`). May be omitted if only one frame configuration is used |
 | `batch_size` | `null` | Inputs per model call. `null` = all tiles of a frame in one call |
-| `threads` | `"auto"` | CPU threads of the TensorFlow Lite interpreter. `"auto"`/`null`: sized to the hardware — a single agent uses all cores up to 4; in [workflows](workflows.md#multithreading) the agent step splits the cores between its threads (usually 1 interpreter thread per agent thread) |
+| `threads` | `"auto"` | CPU threads of the TensorFlow Lite interpreter (PyTorch: `torch.set_num_threads`). `"auto"`/`null`: sized to the hardware — a single agent uses all cores up to 4; in [workflows](workflows.md#multithreading) the agent step splits the cores between its threads (usually 1 interpreter thread per agent thread) |
 | `call` | `"predict"` | Keras models: `predict` calls `model.predict(batch)`; `call` calls `model(batch)`, which has less overhead for small batches |
 | `signature` | `"serving_default"` | Signature of a SavedModel directory |
-| `safe_mode` | `true` | Keras models: `false` allows loading models with `Lambda` layers. Custom layers (for instance the [UNet](networks.md) layers) are found automatically |
+| `safe_mode` | `true` | Keras models: `false` allows loading models with `Lambda` layers. Custom layers (for instance the [UNet](networks.md) layers) are found automatically. PyTorch: `false` also loads complete models saved with `torch.save(model)` (runs code from the file: only for files you trust) |
 
 ### `preprocess` – from frames and tiles to model inputs
 
@@ -88,7 +89,7 @@ Frames and tiles have the shape height × width × 2 (`float32`, channel 0 = pol
 | `channels` | `"both"` | `both`: 2 channels. `on` / `off`: 1 channel with polarity 1 / 0. `sum` / `max`: 1 channel with both polarities combined |
 | `pad` | `true` | The tiles at the right and bottom edges can be smaller than the tile size (for instance 720 = 9 × 80, but 720 = 11 × 64 + 16). `true` pads them with zeros to the full tile size |
 | `resize` | `null` | `[width, height]` to resize every input to. `null`: the model's input size, if the model has a fixed size; otherwise unchanged |
-| `layout` | `"nhwc"` | `nhwc` (batch, height, width, channels; TensorFlow) or `nchw` |
+| `layout` | `"auto"` | `auto`: `nchw` for PyTorch models, otherwise `nhwc`. `nhwc` (batch, height, width, channels; TensorFlow) or `nchw` (batch, channels, height, width; PyTorch). With `nchw` the outputs of segmentation models are read channels first as well |
 | `scale` | `1.0` | Factor for all values, for instance `255` for a model trained on 0–255 images |
 
 The batch is converted to the model's input type. Quantized TensorFlow Lite models (int8 / uint8) are quantized and their outputs dequantized automatically. The number of channels must match the model; otherwise the error message names the expected number.
@@ -212,13 +213,35 @@ for frame in camera.frames(tiles80):
 
 ### Models created in code
 
-A model object with a `predict(batch)` method, for instance a Keras model that is already loaded, or any callable, can be used directly:
+A model object with a `predict(batch)` method, for instance a Keras model that is already loaded, a PyTorch `nn.Module` (see [PyTorch models](#pytorch-models)), or any callable, can be used directly:
 
 ```python
 model = keras.models.load_model("insects.keras")
 agent = opennve.Agent.from_model(model, name="insects", prediction={"labels": ["background", "insect"]})
 result = agent.predict(frame)
 ```
+
+### PyTorch models
+
+PyTorch models run with the `pytorch` backend (extra `opennve[pytorch]`). A `.pth` file with only the weights (`state_dict`) does not contain the network, so save the model in one of these formats:
+
+| Format | Save it with | Notes |
+|---|---|---|
+| `.pt2` (torch.export) | `torch.export.save(torch.export.export(model, (example,), dynamic_shapes=({0: torch.export.Dim("batch")},)), "model.pt2")` | Recommended. Without `dynamic_shapes` the batch size is fixed; openNVE then runs the inputs in chunks of it |
+| `.pt` / `.pth` (TorchScript) | `torch.jit.script(model).save("model.pt")` or `torch.jit.trace(model, example).save("model.pt")` | Deprecated in PyTorch, but still loaded |
+| `.pt` / `.pth` (complete model) | `torch.save(model, "model.pt")` | Needs `"safe_mode": false` and the model's class importable (unpickling runs code from the file) |
+| `nn.Module` in Python | `Agent.from_model(model)` after `model.load_state_dict(torch.load("weights.pth"))` | For `state_dict` files |
+
+```python
+model = MyUNet()
+model.load_state_dict(torch.load("unet_weights.pth"))
+agent = opennve.Agent.from_model(model, name="unet", frame="tiles80",
+                                 prediction={"task": "segmentation", "activation": "softmax", "target_classes": [2]})
+```
+
+PyTorch models take channels first: with the default `"layout": "auto"` openNVE passes the inputs as batch × channels × height × width (`nchw`) and reads segmentation outputs as batch × classes × height × width. The model runs in `torch.inference_mode()` and `eval()` mode, with float32 inputs; outputs (a tensor, a tuple / list or a dict) are converted to float32 numpy arrays.
+
+Devices: `"device": "gpu"` uses CUDA (NVIDIA, AMD ROCm builds), Apple MPS or Intel XPU, whichever PyTorch finds (`"gpu_precision": "fp16"` runs with `torch.autocast` float16); `"auto"` uses the GPU if there is one. PyTorch has no NPU support: `"npu"` falls back to the CPU. `pip install torch` installs the CUDA build on Linux x64 and the CPU build on Windows (CUDA builds for Windows, ROCm and Intel XPU: [pytorch.org/get-started](https://pytorch.org/get-started)). On the CPU, LiteRT is usually faster for the same network (about 15 % for the U-Net of the example); PyTorch is the simpler choice if the model was trained with PyTorch, and fast on CUDA GPUs.
 
 ### Results
 
@@ -290,10 +313,11 @@ The example prints the selected tiles of every agent and draws them on the frame
 | `AgentConfig(model, name=None, backend="auto", input="tiles", frame=None, batch_size=None, threads=None, call="predict", signature="serving_default", preprocess=..., prediction=...)` | One agent (`from_dict`, `to_dict`, `from_json`, `to_json`, `copy`, `model_path`) |
 | `PreprocessConfig`, `PredictionConfig` | The `preprocess` and `prediction` sections |
 | `Agent(config, model=None)` | `load()`, `predict(frame / tiles / array)`, `predict_batch(batch)`, `prepare(images)`, `input` (model input shape and dtype), `close()`; context manager |
-| `Agent.from_model(model, name="model", **settings)` | Agent for a model object with `predict(batch)` |
+| `Agent.from_model(model, name="model", **settings)` | Agent for a model object: `torch.nn.Module`, or an object with `predict(batch)` / a callable |
+| `TorchBackend(model, threads=None, device=None, ...)`, `torch_info()` | PyTorch runtime (`opennve.agents`), PyTorch version and GPU |
 | `run_agents(source, agents, frame_configs=None, duration_ms=None)` | Yields one `AgentStep` per time window of a camera or RAW file |
 | `process_window(window, agents, frame_configs=None)` | One `AgentStep` for one window |
 | `AgentStep` | `window`, `frames`, `results`, `step[agent name]` |
 | `AgentResult`, `Prediction` | See [Results](#results) and [Segmentation](#segmentation) |
 | `register_task(name)`, `list_tasks()`, `TaskInput` | Output decoders (`classification`, `segmentation`) |
-| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`) |
+| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`, `pytorch`) |

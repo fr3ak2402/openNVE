@@ -151,6 +151,10 @@ Linux: Intel `intel_vpu` / `/dev/accel`).
   CPU. Use `.tflite` models only, or separate programs.
 - **Keras / SavedModel agents** (`backend` `tensorflow`) use the GPU through TensorFlow (CUDA on
   Linux, `tensorflow-metal` on macOS) with `"device": "gpu"`; TensorFlow has no NPU support.
+- **PyTorch agents** (`backend` `pytorch`) use the GPU through PyTorch with `"device": "gpu"`:
+  CUDA (NVIDIA; AMD with the ROCm build), Apple MPS or Intel XPU, whichever the installed PyTorch
+  supports (`opennve system` shows it). `"gpu_precision": "fp16"` runs with `torch.autocast`.
+  PyTorch has no NPU support. See [Agents](agents.md#pytorch-models).
 - **Hailo** (Raspberry Pi AI Kit / HAT) needs models compiled with Hailo's tools (`.hef`) and is
   not supported. The **Apple Neural Engine** needs Core ML models.
 - `fp16` on the GPU can change the class of single pixels close to a decision boundary;

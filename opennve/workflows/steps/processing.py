@@ -193,7 +193,8 @@ class AgentStep(Step):
     HEAVY = True
 
     def _tflite(self):
-        return [config for config in self.configs if config.resolved_backend == "tflite"]
+        """Agents whose threads the step plans: TensorFlow Lite and PyTorch (one model per thread)."""
+        return [config for config in self.configs if config.resolved_backend in ("tflite", "pytorch")]
 
     @staticmethod
     def _devices(config) -> list:

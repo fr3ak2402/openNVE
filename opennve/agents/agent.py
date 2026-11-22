@@ -21,7 +21,7 @@ class Agent:
     """A model with its configuration: agent.predict(frame) runs it on the tiles (or the frame).
 
     The model is loaded on first use, or with agent.load(). An already loaded model (for
-    instance a Keras model created in code) can be passed with model=...
+    instance a Keras model or a torch.nn.Module created in code) can be passed with model=...
     """
 
     def __init__(self, config: typing.Union[AgentConfig, dict, str], model: typing.Any = None):
@@ -33,11 +33,12 @@ class Agent:
         self.config = config
         self._backend: typing.Optional[Backend] = None
         if model is not None:
-            self._backend = model if isinstance(model, Backend) else ModelBackend(model)
+            self._backend = model if isinstance(model, Backend) else _model_backend(model, config)
 
     @classmethod
     def from_model(cls, model: typing.Any, name: str = "model", **settings) -> "Agent":
-        """Agent for a model object with predict(batch), for instance a Keras model.
+        """Agent for a model object: a torch.nn.Module (PyTorch), or any object with predict(batch),
+        for instance a Keras model.
         settings: further agent settings, for instance input="frame" or prediction={...}."""
         return cls(AgentConfig(model=f"<{name}>", name=name, **settings), model=model)
 
@@ -79,6 +80,16 @@ class Agent:
         return text
 
     @property
+    def layout(self) -> str:
+        """Input layout of the model: "nhwc" or "nchw" (preprocess.layout, "auto": from the backend)."""
+        layout = self.config.preprocess.layout
+        return self.backend.layout if layout == "auto" else layout
+
+    def _class_softmax(self, values: np.ndarray) -> np.ndarray:
+        """Softmax along the class axis: channels of maps (axis 1 for nchw), else the last axis."""
+        return _softmax(values, axis=1 if self.layout == "nchw" and values.ndim == 4 else -1)
+
+    @property
     def input(self) -> ModelInput:
         """Model input (shape and dtype)."""
         return self.backend.input
@@ -105,7 +116,7 @@ class Agent:
         shape = self.input.shape
         if len(shape) != 4:
             return None, None, None
-        if self.config.preprocess.layout == "nchw":
+        if self.layout == "nchw":
             return shape[2], shape[3], shape[1]
         return shape[1], shape[2], shape[3]
 
@@ -165,7 +176,7 @@ class Agent:
             )
         if preprocess.scale != 1.0:
             batch = batch * np.float32(preprocess.scale)
-        if preprocess.layout == "nchw":
+        if self.layout == "nchw":
             batch = batch.transpose(0, 3, 1, 2)
         return np.ascontiguousarray(batch)
 
@@ -221,7 +232,7 @@ class Agent:
         raw_outputs = outputs
         if outputs and prediction_config.activation != "none" and not logits:
             first = outputs[0].astype(np.float32)
-            first = _softmax(first) if prediction_config.activation == "softmax" else 1 / (1 + np.exp(-first))
+            first = self._class_softmax(first) if prediction_config.activation == "softmax" else 1 / (1 + np.exp(-first))
             outputs = [first] + outputs[1:]
         context = TaskInput(
             agent=self,
@@ -236,7 +247,7 @@ class Agent:
         predictions = decoder(context)
         if logits:
             return lazy_outputs_result(
-                raw_outputs, _softmax, agent=self.name, frame=frame, predictions=predictions, inference_ms=inference_ms
+                raw_outputs, self._class_softmax, agent=self.name, frame=frame, predictions=predictions, inference_ms=inference_ms
             )
         return AgentResult(
             agent=self.name, frame=frame, predictions=predictions, outputs=outputs, inference_ms=inference_ms
@@ -251,3 +262,13 @@ def load_agents(path: PathLike) -> list["Agent"]:
 def load_agent(path: PathLike, name: typing.Optional[str] = None) -> "Agent":
     """One agent of a configuration file (by name if the file has several)."""
     return Agent(load_agent_config(path, name))
+
+
+def _model_backend(model, config: AgentConfig) -> Backend:
+    """Backend for a model object: torch.nn.Module -> TorchBackend, otherwise predict(batch) / call."""
+    from ._torch import TorchBackend, is_torch_module
+
+    if is_torch_module(model):
+        return TorchBackend(model, config.threads, config.device, config.fallback, config.gpu_precision,
+                            batch_size=config.batch_size)
+    return ModelBackend(model)

@@ -14,7 +14,7 @@ PathLike = typing.Union[str, pathlib.Path]
 
 INPUTS = ("tiles", "frame")
 CHANNELS = ("both", "on", "off", "sum", "max")
-LAYOUTS = ("nhwc", "nchw")
+LAYOUTS = ("auto", "nhwc", "nchw")
 ACTIVATIONS = ("none", "softmax", "sigmoid")
 CALLS = ("predict", "call")
 
@@ -31,14 +31,15 @@ class PreprocessConfig:
     pad: pad the smaller tiles at the right and bottom edges with zeros to the full tile size.
     resize: [width, height] to resize the input to, or None: the model's input size if the
         model has a fixed size, otherwise unchanged.
-    layout: "nhwc" (batch, height, width, channels; TensorFlow default) or "nchw".
+    layout: "auto" (default: "nchw" for PyTorch models, otherwise "nhwc"), "nhwc" (batch, height,
+        width, channels; TensorFlow) or "nchw" (batch, channels, height, width; PyTorch).
     scale: factor applied to the values (for instance 255 for models trained on 0-255 images).
     """
 
     channels: str = "both"
     pad: bool = True
     resize: typing.Optional[tuple[int, int]] = None
-    layout: str = "nhwc"
+    layout: str = "auto"
     scale: float = 1.0
 
     def validate(self):
@@ -152,14 +153,16 @@ GPU_PRECISIONS = ("fp16", "fp32")
 class AgentConfig:
     """Configuration of one agent (see the module documentation for the JSON format).
 
-    model: path of the model (.tflite, .keras, .h5 or a SavedModel directory). Relative paths
+    model: path of the model (.tflite, .keras, .h5, a SavedModel directory, or PyTorch: .pt2
+        from torch.export, .pt / .pth TorchScript). Relative paths
         are relative to the agent configuration file (base_dir).
-    backend: "auto", "tflite" or "tensorflow".
+    backend: "auto", "tflite", "tensorflow" or "pytorch".
     device: where the model runs: "cpu" (default), "gpu", "npu" or "auto" (NPU, else GPU, else
         CPU). A list, for instance ["gpu", "cpu"], uses several devices at the same time in a
         workflow (some agent threads on the GPU, the others on the CPU); a single agent uses the
         first device of the list that works. TensorFlow Lite models use the LiteRT CompiledModel API for GPU and NPU (see
-        docs/accelerators.md); TensorFlow models are placed on the GPU with tf.device.
+        docs/accelerators.md); TensorFlow models are placed on the GPU with tf.device, PyTorch
+        models on CUDA / ROCm, Apple MPS or Intel XPU.
     fallback: if the device is not available or cannot run the model: true (default) runs it on
         the CPU (with a message), false raises an error.
     gpu_precision: "fp16" (default, faster) or "fp32" (GPU only).
@@ -174,6 +177,8 @@ class AgentConfig:
     call: TensorFlow (Keras) models: "predict" (model.predict) or "call" (model(x), lower latency
         for small batches).
     signature: SavedModel signature (default "serving_default").
+    safe_mode: Keras: safe deserialization; PyTorch: false also loads complete models saved with
+        torch.save(model) (unpickling runs code from the file, only for trusted files).
     """
 
     model: str
@@ -272,7 +277,7 @@ class AgentConfig:
             return "tensorflow"
         raise ValueError(
             f"agent {self.name}: cannot choose a backend for {self.model!r} "
-            "(.tflite, .keras, .h5 or a SavedModel directory), set \"backend\""
+            "(.tflite, .keras, .h5, .pt2, .pt, .pth or a SavedModel directory), set \"backend\""
         )
 
     # JSON

@@ -5,12 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 
-def _softmax(values: np.ndarray) -> np.ndarray:
-    """Softmax along the last axis (float32, computed in place on a copy)."""
+def _softmax(values: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Softmax along an axis, default the last one (float32, computed in place on a copy)."""
     result = np.array(values, dtype=np.float32, copy=True)
-    result -= result.max(axis=-1, keepdims=True)
+    result -= result.max(axis=axis, keepdims=True)
     np.exp(result, out=result)
-    result /= result.sum(axis=-1, keepdims=True)
+    result /= result.sum(axis=axis, keepdims=True)
     return result
 
 

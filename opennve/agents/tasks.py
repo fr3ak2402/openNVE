@@ -101,7 +101,7 @@ def _segmentation(task: TaskInput) -> list[Prediction]:
     if slow:
         single = task
         if task.logits:  # the per-input path works with probabilities
-            single = dataclasses.replace(task, outputs=[_softmax(task.outputs[0])] + list(task.outputs[1:]), logits=False)
+            single = dataclasses.replace(task, outputs=[task.agent._class_softmax(task.outputs[0])] + list(task.outputs[1:]), logits=False)
         results.update(_segmentation_single(single, slow))
     return [results[index] for index in range(task.count)]
 
@@ -115,7 +115,7 @@ def _segmentation_batch_indices(task: TaskInput) -> list[int]:
     output = task.outputs[0]
     if output.ndim != 4:
         return []
-    layout = task.agent.config.preprocess.layout
+    layout = task.agent.layout
     height, width, classes = (output.shape[2], output.shape[3], output.shape[1]) if layout == "nchw" else output.shape[1:4]
     if classes < 2:
         return []
@@ -129,7 +129,7 @@ def _segmentation_batch_indices(task: TaskInput) -> list[int]:
 def _segmentation_batch(task: TaskInput, indices: list[int]) -> dict[int, Prediction]:
     config = task.config
     output = task.outputs[0][indices]
-    if task.agent.config.preprocess.layout == "nchw":
+    if task.agent.layout == "nchw":
         output = output.transpose(0, 2, 3, 1)
     values = np.asarray(output, dtype=np.float32)  # probabilities, or logits if task.logits
     classes = values.shape[3]
@@ -215,7 +215,7 @@ def _segmentation_prediction(task, index, tile, values, class_map, pixels, pixel
 
 def _segmentation_single(task: TaskInput, indices: list[int]) -> dict[int, Prediction]:
     config = task.config
-    layout = task.agent.config.preprocess.layout
+    layout = task.agent.layout
     predictions = {}
     for index in indices:
         per_input = [output[index] for output in task.outputs]
