@@ -51,6 +51,9 @@ automatically to the CPU cores of the machine, and agents on the GPU or an NPU. 
 - `opennve system` shows the GPU / NPU support of the installed LiteRT; agent steps with GPU / NPU
   agents use 2 threads with `"threads": "auto"`; workflows report where each agent runs
 - Extras `npu-intel`, `npu-qualcomm`; dependency `ai-edge-litert>=2.4`
+- Dependencies completed: `flatbuffers` (used directly for GPU / NPU models), extras `hdf5`
+  (hdf5plugin for compressed HDF5 files), `dev` (pytest, build, packaging); `all` includes
+  hdf5plugin
 - New guide [docs/accelerators.md](docs/accelerators.md)
 
 ### System information

@@ -51,7 +51,7 @@ opennve recording recording.raw --json
 
 ## `opennve version`
 
-Shows the version, the build number and the versions of the dependencies (`--json` as JSON). `opennve --version` prints only the first line.
+Shows the version, the build number and the versions of the dependencies and of the optional extras (`--json` as JSON). `opennve --version` prints only the first line.
 
 ```text
 openNVE 1.1.0 (build 324.2026)
@@ -61,8 +61,16 @@ openNVE 1.1.0 (build 324.2026)
   platform              win32 AMD64
   numpy                 2.5.5
   OpenCV                5.1.0.95
-  LiteRT                2.3.0
-  TensorFlow            -
+  h5py                  3.14.0
+  LiteRT                2.4.0
+  flatbuffers           25.12.19
+  optional (extras):
+  TensorFlow            - (extra tensorflow)
+  pandas                - (extra pandas)
+  PyTables              - (extra pandas)
+  hdf5plugin            - (extra hdf5)
+  NPU Intel SDK         - (extra npu-intel)
+  NPU Qualcomm SDK      - (extra npu-qualcomm)
 ```
 
 The build number is `<day of year>.<year>` of the day the wheel was built (UTC), for instance `324.2026` for 20 November 2026.

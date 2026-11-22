@@ -30,7 +30,7 @@ All names described here are available directly as `opennve.<name>`.
 | `BUILD_NUMBER` / `build_number()` | Build number `<day of year>.<year>` of the build (UTC), for instance `"324.2026"` for 20 November 2026 |
 | `BUILD_DATE` | Build date and time (`datetime`, UTC) |
 | `NEUROMORPHIC_DRIVERS_VERSION` | Version of the embedded neuromorphic_drivers |
-| `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `litert`, `tensorflow` |
+| `version_info()` | Dictionary: `version`, `build`, `build_date`, `build_source`, `neuromorphic_drivers`, `python`, `platform`, `numpy`, `opencv`, `h5py`, `litert`, `flatbuffers`, optional: `tensorflow`, `pandas`, `tables`, `hdf5plugin`, `npu_intel`, `npu_qualcomm` (`None` if not installed) |
 | `version_string()` | `"openNVE 1.1.0 (build 324.2026)"` |
 
 ```python

@@ -32,7 +32,9 @@ pip installs the dependencies automatically:
 | numpy | Events, filters, `.raw` files, time windows, frames and tiles |
 | h5py | [HDF5 event files](hdf5-files.md) (`.h5`, `.hdf5`). Installed for Python 3.14; for Python 3.15 there are no h5py wheels yet (`pip install h5py` builds it if the HDF5 library is installed) |
 | opencv-python | Display (`frame.to_image`, examples), resizing of agent inputs |
-| ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
+| ai-edge-litert (LiteRT) | [Agents](agents.md) with TensorFlow Lite models (`.tflite`) on the CPU, [GPU and NPU](accelerators.md). Installed where wheels exist: Windows x64, Linux x64 / ARM64 (Raspberry Pi 5), macOS Apple Silicon |
+| flatbuffers | GPU / NPU agents (openNVE adapts `.tflite` models for accelerators); also needed by LiteRT |
+| neuromorphic_drivers | Cameras; embedded in the openNVE wheel (with the SE1-S4 driver) |
 
 Optional extras:
 
@@ -40,7 +42,12 @@ Optional extras:
 |---|---|---|
 | `tensorflow` | tf-nightly (about 600 MB, includes Keras 3) | [Neural networks](networks.md) (building, training, TensorFlow Lite export) and agents with Keras / SavedModel models |
 | `pandas` | pandas, PyTables | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`), HDF5 files written by pandas in table format |
-| `all` | tensorflow, pandas, PyTables, pytest | Everything |
+| `hdf5` | hdf5plugin | Compressed HDF5 files of other tools (Blosc, LZ4, Zstd, Bitshuffle); without it h5py cannot read them |
+| `npu-intel` | LiteRT Intel SDK (OpenVINO) | NPU of Intel Core Ultra (AI Boost), see [GPU and NPU](accelerators.md#npu-runtimes); needs `--extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly` |
+| `npu-qualcomm` | LiteRT Qualcomm SDK | Qualcomm NPU (Hexagon) on Linux ARM64 |
+| `test` | pytest | Running the tests |
+| `dev` | pytest, build, packaging | Tests and building the wheel |
+| `all` | tensorflow, pandas, PyTables, hdf5plugin, pytest | Everything except the NPU runtimes |
 
 ```sh
 pip install "opennve-1.1.0-cp314-cp314-win_amd64.whl[tensorflow]"
