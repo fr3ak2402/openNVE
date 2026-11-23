@@ -25,10 +25,8 @@ DEFAULT_BATCH_SIZE = 8
 TIMEOUT_MS = 10_000
 
 INSTALL_HELP = (
-    "Hailo models need openNVE-hailo (package opennve_hailo): install HailoRT (Raspberry Pi OS: sudo "
-    "apt install hailo-all for Hailo-8 / 8L, hailo-h10-all for Hailo-10H), then in the environment "
-    "of openNVE: git clone https://github.com/fr3ak2402/openNVE-hailo && bash openNVE-hailo/install.sh "
-    "(see docs/accelerators.md#hailo)"
+    "Hailo models need openNVE-hailo (package opennve_hailo): run opennve hailo install (sets up PCIe, "
+    "driver, HailoRT and opennve_hailo on the Raspberry Pi; see docs/accelerators.md#hailo)"
 )
 
 

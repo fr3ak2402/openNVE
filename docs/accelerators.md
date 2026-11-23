@@ -185,27 +185,29 @@ the `.tflite` model. Inputs and outputs are channels last (`nhwc`).
 [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (package `opennve_hailo`): HailoRT in
 Rust with a Python module, like the camera drivers in neuromorphic-drivers. It uses the
 asynchronous HailoRT API, which works on all Hailo chips, and is compiled against the HailoRT
-installed on the computer (its `install.sh` downloads the matching HailoRT headers); one build
-works for every Python from 3.11. On the Raspberry Pi 5:
+installed on the computer; one build works for every Python from 3.11. On the Raspberry Pi one
+command sets up everything that is missing:
 
 ```sh
-sudo apt install dkms hailo-all                # AI Kit / AI HAT+ (AI HAT+ 2: hailo-h10-all); reboot afterwards
-sudo apt install git g++                       # C++ compiler
-curl https://sh.rustup.rs -sSf | sh            # Rust
 source ~/opennve/.venv/bin/activate            # the environment openNVE is installed in
-git clone https://github.com/fr3ak2402/openNVE-hailo
-bash openNVE-hailo/install.sh
-opennve system
+opennve hailo install                          # asks before changing the system (--yes: does not ask)
+sudo reboot                                    # if it says so
+opennve hailo                                  # state: module, driver, HailoRT, devices
 ```
+
+It finds the module (Hailo-8 / 8L or Hailo-10H), enables PCIe Gen 3 in
+`/boot/firmware/config.txt` (Raspberry Pi 5), installs driver, firmware and HailoRT
+(`sudo apt install dkms hailo-all`, Hailo-10H: `hailo-h10-all`), git, g++ and Rust, and builds and
+installs `opennve_hailo` for the Python of openNVE (see [opennve hailo](cli.md#opennve-hailo-install)).
 
 ```text
   NPU                   Hailo AI accelerator (hailo_pci)
   HailoRT 4.23.0        1 Hailo device (Hailo-8L) (.hef models)
 ```
 
-Run `install.sh` again after a HailoRT update: openNVE-hailo is compiled for one HailoRT version.
-Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module work the same way with the
-HailoRT packages of the Hailo Developer Zone; Windows (HailoRT Windows installer) is not tested.
+Run `opennve hailo install` again after a HailoRT update: openNVE-hailo is compiled for one
+HailoRT version. Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module: install
+HailoRT from the Hailo Developer Zone first; Windows (HailoRT Windows installer) is not tested.
 
 **Hailo-15.** The Hailo-15 is a camera processor with its own ARM cores and Linux; HailoRT runs
 on the Hailo-15 itself. openNVE would have to run there as well (with Python 3.14, which the

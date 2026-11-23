@@ -29,6 +29,9 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 - The Hailo runtime is a separate project, [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo)
   (package `opennve_hailo`): HailoRT in Rust with a Python module, built against the installed
   HailoRT 4.x or 5.x, for every Python from 3.11
+- `opennve hailo install` sets up the Raspberry Pi in one step (openNVE-hailo `install.sh`):
+  PCIe Gen 3, driver, firmware and HailoRT (`hailo-all` / `hailo-h10-all`), Rust, `opennve_hailo`;
+  `opennve hailo` shows module, driver, HailoRT and devices
 - `opennve system` / `opennve version` show HailoRT and its devices with their chip (Hailo-8L,
   Hailo-10H, ...); `opennve.agents.hailo_info()`
 

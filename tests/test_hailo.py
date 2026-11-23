@@ -155,3 +155,30 @@ def test_workflow(hailo, tmp_path):
     assert plan["threads"] == 2
     run = workflow.run()
     assert len(run.results) == 4 and hailo.calls["runs"] > 0
+
+
+def test_setup_pci_modules(tmp_path):
+    from opennve import hailo_setup
+
+    for address, device in (("0001:01:00.0", "0x2864"), ("0002:01:00.0", "0x45c4"), ("0000:00:00.0", None)):
+        folder = tmp_path / "sys/bus/pci/devices" / address
+        folder.mkdir(parents=True)
+        (folder / "vendor").write_text("0x1e60\n" if device else "0x14e4\n")
+        (folder / "device").write_text(f"{device or '0x2712'}\n")
+    assert hailo_setup.pci_modules(str(tmp_path)) == [
+        {"address": "0001:01:00.0", "chip": "Hailo-8 / Hailo-8L"},
+        {"address": "0002:01:00.0", "chip": "Hailo-10H"},
+    ]
+
+
+def test_setup_install_runs_install_sh(tmp_path, monkeypatch):
+    from opennve import hailo_setup
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    (tmp_path / "install.sh").write_text('echo "$PYTHON $*" > "$(dirname "$0")/called"\n')
+    assert hailo_setup.install(yes=True, gen3=False, package="hailo-h10-all", source=str(tmp_path)) == 0
+    assert (tmp_path / "called").read_text().split() == [sys.executable, "--yes", "--no-gen3", "--package=hailo-h10-all"]
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert hailo_setup.install(source=str(tmp_path)) == 1
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert hailo_setup.install(source=str(tmp_path / "missing")) == 1

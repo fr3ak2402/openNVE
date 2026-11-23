@@ -174,6 +174,26 @@ SENSING SE1-S4-USB (04B4:00C4) driver: WinUSB | ready
 
 The exit code is `1` if a camera is not ready.
 
+## `opennve hailo [install]`
+
+Shows the Hailo accelerator (module on PCIe, driver, HailoRT, `opennve_hailo`, devices), or sets
+it up on Linux / the Raspberry Pi:
+
+```sh
+opennve hailo                       # state
+opennve hailo install               # PCIe (Gen 3), driver + HailoRT (apt), Rust, opennve_hailo; asks before changes
+opennve hailo install --yes --reboot
+opennve hailo install --no-system   # only build and install opennve_hailo (HailoRT already installed)
+```
+
+`install` downloads [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (`--ref`, or
+`--source DIR` for a local copy) and runs its `install.sh` for the Python that runs openNVE:
+it finds the module (Hailo-8 / 8L or Hailo-10H), adds `dtparam=pciex1_gen=3` to
+`/boot/firmware/config.txt` (Raspberry Pi 5, `--no-gen3`: not), installs `dkms` and `hailo-all`
+(Hailo-10H: `hailo-h10-all`), git, g++ and Rust, builds `opennve_hailo` against the installed
+HailoRT and says when a reboot is needed. Run it again after a HailoRT update. See
+[Hailo](accelerators.md#hailo).
+
 ## `opennve raw <file>`
 
 Shows the header and statistics of a RAW file: format, sensor size, serial number, number of events, time span and event rate.
