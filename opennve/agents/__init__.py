@@ -30,8 +30,9 @@ Backends (backend "auto" chooses by the model path):
     pytorch:    PyTorch models: .pt2 (torch.export), .pt / .pth (TorchScript; complete models
                 saved with torch.save(model) with "safe_mode": false), or an nn.Module passed
                 with Agent.from_model (pip install "opennve[pytorch]"); inputs channels first
-    hailo:      compiled Hailo models (.hef) on a Hailo-8L / Hailo-8 (Raspberry Pi AI Kit /
-                AI HAT+) with the HailoRT Python API (tools/build_hailort_python.sh)
+    hailo:      compiled Hailo models (.hef) on Hailo-8, Hailo-8L, Hailo-10H, Hailo-15 (Raspberry
+                Pi AI Kit, AI HAT+, AI HAT+ 2) with the HailoRT Python API 4.x / 5.x
+                (tools/build_hailort_python.sh)
 
 Use:
 

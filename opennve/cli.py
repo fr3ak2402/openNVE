@@ -199,8 +199,9 @@ def _system(args) -> int:
     hailo = info.get("hailo") or {}
     has_hailo = any(device.get("vendor") == "Hailo" for device in info.get("npus", []))
     if hailo.get("installed"):
-        devices = len(hailo.get("devices") or [])
-        state = f"{devices} Hailo device{'s' if devices != 1 else ''}" if devices else "no Hailo device found"
+        devices = hailo.get("devices") or []
+        chips = ", ".join(device.get("architecture") or "in use" for device in devices)
+        state = f"{len(devices)} Hailo device{'s' if len(devices) != 1 else ''} ({chips})" if devices else "no Hailo device found"
         print(f"  HailoRT {str(hailo.get('version')):<14}{state} (.hef models)")
     elif has_hailo:
         print("  HailoRT               Python API not installed: tools/build_hailort_python.sh (docs/accelerators.md)")

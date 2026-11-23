@@ -14,10 +14,10 @@ WEIGHTS = np.array([[0.0, 5.0, 0.0], [0.0, 0.0, 5.0]], np.float32)  # 1 x 1 conv
 BIAS = np.array([1.0, 0.0, 0.0], np.float32)
 
 
-def _fake_hailo(shape=(16, 16, 2), multiple_inputs=False):
+def _fake_hailo(shape=(16, 16, 2), multiple_inputs=False, architecture="HAILO8L", version="4.23.0"):
     """A minimal stand-in for hailo_platform: the .hef "model" is a 1 x 1 convolution."""
     module = types.ModuleType("hailo_platform")
-    module.__version__ = "4.23.0"
+    module.__version__ = version
     module.calls = {"vdevices": 0, "runs": 0, "batches": [], "threads": set(), "shutdown": 0}
 
     class FormatType:
@@ -106,6 +106,8 @@ def _fake_hailo(shape=(16, 16, 2), multiple_inputs=False):
             return Params()
 
         def create_infer_model(self, path, name=""):
+            if str(path).endswith("other_chip.hef"):
+                raise RuntimeError("libhailort failed with error: 93 (HAILO_HEF_NOT_COMPATIBLE_WITH_DEVICE)")
             return InferModel(path)
 
         def get_physical_devices_ids(self):
@@ -114,10 +116,23 @@ def _fake_hailo(shape=(16, 16, 2), multiple_inputs=False):
         def release(self):
             pass
 
+    class Identity:
+        device_architecture = f"DeviceArchitectureTypes.{architecture}"
+
+    class Control:
+        def identify(self):
+            return Identity()
+
     class Device:
+        def __init__(self, device_id=None):
+            self.device_id, self.control = device_id, Control()
+
         @staticmethod
         def scan():
             return ["0001:01:00.0"]
+
+        def release(self):
+            pass
 
     module.FormatType, module.HailoSchedulingAlgorithm = FormatType, HailoSchedulingAlgorithm
     module.VDevice, module.Device = VDevice, Device
@@ -210,10 +225,21 @@ def test_devices_and_errors(hailo, tmp_path, monkeypatch):
         opennve.Agent(opennve.AgentConfig(model=str(tmp_path / "a.hef"))).load()
 
 
-def test_hailo_info(hailo, monkeypatch):
+@pytest.mark.parametrize("architecture, version, chip", [
+    ("HAILO8L", "4.23.0", "Hailo-8L"), ("HAILO8", "4.23.0", "Hailo-8"),
+    ("HAILO10H", "5.5.0", "Hailo-10H"), ("HAILO15H", "5.5.0", "Hailo-15H")])
+def test_hailo_info(monkeypatch, architecture, version, chip):
+    monkeypatch.setitem(sys.modules, "hailo_platform", _fake_hailo(architecture=architecture, version=version))
     monkeypatch.setattr("importlib.util.find_spec", lambda name, *args: object())
     info = opennve.agents.hailo_info()
-    assert info == {"installed": True, "version": "4.23.0", "devices": ["0001:01:00.0"]}
+    assert info == {"installed": True, "version": version, "devices": [{"id": "0001:01:00.0", "architecture": chip}]}
+    assert opennve.agents.hailo_info(identify=False)["devices"][0]["architecture"] is None
+
+
+def test_hef_for_another_chip(hailo, tmp_path):
+    (tmp_path / "other_chip.hef").write_bytes(b"fake")
+    with pytest.raises(RuntimeError, match="compiled for one chip"):
+        opennve.Agent(opennve.AgentConfig(model=str(tmp_path / "other_chip.hef"))).load()
 
 
 def test_workflow(hailo, tmp_path):

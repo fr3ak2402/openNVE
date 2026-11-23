@@ -1,8 +1,11 @@
-"""Hailo accelerators (Raspberry Pi AI Kit / AI HAT+: Hailo-8L, Hailo-8) with HailoRT.
+"""Hailo accelerators with HailoRT: Hailo-8 / Hailo-8L (HailoRT 4.x; Raspberry Pi AI Kit,
+AI HAT+), Hailo-10H (HailoRT 5.x; AI HAT+ 2) and the Hailo-15 vision processors (HailoRT 5.x on
+the Hailo-15 itself).
 
-Runs compiled Hailo models (.hef, made with the Hailo Dataflow Compiler) through the Python API
-of HailoRT (hailo_platform). HailoRT publishes that API only for some Python versions; for the
-Python of openNVE build it with tools/build_hailort_python.sh (see docs/accelerators.md).
+Runs compiled Hailo models (.hef, made with the Hailo Dataflow Compiler for the chip) through the
+Python API of HailoRT (hailo_platform), which is the same for HailoRT 4 and 5. HailoRT publishes
+that API only for some Python versions; for the Python of openNVE build it with
+tools/build_hailort_python.sh (see docs/accelerators.md).
 """
 
 from __future__ import annotations
@@ -29,7 +32,8 @@ _VDEVICE_PID = None
 
 INSTALL_HELP = (
     "Hailo models need the HailoRT Python API (hailo_platform) for this Python version: on the "
-    "Raspberry Pi install HailoRT (sudo apt install hailo-all) and build the Python API with "
+    "Raspberry Pi install HailoRT (sudo apt install hailo-all for Hailo-8 / 8L, hailo-h10-all for "
+    "Hailo-10H) and build the Python API with "
     "tools/build_hailort_python.sh, see docs/accelerators.md#hailo"
 )
 
@@ -44,10 +48,33 @@ def import_hailo():
     return hailo_platform
 
 
-def hailo_info() -> dict[str, typing.Any]:
-    """HailoRT Python API: installed, version and the Hailo devices it finds (for opennve system).
+ARCHITECTURES = {"HAILO8_A0": "Hailo-8", "HAILO8": "Hailo-8", "HAILO8L": "Hailo-8L", "HAILO10H": "Hailo-10H",
+                 "HAILO15H": "Hailo-15H", "HAILO15M": "Hailo-15M", "HAILO15L": "Hailo-15L"}
 
-    Does not open the devices (they may be in use by another program)."""
+
+def _architecture(hailo, device_id: str) -> typing.Optional[str]:
+    """Chip of a device (Hailo-8, Hailo-8L, Hailo-10H, Hailo-15H, ...), None if it is in use."""
+    device = None
+    try:
+        device = hailo.Device(device_id)
+        name = str(device.control.identify().device_architecture).split(".")[-1]
+        return ARCHITECTURES.get(name, name)
+    except Exception:
+        return None
+    finally:
+        if device is not None:
+            try:
+                device.release()
+            except Exception:
+                pass
+
+
+def hailo_info(identify: bool = True) -> dict[str, typing.Any]:
+    """HailoRT Python API: installed, version and the Hailo devices it finds (for opennve system):
+    {"installed", "version", "devices": [{"id", "architecture"}]}.
+
+    identify: ask each device for its chip (opens the device briefly; None if another program
+    uses it)."""
     import importlib.util
 
     if importlib.util.find_spec("hailo_platform") is None:
@@ -58,7 +85,9 @@ def hailo_info() -> dict[str, typing.Any]:
         return {"installed": False, "error": str(error).splitlines()[0]}
     info: dict[str, typing.Any] = {"installed": True, "version": getattr(hailo, "__version__", None)}
     try:
-        info["devices"] = [str(device) for device in hailo.Device.scan()]
+        ids = [str(device) for device in hailo.Device.scan()]
+        info["devices"] = [{"id": device_id, "architecture": _architecture(hailo, device_id) if identify else None}
+                           for device_id in ids]
     except Exception as error:  # driver missing, no device
         info["devices"] = []
         info["error"] = str(error).splitlines()[0] if str(error) else type(error).__name__
@@ -101,7 +130,7 @@ def _check_device(device) -> None:
 
 
 class HailoBackend(Backend):
-    """Compiled Hailo model (.hef) on a Hailo accelerator.
+    """Compiled Hailo model (.hef) on a Hailo accelerator (Hailo-8, Hailo-8L, Hailo-10H, Hailo-15).
 
     The model is quantized; HailoRT converts the float32 inputs and outputs on the CPU. Inputs
     and outputs are channels last (nhwc). batch_size: frames per Hailo batch (default 8).
@@ -126,11 +155,20 @@ class HailoBackend(Backend):
                 text = str(error)
                 if "OUT_OF_PHYSICAL_DEVICES" in text or "NOT_FOUND" in text:
                     raise RuntimeError(
-                        "no free Hailo device: is the AI Kit / AI HAT+ connected and its driver loaded "
+                        "no free Hailo device: is the Hailo module (AI Kit, AI HAT+, AI HAT+ 2, M.2) connected and its driver loaded "
                         "(hailortcli scan), and no other program using it? " + text
                     ) from error
                 raise
-            model = vdevice.create_infer_model(os.fspath(self.path))
+            try:
+                model = vdevice.create_infer_model(os.fspath(self.path))
+            except Exception as error:
+                if "NOT_COMPATIBLE" in str(error) or "INVALID_HEF" in str(error):
+                    raise RuntimeError(
+                        f"{self.path.name} does not fit the Hailo device: a .hef is compiled for one chip "
+                        "(hailo8 / hailo8l with the Dataflow Compiler 3.x, hailo10h / hailo15h with 5.x); "
+                        f"compile it for this device ({error})"
+                    ) from error
+                raise
         if len(model.input_names) != 1:
             raise ValueError(f"{self.path.name}: Hailo models with {len(model.input_names)} inputs are not supported")
         model.set_batch_size(self.batch_size)

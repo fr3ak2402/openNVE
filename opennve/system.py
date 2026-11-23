@@ -238,6 +238,8 @@ _NPU_DRIVERS = {
     "qaic": ("Qualcomm", "Qualcomm Cloud AI"),
     "hailo": ("Hailo", "Hailo AI accelerator"),
     "hailo_pci": ("Hailo", "Hailo AI accelerator"),
+    "hailo1x": ("Hailo", "Hailo AI accelerator"),  # Hailo-10H / Hailo-15 (HailoRT 5)
+    "hailo1x_pci": ("Hailo", "Hailo AI accelerator"),
     "apex": ("Google", "Coral Edge TPU"),
     "rknpu": ("Rockchip", "Rockchip NPU"),
     "ethosu": ("Arm", "Arm Ethos-U NPU"),

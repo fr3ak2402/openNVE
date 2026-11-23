@@ -19,15 +19,18 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   otherwise (unchanged for existing configurations)
 - `opennve system` and `opennve version` show PyTorch and its GPU; `opennve.agents.torch_info()`
 
-### Hailo (Raspberry Pi AI Kit / AI HAT+)
+### Hailo (Raspberry Pi AI Kit, AI HAT+, AI HAT+ 2)
 
-- New backend `hailo`: agents run compiled Hailo models (`.hef`) on a Hailo-8L / Hailo-8 with
-  HailoRT; `"backend": "auto"` picks it for `.hef` files. HailoRT converts the float32 inputs and
+- New backend `hailo`: agents run compiled Hailo models (`.hef`) on Hailo-8, Hailo-8L (HailoRT
+  4.x), Hailo-10H and Hailo-15 (HailoRT 5.x); `"backend": "auto"` picks it for `.hef` files; a
+  `.hef` compiled for another chip gives a clear error. HailoRT converts the float32 inputs and
   outputs, so `preprocess` / `prediction` stay as for the `.tflite` model. All Hailo agents and
   workflow threads share one device (HailoRT scheduler); workflows give Hailo agents 2 threads
 - `tools/build_hailort_python.sh` builds the HailoRT Python API (`hailo_platform`) for Python 3.14
-  from the HailoRT source of the installed version (Hailo publishes it only for other Python versions)
-- `opennve system` / `opennve version` show HailoRT and its devices; `opennve.agents.hailo_info()`
+  from the HailoRT source of the installed version, 4.x or 5.x (Hailo publishes it only for other
+  Python versions)
+- `opennve system` / `opennve version` show HailoRT and its devices with their chip (Hailo-8L,
+  Hailo-10H, ...); `opennve.agents.hailo_info()`
 
 ### Fixes
 
