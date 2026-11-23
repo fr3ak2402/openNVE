@@ -31,8 +31,8 @@ Backends (backend "auto" chooses by the model path):
                 saved with torch.save(model) with "safe_mode": false), or an nn.Module passed
                 with Agent.from_model (pip install "opennve[pytorch]"); inputs channels first
     hailo:      compiled Hailo models (.hef) on Hailo-8, Hailo-8L, Hailo-10H, Hailo-15 (Raspberry
-                Pi AI Kit, AI HAT+, AI HAT+ 2) with the HailoRT Python API 4.x / 5.x
-                (tools/build_hailort_python.sh)
+                Pi AI Kit, AI HAT+, AI HAT+ 2) with HailoRT 4.x / 5.x through openNVE-hailo
+                (package opennve_hailo, github.com/fr3ak2402/openNVE-hailo)
 
 Use:
 

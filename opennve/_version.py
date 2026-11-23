@@ -103,7 +103,7 @@ def version_info() -> dict[str, typing.Any]:
         # optional (extras)
         "tensorflow": installed("tf-nightly") or installed("tensorflow") or installed("tensorflow-cpu"),
         "pytorch": installed("torch"),
-        "hailo": installed("hailort"),  # HailoRT Python API (hailo_platform)
+        "hailo": installed("opennve-hailo"),  # Hailo accelerators (github.com/fr3ak2402/openNVE-hailo)
         "pandas": installed("pandas"),
         "tables": installed("tables"),
         "hdf5plugin": installed("hdf5plugin"),

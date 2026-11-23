@@ -26,9 +26,9 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   `.hef` compiled for another chip gives a clear error. HailoRT converts the float32 inputs and
   outputs, so `preprocess` / `prediction` stay as for the `.tflite` model. All Hailo agents and
   workflow threads share one device (HailoRT scheduler); workflows give Hailo agents 2 threads
-- `tools/build_hailort_python.sh` builds the HailoRT Python API (`hailo_platform`) for Python 3.14
-  from the HailoRT source of the installed version, 4.x or 5.x (Hailo publishes it only for other
-  Python versions)
+- The Hailo runtime is a separate project, [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo)
+  (package `opennve_hailo`): HailoRT in Rust with a Python module, built against the installed
+  HailoRT 4.x or 5.x, for every Python from 3.11
 - `opennve system` / `opennve version` show HailoRT and its devices with their chip (Hailo-8L,
   Hailo-10H, ...); `opennve.agents.hailo_info()`
 

@@ -15,7 +15,7 @@ agents.json   ──►  agent "insects" (model.tflite) ──► predict(tiles)
 | TensorFlow Lite (`.tflite`) | [LiteRT](https://ai.google.dev/edge/litert) (TensorFlow Lite runtime) | Installed with openNVE (dependency `ai-edge-litert`) |
 | TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | Extra `opennve[tensorflow]` (installs `tf-nightly`, see below) |
 | PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`) | [PyTorch](https://pytorch.org) | Extra `opennve[pytorch]` (installs `torch`, see [PyTorch models](#pytorch-models)) |
-| Hailo (`.hef`, compiled for Hailo-8 / 8L / 10H / 15) | HailoRT 4 / 5 | Raspberry Pi OS `hailo-all` / `hailo-h10-all` + `tools/build_hailort_python.sh`, see [Hailo](accelerators.md#hailo) |
+| Hailo (`.hef`, compiled for Hailo-8 / 8L / 10H / 15) | HailoRT 4 / 5 | Raspberry Pi OS `hailo-all` / `hailo-h10-all` + [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo), see [Hailo](accelerators.md#hailo) |
 
 LiteRT is small (about 15 MB) and has wheels for Python 3.14 on Windows x64, Linux x64 and ARM64 (Raspberry Pi 5) and macOS Apple Silicon. It is the recommended runtime for live cameras.
 

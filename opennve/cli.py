@@ -131,14 +131,14 @@ def _version(args) -> int:
     for key, label, extra in (
         ("tensorflow", "TensorFlow", "tensorflow"),
         ("pytorch", "PyTorch", "pytorch"),
-        ("hailo", "HailoRT (Hailo)", "tools/build_hailort_python.sh"),
+        ("hailo", "openNVE-hailo (Hailo)", "github.com/fr3ak2402/openNVE-hailo"),
         ("pandas", "pandas", "pandas"),
         ("tables", "PyTables", "pandas"),
         ("hdf5plugin", "hdf5plugin", "hdf5"),
         ("npu_intel", "NPU Intel SDK", "npu-intel"),
         ("npu_qualcomm", "NPU Qualcomm SDK", "npu-qualcomm"),
     ):
-        hint = extra if extra.endswith(".sh") else f"extra {extra}"
+        hint = extra if "/" in extra else f"extra {extra}"
         print(f"  {label:<21} {info[key] or f'- ({hint})'}")
     return 0
 
@@ -204,7 +204,7 @@ def _system(args) -> int:
         state = f"{len(devices)} Hailo device{'s' if len(devices) != 1 else ''} ({chips})" if devices else "no Hailo device found"
         print(f"  HailoRT {str(hailo.get('version')):<14}{state} (.hef models)")
     elif has_hailo:
-        print("  HailoRT               Python API not installed: tools/build_hailort_python.sh (docs/accelerators.md)")
+        print("  HailoRT               openNVE-hailo not installed: github.com/fr3ak2402/openNVE-hailo (docs/accelerators.md)")
     return 0
 
 

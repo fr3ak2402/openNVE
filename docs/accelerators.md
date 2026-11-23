@@ -181,15 +181,20 @@ quantization can change results. HailoRT converts the float32 inputs and outputs
 the quantized values and back, so the `preprocess` and `prediction` settings stay the same as for
 the `.tflite` model. Inputs and outputs are channels last (`nhwc`).
 
-**Installation on the Raspberry Pi 5.** HailoRT comes with Raspberry Pi OS, its Python API
-(`hailo_platform`) only for the system Python. For the Python 3.14 of openNVE, build the Python API
-with `tools/build_hailort_python.sh` (in the openNVE repository; takes a few minutes):
+**Installation.** openNVE runs `.hef` models with
+[openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (package `opennve_hailo`): HailoRT in
+Rust with a Python module, like the camera drivers in neuromorphic-drivers. It uses the
+asynchronous HailoRT API, which works on all Hailo chips, and is compiled against the HailoRT
+installed on the computer (its `install.sh` downloads the matching HailoRT headers); one build
+works for every Python from 3.11. On the Raspberry Pi 5:
 
 ```sh
 sudo apt install dkms hailo-all                # AI Kit / AI HAT+ (AI HAT+ 2: hailo-h10-all); reboot afterwards
-sudo apt install git cmake g++                 # build tools; plus the headers of your Python 3.14
+sudo apt install git g++                       # C++ compiler
+curl https://sh.rustup.rs -sSf | sh            # Rust
 source ~/opennve/.venv/bin/activate            # the environment openNVE is installed in
-bash tools/build_hailort_python.sh             # builds and installs hailo_platform for this Python
+git clone https://github.com/fr3ak2402/openNVE-hailo
+bash openNVE-hailo/install.sh
 opennve system
 ```
 
@@ -198,12 +203,9 @@ opennve system
   HailoRT 4.23.0        1 Hailo device (Hailo-8L) (.hef models)
 ```
 
-The script finds the installed HailoRT (4.x or 5.x), compiles the Python bindings of exactly that
-version from the HailoRT source code on GitHub (pybind11 3 for HailoRT 4, pybind11 2.13 for
-HailoRT 5) and installs them as a wheel (`hailort`). Run it again after a HailoRT update: the
-Python API must have the same version as the library. Other Linux computers (x86_64, ARM64)
-with a Hailo M.2 / PCIe module work the same way with the HailoRT packages of the Hailo
-Developer Zone.
+Run `install.sh` again after a HailoRT update: openNVE-hailo is compiled for one HailoRT version.
+Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module work the same way with the
+HailoRT packages of the Hailo Developer Zone; Windows (HailoRT Windows installer) is not tested.
 
 **Hailo-15.** The Hailo-15 is a camera processor with its own ARM cores and Linux; HailoRT runs
 on the Hailo-15 itself. openNVE would have to run there as well (with Python 3.14, which the
