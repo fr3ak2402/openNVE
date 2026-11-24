@@ -197,16 +197,18 @@ opennve hailo                                  # state: module, driver, HailoRT,
 
 It finds the module (Hailo-8 / 8L or Hailo-10H), enables PCIe Gen 3 in
 `/boot/firmware/config.txt` (Raspberry Pi 5), installs driver, firmware and HailoRT
-(`sudo apt install dkms hailo-all`, Hailo-10H: `hailo-h10-all`), git, g++ and Rust, and builds and
-installs `opennve_hailo` for the Python of openNVE (see [opennve hailo](cli.md#opennve-hailo-install)).
+(`sudo apt install dkms hailo-all`, Hailo-10H: `hailo-h10-all`) and the ready-made `opennve_hailo`
+package for the installed HailoRT version (releases of openNVE-hailo: HailoRT 4.23 / 4.24 and
+5.1 to 5.5, aarch64 / x86_64, every Python from 3.11; no Rust needed). Only for another HailoRT
+version it installs Rust and builds the package (see [opennve hailo](cli.md#opennve-hailo-install)).
 
 ```text
   NPU                   Hailo AI accelerator (hailo_pci)
   HailoRT 4.23.0        1 Hailo device (Hailo-8L) (.hef models)
 ```
 
-Run `opennve hailo install` again after a HailoRT update: openNVE-hailo is compiled for one
-HailoRT version. Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module: install
+Run `opennve hailo install` again after a HailoRT update: each `opennve_hailo` package is made
+for one HailoRT version. Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module: install
 HailoRT from the Hailo Developer Zone first; Windows (HailoRT Windows installer) is not tested.
 
 **Hailo-15.** The Hailo-15 is a camera processor with its own ARM cores and Linux; HailoRT runs

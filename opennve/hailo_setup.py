@@ -1,8 +1,9 @@
 """Setup of Hailo accelerators: `opennve hailo` (status) and `opennve hailo install`.
 
 The installation is done by install.sh of openNVE-hailo (github.com/fr3ak2402/openNVE-hailo):
-on a Raspberry Pi it enables PCIe (Gen 3), installs driver, firmware and HailoRT (apt), Rust,
-and builds opennve_hailo for this Python.
+on a Raspberry Pi it enables PCIe (Gen 3), installs driver, firmware and HailoRT (apt) and the
+ready-made opennve_hailo package for the installed HailoRT version (built locally with Rust only
+if there is none).
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ import subprocess
 import sys
 import typing
 
-REPOSITORY = "https://github.com/fr3ak2402/openNVE-hailo.git"
+REPOSITORY = "https://github.com/fr3ak2402/openNVE-hailo"
+ARCHIVE = "https://codeload.github.com/fr3ak2402/openNVE-hailo/tar.gz"
 PCI_CHIPS = {"0x2864": "Hailo-8 / Hailo-8L", "0x45c4": "Hailo-10H"}
 
 
@@ -62,21 +64,34 @@ def print_status() -> int:
 
 
 def source_directory(ref: str = "main", source: typing.Optional[str] = None) -> pathlib.Path:
-    """openNVE-hailo: the given directory, or a clone in ~/.cache/opennve (updated to ref)."""
+    """openNVE-hailo: the given directory, or a download of ref (branch or tag) into
+    ~/.cache/opennve (no git needed)."""
     if source:
         path = pathlib.Path(source).expanduser().resolve()
         if not (path / "install.sh").is_file():
             raise FileNotFoundError(f"{path} is not an openNVE-hailo directory (install.sh missing)")
         return path
-    if shutil.which("git") is None:
-        raise RuntimeError("git is missing: sudo apt install git")
-    path = pathlib.Path(os.environ.get("XDG_CACHE_HOME", pathlib.Path.home() / ".cache")) / "opennve" / "openNVE-hailo"
-    if (path / ".git").is_dir():
-        subprocess.run(["git", "-C", str(path), "fetch", "--quiet", "--depth", "1", "origin", ref], check=True)
-        subprocess.run(["git", "-C", str(path), "reset", "--quiet", "--hard", "FETCH_HEAD"], check=True)
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", "--quiet", "--depth", "1", "--branch", ref, REPOSITORY, str(path)], check=True)
+    import io
+    import tarfile
+    import urllib.request
+
+    cache = pathlib.Path(os.environ.get("XDG_CACHE_HOME", pathlib.Path.home() / ".cache")) / "opennve"
+    path = cache / "openNVE-hailo"
+    url = f"{ARCHIVE}/{ref}"
+    with urllib.request.urlopen(url, timeout=60) as response:
+        data = response.read()
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True)
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+        for member in archive.getmembers():
+            parts = pathlib.PurePosixPath(member.name).parts[1:]  # without the top folder
+            if not parts or ".." in parts or member.issym() or member.islnk():
+                continue
+            member.name = str(pathlib.PurePosixPath(*parts))
+            archive.extract(member, path, filter="data")
+    if not (path / "install.sh").is_file():
+        raise RuntimeError(f"{url} has no install.sh")
     return path
 
 
@@ -93,7 +108,7 @@ def install(yes: bool = False, reboot: bool = False, gen3: bool = True, package:
         return 1
     try:
         path = source_directory(ref, source)
-    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, RuntimeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     command = ["bash", str(path / "install.sh")]

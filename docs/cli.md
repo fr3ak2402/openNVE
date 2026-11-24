@@ -190,8 +190,9 @@ opennve hailo install --no-system   # only build and install opennve_hailo (Hail
 `--source DIR` for a local copy) and runs its `install.sh` for the Python that runs openNVE:
 it finds the module (Hailo-8 / 8L or Hailo-10H), adds `dtparam=pciex1_gen=3` to
 `/boot/firmware/config.txt` (Raspberry Pi 5, `--no-gen3`: not), installs `dkms` and `hailo-all`
-(Hailo-10H: `hailo-h10-all`), git, g++ and Rust, builds `opennve_hailo` against the installed
-HailoRT and says when a reboot is needed. Run it again after a HailoRT update. See
+(Hailo-10H: `hailo-h10-all`), installs the ready-made `opennve_hailo` package for the installed
+HailoRT version (no Rust needed; only if there is none it installs Rust and builds it) and says
+when a reboot is needed. Run it again after a HailoRT update. See
 [Hailo](accelerators.md#hailo).
 
 ## `opennve raw <file>`
