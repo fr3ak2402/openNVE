@@ -131,13 +131,15 @@ def _version(args) -> int:
     for key, label, extra in (
         ("tensorflow", "TensorFlow", "tensorflow"),
         ("pytorch", "PyTorch", "pytorch"),
+        ("hailo", "openNVE-hailo (Hailo)", "github.com/fr3ak2402/openNVE-hailo"),
         ("pandas", "pandas", "pandas"),
         ("tables", "PyTables", "pandas"),
         ("hdf5plugin", "hdf5plugin", "hdf5"),
         ("npu_intel", "NPU Intel SDK", "npu-intel"),
         ("npu_qualcomm", "NPU Qualcomm SDK", "npu-qualcomm"),
     ):
-        print(f"  {label:<21} {info[key] or f'- (extra {extra})'}")
+        hint = extra if "/" in extra else f"extra {extra}"
+        print(f"  {label:<21} {info[key] or f'- ({hint})'}")
     return 0
 
 
@@ -194,6 +196,15 @@ def _system(args) -> int:
         if pytorch.get("gpu_name"):
             gpu += f" ({pytorch['gpu_name']})"
         print(f"  PyTorch {pytorch['version']:<14}{'GPU via ' + gpu if gpu else 'CPU only (no GPU found)'}")
+    hailo = info.get("hailo") or {}
+    has_hailo = any(device.get("vendor") == "Hailo" for device in info.get("npus", []))
+    if hailo.get("installed"):
+        devices = hailo.get("devices") or []
+        chips = ", ".join(device.get("architecture") or "in use" for device in devices)
+        state = f"{len(devices)} Hailo device{'s' if len(devices) != 1 else ''} ({chips})" if devices else "no Hailo device found"
+        print(f"  HailoRT {str(hailo.get('version')):<14}{state} (.hef models)")
+    elif has_hailo:
+        print("  HailoRT               openNVE-hailo not installed: opennve hailo install")
     return 0
 
 
@@ -281,6 +292,15 @@ def _driver(args) -> int:
         driver = f" driver: {status.driver or '(none)'}" if status.usb_id else ""
         print(f"{status.device}{usb_id}{driver} | {state}")
     return 0 if all(status.ready for status in statuses) else 1
+
+
+def _hailo(args) -> int:
+    from . import hailo_setup
+
+    if args.action == "install":
+        return hailo_setup.install(yes=args.yes, reboot=args.reboot, gen3=not args.no_gen3, package=args.package,
+                                   system=not args.no_system, ref=args.ref, source=args.source)
+    return hailo_setup.print_status()
 
 
 def _raw(args) -> int:
@@ -422,6 +442,20 @@ def main(argv=None) -> int:
     command.add_argument("--model", help="only cameras of this model, for instance SE1-S4")
     command.add_argument("--force", action="store_true", help="also replace another (vendor) driver")
     command.set_defaults(function=_driver)
+
+    command = commands.add_parser(
+        "hailo", help="show or set up the Hailo accelerator (Raspberry Pi AI Kit / AI HAT+ / AI HAT+ 2)"
+    )
+    command.add_argument("action", nargs="?", choices=["status", "install"], default="status",
+                         help="install: PCIe, driver, HailoRT, Rust and opennve_hailo (openNVE-hailo install.sh)")
+    command.add_argument("--yes", "-y", action="store_true", help="do not ask before changing the system")
+    command.add_argument("--reboot", action="store_true", help="reboot at the end if needed")
+    command.add_argument("--no-gen3", action="store_true", help="do not enable PCIe Gen 3 (Raspberry Pi 5)")
+    command.add_argument("--package", choices=["hailo-all", "hailo-h10-all"], help="HailoRT package (default: by the module)")
+    command.add_argument("--no-system", action="store_true", help="only build and install opennve_hailo")
+    command.add_argument("--ref", default="main", help="branch or tag of openNVE-hailo (default main)")
+    command.add_argument("--source", help="use this openNVE-hailo directory instead of downloading it")
+    command.set_defaults(function=_hailo)
 
     for command_name in ("recording", "raw"):
         command = commands.add_parser(

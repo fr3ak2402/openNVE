@@ -1,4 +1,4 @@
-"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, PyTorch, Python model objects."""
+"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, PyTorch, Hailo, Python model objects."""
 
 from __future__ import annotations
 
@@ -422,6 +422,15 @@ def _create_torch_backend(config: AgentConfig) -> Backend:
 
 
 register_backend("pytorch", _create_torch_backend, [".pt", ".pth", ".pt2"])
+
+
+def _create_hailo_backend(config: AgentConfig) -> Backend:
+    from ._hailo import create_hailo_backend
+
+    return create_hailo_backend(config)
+
+
+register_backend("hailo", _create_hailo_backend, [".hef"])
 
 
 def create_backend(config: AgentConfig) -> Backend:

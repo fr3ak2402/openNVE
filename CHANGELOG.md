@@ -19,6 +19,23 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   otherwise (unchanged for existing configurations)
 - `opennve system` and `opennve version` show PyTorch and its GPU; `opennve.agents.torch_info()`
 
+### Hailo (Raspberry Pi AI Kit, AI HAT+, AI HAT+ 2)
+
+- New backend `hailo`: agents run compiled Hailo models (`.hef`) on Hailo-8, Hailo-8L (HailoRT
+  4.x), Hailo-10H and Hailo-15 (HailoRT 5.x); `"backend": "auto"` picks it for `.hef` files; a
+  `.hef` compiled for another chip gives a clear error. HailoRT converts the float32 inputs and
+  outputs, so `preprocess` / `prediction` stay as for the `.tflite` model. All Hailo agents and
+  workflow threads share one device (HailoRT scheduler); workflows give Hailo agents 2 threads
+- The Hailo runtime is a separate project, [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo)
+  (package `opennve_hailo`): HailoRT in Rust with a Python module, built against the installed
+  HailoRT 4.x or 5.x, for every Python from 3.11
+- `opennve hailo install` sets up the Raspberry Pi in one step (openNVE-hailo `install.sh`):
+  PCIe Gen 3, driver, firmware and HailoRT (`hailo-all` / `hailo-h10-all`) and the ready-made
+  `opennve_hailo` package for the installed HailoRT version (no Rust or git needed);
+  `opennve hailo` shows module, driver, HailoRT and devices
+- `opennve system` / `opennve version` show HailoRT and its devices with their chip (Hailo-8L,
+  Hailo-10H, ...); `opennve.agents.hailo_info()`
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class

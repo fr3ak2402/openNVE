@@ -30,6 +30,9 @@ Backends (backend "auto" chooses by the model path):
     pytorch:    PyTorch models: .pt2 (torch.export), .pt / .pth (TorchScript; complete models
                 saved with torch.save(model) with "safe_mode": false), or an nn.Module passed
                 with Agent.from_model (pip install "opennve[pytorch]"); inputs channels first
+    hailo:      compiled Hailo models (.hef) on Hailo-8, Hailo-8L, Hailo-10H, Hailo-15 (Raspberry
+                Pi AI Kit, AI HAT+, AI HAT+ 2) with HailoRT 4.x / 5.x through openNVE-hailo
+                (package opennve_hailo, github.com/fr3ak2402/openNVE-hailo)
 
 Use:
 
@@ -48,6 +51,7 @@ runner (run_agents), registry (register_backend, register_task).
 
 from .agent import Agent, load_agent, load_agents
 from ._litert import AcceleratorUnavailable, CompiledModelBackend, litert_accelerators, static_model
+from ._hailo import HailoBackend, hailo_info
 from ._torch import TorchBackend, torch_info
 from .backends import Backend, ModelBackend, ModelInput, TensorFlowBackend, TFLiteBackend, create_backend
 from .benchmark import benchmark_agent, benchmark_report
@@ -73,6 +77,7 @@ __all__ = [
     "litert_accelerators",
     "static_model",
     "torch_info",
+    "hailo_info",
     "Agent",
     "AgentConfig",
     "AgentResult",
@@ -87,6 +92,7 @@ __all__ = [
     "TaskInput",
     "TensorFlowBackend",
     "TorchBackend",
+    "HailoBackend",
     "agent_configs_from_data",
     "as_agents",
     "create_backend",

@@ -95,7 +95,7 @@ Ubuntu 24.04.1 LTS (x86_64), Python 3.14.1
 - `usable by openNVE` takes the process affinity and container CPU limits into account; the environment variable `OPENNVE_CPUS` overrides it.
 - RAM: installed and available memory, plus the memory limit of a container.
 - GPUs and NPUs are found through the operating system, without extra packages: on Linux `nvidia-smi`, `/sys/class/drm` (also Raspberry Pi, Mali, Jetson) and NPUs in `/sys/class/accel` (Intel AI Boost, AMD Ryzen AI), Hailo (Raspberry Pi AI Kit / HAT), Coral Edge TPU and Rockchip NPU; on macOS the GPU of the Mac and the Apple Neural Engine; on Windows the graphics adapters and the "compute accelerators" of the device manager (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon).
-- The last line shows what the installed LiteRT can use: the GPU (WebGPU, Metal) and the NPU runtimes, see [GPU and NPU](accelerators.md).
+- The last lines show what the installed LiteRT can use (the GPU via WebGPU / Metal and the NPU runtimes), PyTorch (CUDA, Apple MPS, Intel XPU) and HailoRT (Hailo devices for `.hef` models), see [GPU and NPU](accelerators.md).
 
 ## `opennve benchmark <agents.json>`
 
@@ -173,6 +173,27 @@ SENSING SE1-S4-USB (04B4:00C4) driver: WinUSB | ready
 ```
 
 The exit code is `1` if a camera is not ready.
+
+## `opennve hailo [install]`
+
+Shows the Hailo accelerator (module on PCIe, driver, HailoRT, `opennve_hailo`, devices), or sets
+it up on Linux / the Raspberry Pi:
+
+```sh
+opennve hailo                       # state
+opennve hailo install               # PCIe (Gen 3), driver + HailoRT (apt), Rust, opennve_hailo; asks before changes
+opennve hailo install --yes --reboot
+opennve hailo install --no-system   # only build and install opennve_hailo (HailoRT already installed)
+```
+
+`install` downloads [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (`--ref`, or
+`--source DIR` for a local copy) and runs its `install.sh` for the Python that runs openNVE:
+it finds the module (Hailo-8 / 8L or Hailo-10H), adds `dtparam=pciex1_gen=3` to
+`/boot/firmware/config.txt` (Raspberry Pi 5, `--no-gen3`: not), installs `dkms` and `hailo-all`
+(Hailo-10H: `hailo-h10-all`), installs the ready-made `opennve_hailo` package for the installed
+HailoRT version (no Rust needed; only if there is none it installs Rust and builds it) and says
+when a reboot is needed. Run it again after a HailoRT update. See
+[Hailo](accelerators.md#hailo).
 
 ## `opennve raw <file>`
 

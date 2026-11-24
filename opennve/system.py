@@ -238,6 +238,8 @@ _NPU_DRIVERS = {
     "qaic": ("Qualcomm", "Qualcomm Cloud AI"),
     "hailo": ("Hailo", "Hailo AI accelerator"),
     "hailo_pci": ("Hailo", "Hailo AI accelerator"),
+    "hailo1x": ("Hailo", "Hailo AI accelerator"),  # Hailo-10H / Hailo-15 (HailoRT 5)
+    "hailo1x_pci": ("Hailo", "Hailo AI accelerator"),
     "apex": ("Google", "Coral Edge TPU"),
     "rknpu": ("Rockchip", "Rockchip NPU"),
     "ethosu": ("Arm", "Arm Ethos-U NPU"),
@@ -493,7 +495,7 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
     limit" or "OPENNVE_CPUS"; memory: memory_info(); gpus, npus: accelerators() (empty lists with
     devices=False, which skips the slower device search); litert: the GPU and NPU support of the
     installed LiteRT (opennve.litert_accelerators()); pytorch: version and GPU of PyTorch if
-    installed ({"installed": False} otherwise).
+    installed ({"installed": False} otherwise); hailo: HailoRT Python API (installed, version, devices).
     """
     usable, source = _usable_cpus()
     found = accelerators() if devices else []
@@ -512,6 +514,7 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
         "npus": [device for device in found if device["type"] == "npu"],
         "litert": _litert_info(),
         "pytorch": _pytorch_info(),
+        "hailo": _hailo_info(),
         "python": platform.python_version(),
     }
 
@@ -534,6 +537,15 @@ def _pytorch_info() -> dict[str, typing.Any]:
         from .agents._torch import torch_info
 
         return torch_info()
+    except Exception:
+        return {"installed": False}
+
+
+def _hailo_info() -> dict[str, typing.Any]:
+    try:
+        from .agents._hailo import hailo_info
+
+        return hailo_info()
     except Exception:
         return {"installed": False}
 
