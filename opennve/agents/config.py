@@ -156,7 +156,7 @@ class AgentConfig:
     model: path of the model (.tflite, .keras, .h5, a SavedModel directory, PyTorch: .pt2
         from torch.export, .pt / .pth TorchScript, or Hailo: .hef). Relative paths
         are relative to the agent configuration file (base_dir).
-    backend: "auto", "tflite", "tensorflow", "pytorch" or "hailo".
+    backend: "auto", "tflite", "tensorflow", "pytorch", or one of a plugin (for instance "hailo").
     device: where the model runs: "cpu" (default), "gpu", "npu" or "auto" (NPU, else GPU, else
         CPU). A list, for instance ["gpu", "cpu"], uses several devices at the same time in a
         workflow (some agent threads on the GPU, the others on the CPU); a single agent uses the
@@ -216,7 +216,15 @@ class AgentConfig:
         if self.name is not None and (not isinstance(self.name, str) or not self.name.strip()):
             raise ValueError("agent.name must be a non-empty string")
         if self.backend != "auto" and self.backend not in _BACKENDS:
-            raise ValueError(f"agent.backend must be one of auto, {', '.join(sorted(_BACKENDS))}")
+            from ..plugins import load_plugins, plugin_for_backend
+
+            load_plugins()
+            if self.backend not in _BACKENDS:
+                entry = plugin_for_backend(self.backend)
+                if entry is not None:
+                    raise ValueError(f"agent.backend {self.backend} comes with the plugin {entry.name}: "
+                                     f"opennve plugin install {entry.name}")
+                raise ValueError(f"agent.backend must be one of auto, {', '.join(sorted(_BACKENDS))}")
         if isinstance(self.device, (list, tuple)):
             if not self.device or len(set(self.device)) != len(self.device) or any(
                 device not in ("cpu", "gpu", "npu") for device in self.device
@@ -271,13 +279,22 @@ class AgentConfig:
         if self.backend != "auto":
             return self.backend
         path = self.model_path
-        if path.suffix.lower() in _BACKEND_SUFFIXES:
-            return _BACKEND_SUFFIXES[path.suffix.lower()]
+        suffix = path.suffix.lower()
+        if suffix and suffix not in _BACKEND_SUFFIXES and not path.is_dir():
+            from ..plugins import load_plugins, plugin_for_suffix
+
+            load_plugins()
+            entry = plugin_for_suffix(suffix) if suffix not in _BACKEND_SUFFIXES else None
+            if entry is not None:
+                raise ValueError(f"agent {self.name}: {suffix} models need the plugin {entry.name}: "
+                                 f"opennve plugin install {entry.name}")
+        if suffix in _BACKEND_SUFFIXES:
+            return _BACKEND_SUFFIXES[suffix]
         if path.is_dir():
             return "tensorflow"
         raise ValueError(
             f"agent {self.name}: cannot choose a backend for {self.model!r} "
-            "(.tflite, .keras, .h5, .pt2, .pt, .pth, .hef or a SavedModel directory), set \"backend\""
+            "(.tflite, .keras, .h5, .pt2, .pt, .pth, a SavedModel directory, or a file of a plugin), set \"backend\""
         )
 
     # JSON

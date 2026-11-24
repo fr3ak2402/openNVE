@@ -2,7 +2,7 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Plugins](docs/plugins.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
 
 ## Features
 
@@ -96,7 +96,7 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 
 `"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
 Hailo-8, Hailo-8L, Hailo-10H and Hailo-15 (Raspberry Pi AI Kit, AI HAT+, AI HAT+ 2, M.2 modules):
-compiled Hailo models (`.hef`) with HailoRT 4 / 5 through [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (Rust + Python), see [Hailo](docs/accelerators.md#hailo). Not supported: the Apple Neural Engine.
+compiled Hailo models (`.hef`) with HailoRT 4 / 5 through the plugin [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (Rust + Python, `opennve plugin install hailo`), see [Hailo](docs/accelerators.md#hailo). Not supported: the Apple Neural Engine.
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
 macOS), PyTorch agents through PyTorch (CUDA / ROCm, Apple MPS, Intel XPU). `opennve benchmark` compares CPU, GPU and NPU on your computer.
 

@@ -181,7 +181,7 @@ class AgentStep(Step):
     interpreter thread each (several interpreters in parallel are faster than one with several
     threads). With a fixed number of step threads, agents with "threads": "auto" share the cores:
     interpreter threads = cores / step threads. TensorFlow models run in one thread (TensorFlow
-    uses all cores itself). GPU / NPU agents (and Hailo .hef models) get 2 threads.
+    uses all cores itself). GPU / NPU agents (and accelerator plugins like Hailo) get 2 threads.
 
     Several devices ("device": ["gpu", "cpu"]): 2 threads per accelerator, the other cores run
     the model on the CPU (one thread each); every thread takes the next window when it is free,
@@ -193,8 +193,11 @@ class AgentStep(Step):
     HEAVY = True
 
     def _tflite(self):
-        """Agents whose threads the step plans: TensorFlow Lite, PyTorch and Hailo (one model per thread)."""
-        return [config for config in self.configs if config.resolved_backend in ("tflite", "pytorch", "hailo")]
+        """Agents whose threads the step plans: backends registered with threads="planned"
+        (TensorFlow Lite, PyTorch, plugins like Hailo; one model per thread)."""
+        from ...agents.registry import backend_options
+
+        return [config for config in self.configs if backend_options(config.resolved_backend)["threads"] == "planned"]
 
     @staticmethod
     def _devices(config) -> list:
@@ -217,7 +220,9 @@ class AgentStep(Step):
     @staticmethod
     def _accelerated(config) -> bool:
         """The agent runs on a GPU / NPU (device "auto": if the machine has one)."""
-        if config.resolved_backend == "hailo":  # .hef models run only on the Hailo accelerator
+        from ...agents.registry import backend_options
+
+        if backend_options(config.resolved_backend)["accelerator"]:  # for instance Hailo (.hef)
             return True
         if isinstance(config.device, list):
             return "cpu" not in config.device or len(config.device) == 1 and config.device[0] != "cpu"

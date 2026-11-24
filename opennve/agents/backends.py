@@ -1,4 +1,5 @@
-"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, PyTorch, Hailo, Python model objects."""
+"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, PyTorch, Python model objects
+(more come with plugins, see opennve.plugins)."""
 
 from __future__ import annotations
 
@@ -405,7 +406,7 @@ def create_tflite_backend(config: AgentConfig) -> Backend:
     return backend
 
 
-register_backend("tflite", create_tflite_backend, [".tflite"])
+register_backend("tflite", create_tflite_backend, [".tflite"], threads="planned")
 register_backend(
     "tensorflow",
     lambda config: TensorFlowBackend(config.model_path, config.call, config.signature, config.safe_mode,
@@ -421,16 +422,7 @@ def _create_torch_backend(config: AgentConfig) -> Backend:
     return create_torch_backend(config)
 
 
-register_backend("pytorch", _create_torch_backend, [".pt", ".pth", ".pt2"])
-
-
-def _create_hailo_backend(config: AgentConfig) -> Backend:
-    from ._hailo import create_hailo_backend
-
-    return create_hailo_backend(config)
-
-
-register_backend("hailo", _create_hailo_backend, [".hef"])
+register_backend("pytorch", _create_torch_backend, [".pt", ".pth", ".pt2"], threads="planned")
 
 
 def create_backend(config: AgentConfig) -> Backend:

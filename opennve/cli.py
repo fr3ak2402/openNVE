@@ -109,7 +109,10 @@ def _workflow(args) -> int:
 def _version(args) -> int:
     from ._version import version_info
 
+    from .plugins import installed_plugins
+
     info = version_info()
+    info["plugins"] = {name: plugin.version or "?" for name, plugin in installed_plugins().items()}
     if args.json:
         print(json.dumps(info, indent=4))
         return 0
@@ -131,15 +134,17 @@ def _version(args) -> int:
     for key, label, extra in (
         ("tensorflow", "TensorFlow", "tensorflow"),
         ("pytorch", "PyTorch", "pytorch"),
-        ("hailo", "openNVE-hailo (Hailo)", "github.com/fr3ak2402/openNVE-hailo"),
         ("pandas", "pandas", "pandas"),
         ("tables", "PyTables", "pandas"),
         ("hdf5plugin", "hdf5plugin", "hdf5"),
         ("npu_intel", "NPU Intel SDK", "npu-intel"),
         ("npu_qualcomm", "NPU Qualcomm SDK", "npu-qualcomm"),
     ):
-        hint = extra if "/" in extra else f"extra {extra}"
+        hint = f"extra {extra}"
         print(f"  {label:<21} {info[key] or f'- ({hint})'}")
+    print("  plugins:" + ("" if info["plugins"] else "               - (opennve plugin list)"))
+    for name, version in info["plugins"].items():
+        print(f"  {name:<21} {version}")
     return 0
 
 
@@ -196,15 +201,20 @@ def _system(args) -> int:
         if pytorch.get("gpu_name"):
             gpu += f" ({pytorch['gpu_name']})"
         print(f"  PyTorch {pytorch['version']:<14}{'GPU via ' + gpu if gpu else 'CPU only (no GPU found)'}")
-    hailo = info.get("hailo") or {}
-    has_hailo = any(device.get("vendor") == "Hailo" for device in info.get("npus", []))
-    if hailo.get("installed"):
-        devices = hailo.get("devices") or []
-        chips = ", ".join(device.get("architecture") or "in use" for device in devices)
-        state = f"{len(devices)} Hailo device{'s' if len(devices) != 1 else ''} ({chips})" if devices else "no Hailo device found"
-        print(f"  HailoRT {str(hailo.get('version')):<14}{state} (.hef models)")
-    elif has_hailo:
-        print("  HailoRT               openNVE-hailo not installed: opennve hailo install")
+    from .plugins import catalog, installed_plugins
+
+    plugins = installed_plugins()
+    for name, installed in plugins.items():
+        plugin = installed.plugin
+        if plugin is not None and plugin.system_lines is not None:
+            try:
+                for line in plugin.system_lines(info.get("plugins", {}).get(name, {})):
+                    print(f"  {line}")
+            except Exception as error:
+                print(f"  plugin {name}: {error}")
+    # hardware that a plugin not yet installed would use
+    if any(device.get("vendor") == "Hailo" for device in info.get("npus", [])) and "hailo" not in plugins:
+        print("  Hailo                 plugin not installed: opennve plugin install hailo")
     return 0
 
 
@@ -294,13 +304,66 @@ def _driver(args) -> int:
     return 0 if all(status.ready for status in statuses) else 1
 
 
-def _hailo(args) -> int:
-    from . import hailo_setup
+def _plugin(args) -> int:
+    from .plugins import catalog, catalog_entry, installed_plugins, manager
 
     if args.action == "install":
-        return hailo_setup.install(yes=args.yes, reboot=args.reboot, gen3=not args.no_gen3, package=args.package,
-                                   system=not args.no_system, ref=args.ref, source=args.source)
-    return hailo_setup.print_status()
+        if not args.name:
+            print("which plugin? opennve plugin list", file=sys.stderr)
+            return 2
+        try:
+            return manager.install(args.name, args.extra, ref=args.ref, source=args.source)
+        except KeyError as error:
+            print(error.args[0], file=sys.stderr)
+            return 2
+    if args.action == "remove":
+        return manager.remove(args.name) if args.name else 2
+    installed = installed_plugins(reload=True)
+    if args.action == "info":
+        entry = catalog_entry(args.name) if args.name else None
+        plugin = installed.get(args.name) if args.name else None
+        if entry is None and plugin is None:
+            print(f"unknown plugin {args.name!r}", file=sys.stderr)
+            return 1
+        print(f"{args.name}: {(plugin.description if plugin else entry.description)}")
+        if plugin:
+            state = f"installed {plugin.version or ''} ({plugin.distribution})"
+            print(f"  state:       {state}" + (f", cannot be loaded: {plugin.error}" if plugin.error else ""))
+        else:
+            print("  state:       not installed" + ("" if entry.supported else f" (not available on {sys.platform})"))
+        if entry:
+            print(f"  repository:  {entry.repository}")
+            print(f"  install:     opennve plugin install {entry.name}  ({entry.method})")
+            if entry.backends:
+                print(f"  backends:    {', '.join(entry.backends)} ({', '.join(entry.suffixes)} models)")
+            if entry.commands:
+                print(f"  commands:    {', '.join('opennve ' + command for command in entry.commands)}")
+            if entry.notes:
+                print(f"  notes:       {entry.notes}")
+        return 0
+    if args.json:
+        result = {
+            "installed": [{"name": p.name, "version": p.version, "distribution": p.distribution, "error": p.error,
+                           "description": p.description} for p in installed.values()],
+            "available": [{"name": e.name, "description": e.description, "installed": e.name in installed,
+                           "supported": e.supported, "repository": e.repository} for e in catalog()],
+        }
+        print(json.dumps(result, indent=2))
+        return 0
+    print("Installed plugins:")
+    if not installed:
+        print("  (none)")
+    for plugin in installed.values():
+        state = f"{plugin.version or ''}" + (f"  cannot be loaded: {plugin.error}" if plugin.error else "")
+        print(f"  {plugin.name:<12} {state:<10} {plugin.description}")
+    print("Installable plugins (opennve plugin install <name>):")
+    available = [entry for entry in catalog() if entry.name not in installed]
+    if not available:
+        print("  (all installed)")
+    for entry in available:
+        note = "" if entry.supported else f"  [not on {sys.platform}]"
+        print(f"  {entry.name:<12} {entry.description}{note}")
+    return 0
 
 
 def _raw(args) -> int:
@@ -444,18 +507,25 @@ def main(argv=None) -> int:
     command.set_defaults(function=_driver)
 
     command = commands.add_parser(
-        "hailo", help="show or set up the Hailo accelerator (Raspberry Pi AI Kit / AI HAT+ / AI HAT+ 2)"
+        "plugin", help="list, install or remove plugins (for instance hailo)",
+        epilog="options for the installer of a plugin come after --: opennve plugin install hailo -- --yes --reboot",
     )
-    command.add_argument("action", nargs="?", choices=["status", "install"], default="status",
-                         help="install: PCIe, driver, HailoRT, Rust and opennve_hailo (openNVE-hailo install.sh)")
-    command.add_argument("--yes", "-y", action="store_true", help="do not ask before changing the system")
-    command.add_argument("--reboot", action="store_true", help="reboot at the end if needed")
-    command.add_argument("--no-gen3", action="store_true", help="do not enable PCIe Gen 3 (Raspberry Pi 5)")
-    command.add_argument("--package", choices=["hailo-all", "hailo-h10-all"], help="HailoRT package (default: by the module)")
-    command.add_argument("--no-system", action="store_true", help="only build and install opennve_hailo")
-    command.add_argument("--ref", default="main", help="branch or tag of openNVE-hailo (default main)")
-    command.add_argument("--source", help="use this openNVE-hailo directory instead of downloading it")
-    command.set_defaults(function=_hailo)
+    command.add_argument("action", nargs="?", choices=["list", "info", "install", "remove"], default="list")
+    command.add_argument("name", nargs="?", help="plugin name, see opennve plugin list")
+    command.add_argument("--ref", help="install: branch or tag of the plugin (script plugins)")
+    command.add_argument("--source", help="install: a local copy of the plugin instead of downloading it")
+    command.add_argument("--json", action="store_true", help="list: output as JSON")
+    command.set_defaults(function=_plugin)
+
+    # commands of the installed plugins, for instance `opennve hailo`
+    from .plugins import installed_plugins as _installed_plugins
+
+    for _name, _installed in _installed_plugins().items():
+        if _installed.plugin is not None and _installed.plugin.commands is not None:
+            try:
+                _installed.plugin.commands(commands)
+            except Exception as error:  # a broken plugin must not break the CLI
+                print(f"plugin {_name}: commands not available ({error})", file=sys.stderr)
 
     for command_name in ("recording", "raw"):
         command = commands.add_parser(
@@ -466,7 +536,13 @@ def main(argv=None) -> int:
     command = commands.add_parser("models", help="list supported camera models")
     command.set_defaults(function=_models)
 
+    argv = list(sys.argv[1:] if argv is None else argv)
+    extra = []
+    if "--" in argv:  # opennve plugin install hailo -- --yes: options for the plugin's installer
+        extra = argv[argv.index("--") + 1 :]
+        argv = argv[: argv.index("--")]
     args = parser.parse_args(argv)
+    args.extra = extra
     try:
         return args.function(args)
     except (ValueError, OSError, RuntimeError, ImportError) as error:

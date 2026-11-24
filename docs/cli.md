@@ -174,26 +174,22 @@ SENSING SE1-S4-USB (04B4:00C4) driver: WinUSB | ready
 
 The exit code is `1` if a camera is not ready.
 
-## `opennve hailo [install]`
+## `opennve plugin [list|info|install|remove] [<name>]`
 
-Shows the Hailo accelerator (module on PCIe, driver, HailoRT, `opennve_hailo`, devices), or sets
-it up on Linux / the Raspberry Pi:
+Lists the installed and installable plugins, shows a plugin, installs or removes it, see
+[Plugins](plugins.md):
 
 ```sh
-opennve hailo                       # state
-opennve hailo install               # PCIe (Gen 3), driver + HailoRT (apt), Rust, opennve_hailo; asks before changes
-opennve hailo install --yes --reboot
-opennve hailo install --no-system   # only build and install opennve_hailo (HailoRT already installed)
+opennve plugin list                              # installed and installable plugins (--json)
+opennve plugin info hailo
+opennve plugin install hailo                     # Hailo: PCIe, driver + HailoRT (apt), opennve_hailo; asks before changes
+opennve plugin install hailo -- --yes --reboot   # options for the plugin's installer after --
+opennve plugin install hailo --ref v0.1.0        # a branch or tag of the plugin (--source DIR: a local copy)
+opennve plugin remove hailo
 ```
 
-`install` downloads [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (`--ref`, or
-`--source DIR` for a local copy) and runs its `install.sh` for the Python that runs openNVE:
-it finds the module (Hailo-8 / 8L or Hailo-10H), adds `dtparam=pciex1_gen=3` to
-`/boot/firmware/config.txt` (Raspberry Pi 5, `--no-gen3`: not), installs `dkms` and `hailo-all`
-(Hailo-10H: `hailo-h10-all`), installs the ready-made `opennve_hailo` package for the installed
-HailoRT version (no Rust needed; only if there is none it installs Rust and builds it) and says
-when a reboot is needed. Run it again after a HailoRT update. See
-[Hailo](accelerators.md#hailo).
+Installed plugins can add commands, for instance `opennve hailo` (plugin hailo): module on PCIe,
+driver, HailoRT and devices.
 
 ## `opennve raw <file>`
 
