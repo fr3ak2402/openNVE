@@ -1,4 +1,4 @@
-"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, Python model objects."""
+"""Model runtimes: TensorFlow Lite (LiteRT), TensorFlow / Keras, PyTorch, Python model objects."""
 
 from __future__ import annotations
 
@@ -27,11 +27,13 @@ class Backend:
     """Runs a model on a batch: predict(batch) -> list of output arrays (first dimension = batch).
 
     device: where the model runs ("cpu", "gpu", "npu", "gpu+cpu" / "npu+cpu" if some operations
-    run on the CPU, "delegate"); device_note: why another device than the requested one is used.
+    run on the CPU, "delegate"); layout: "nhwc" or "nchw" (PyTorch), used for the agent's layout
+    "auto"; device_note: why another device than the requested one is used.
     """
 
     input: ModelInput
     device: str = "cpu"
+    layout: str = "nhwc"  # input layout the model expects if the agent's layout is "auto"
     device_note: typing.Optional[str] = None
 
     def predict(self, batch: np.ndarray) -> list[np.ndarray]:  # pragma: no cover - interface
@@ -411,6 +413,15 @@ register_backend(
                                      config.fallback),
     [".keras", ".h5", ".hdf5"],
 )
+
+
+def _create_torch_backend(config: AgentConfig) -> Backend:
+    from ._torch import create_torch_backend
+
+    return create_torch_backend(config)
+
+
+register_backend("pytorch", _create_torch_backend, [".pt", ".pth", ".pt2"])
 
 
 def create_backend(config: AgentConfig) -> Backend:

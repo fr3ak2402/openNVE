@@ -492,7 +492,8 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
     uses for "auto" (cpu_count()); usable_cpus_source: "process" (affinity), "system", "container
     limit" or "OPENNVE_CPUS"; memory: memory_info(); gpus, npus: accelerators() (empty lists with
     devices=False, which skips the slower device search); litert: the GPU and NPU support of the
-    installed LiteRT (opennve.litert_accelerators()).
+    installed LiteRT (opennve.litert_accelerators()); pytorch: version and GPU of PyTorch if
+    installed ({"installed": False} otherwise).
     """
     usable, source = _usable_cpus()
     found = accelerators() if devices else []
@@ -510,6 +511,7 @@ def system_info(devices: bool = True) -> dict[str, typing.Any]:
         "gpus": [device for device in found if device["type"] == "gpu"],
         "npus": [device for device in found if device["type"] == "npu"],
         "litert": _litert_info(),
+        "pytorch": _pytorch_info(),
         "python": platform.python_version(),
     }
 
@@ -521,6 +523,19 @@ def _litert_info() -> dict[str, typing.Any]:
         return litert_accelerators()
     except Exception:
         return {"version": None, "compiled_model": False, "gpu": None, "npu": []}
+
+
+def _pytorch_info() -> dict[str, typing.Any]:
+    import importlib.util
+
+    if importlib.util.find_spec("torch") is None:
+        return {"installed": False}
+    try:
+        from .agents._torch import torch_info
+
+        return torch_info()
+    except Exception:
+        return {"installed": False}
 
 
 def format_bytes(value: typing.Optional[int]) -> str:

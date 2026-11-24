@@ -4,7 +4,26 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 
 ## [1.2.0] - unreleased
 
-In development.
+### PyTorch models
+
+- New backend `pytorch` (extra `opennve[pytorch]`): agents run PyTorch models from `.pt2`
+  (torch.export, recommended), `.pt` / `.pth` (TorchScript, or complete models saved with
+  `torch.save(model)` with `"safe_mode": false`) and `nn.Module` objects
+  (`Agent.from_model(module)`); `"backend": "auto"` picks it by the file name
+- Devices: CPU, GPU via CUDA / ROCm, Apple MPS or Intel XPU (`"device": "gpu"` / `"auto"`,
+  `gpu_precision` fp16 with autocast), fallback to the CPU; channels-last memory format (about
+  30 % faster convolutions on the CPU)
+- Workflows plan the threads of PyTorch agents like those of TensorFlow Lite agents (several
+  agent threads, CPU threads split between them, mixed devices)
+- `"preprocess": {"layout": "auto"}` is the new default: `nchw` for PyTorch models, `nhwc`
+  otherwise (unchanged for existing configurations)
+- `opennve system` and `opennve version` show PyTorch and its GPU; `opennve.agents.torch_info()`
+
+### Fixes
+
+- Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class
+  axis (it was taken along the width for tiles at the edges and for `result.outputs`);
+  `opennve benchmark` compares the classes of such outputs along the class axis as well
 
 ## [1.1.0] - 2026-11-20
 

@@ -54,6 +54,10 @@ pandas = ["pandas>=2.2", "tables>=3.10"]
 # with Keras / SavedModel models. Stable TensorFlow has no Python 3.14 wheels yet, so this installs
 # the nightly build (tf-nightly, includes Keras 3); see docs/agents.md
 tensorflow = ["tf-nightly"]
+# PyTorch: agents with PyTorch models (.pt2 from torch.export, .pt / .pth TorchScript, nn.Module).
+# PyPI installs the CPU build on Windows / macOS and the CUDA build on Linux x64; other GPU builds
+# (ROCm, Intel XPU, CPU-only Linux) come from https://pytorch.org/get-started
+pytorch = ["torch>=2.6"]
 # LiteRT on its own (already a dependency where wheels exist)
 tflite = ["ai-edge-litert>=2.4"]
 # NPU runtimes for agents with "device": "npu" (see docs/accelerators.md).
@@ -70,7 +74,7 @@ test = ["pytest>=8"]
 # Development: tests and building the wheel (tools/bundle_wheel.py)
 dev = ["pytest>=8", "build", "packaging"]
 # Everything except the vendor NPU runtimes
-all = ["pandas>=2.2", "tables>=3.10", "tf-nightly", "hdf5plugin>=5; python_version < '3.15'", "pytest>=8"]
+all = ["pandas>=2.2", "tables>=3.10", "tf-nightly", "torch>=2.6", "hdf5plugin>=5; python_version < '3.15'", "pytest>=8"]
 
 [project.scripts]
 opennve = "opennve.cli:main"

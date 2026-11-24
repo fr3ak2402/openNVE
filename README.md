@@ -25,7 +25,7 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 - Display frames and tiles as images (`frame.to_image`).
 
 ### Neural networks (agents)
-- **Run models** on the tiles or the whole frame of every window: TensorFlow Lite (`.tflite`, LiteRT) and TensorFlow / Keras (`.keras`, `.h5`, SavedModel), configured in `agents.json`.
+- **Run models** on the tiles or the whole frame of every window: TensorFlow Lite (`.tflite`, LiteRT), TensorFlow / Keras (`.keras`, `.h5`, SavedModel) and PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`), configured in `agents.json`.
 - **Tasks:** classification and segmentation (class map, pixels and events of the target classes, thresholds, labels), own tasks can be registered.
 - **Preprocessing:** channels, padding, resizing, input quantization for int8 models — automatic.
 - **Devices:** CPU, GPU (WebGPU, Metal), NPU (Intel, Qualcomm), TensorFlow Lite delegates (Coral Edge TPU), several devices at the same time (`"device": ["gpu", "cpu"]`), automatic fallback to the CPU.
@@ -97,11 +97,11 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 `"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
 Not supported: the Apple Neural Engine, Hailo accelerators (Raspberry Pi AI Kit / HAT).
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
-macOS). `opennve benchmark` compares CPU, GPU and NPU on your computer.
+macOS), PyTorch agents through PyTorch (CUDA / ROCm, Apple MPS, Intel XPU). `opennve benchmark` compares CPU, GPU and NPU on your computer.
 
 ## Installation
 
-Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver; pip installs the other dependencies (numpy, OpenCV, LiteRT for TensorFlow Lite models) automatically. Python 3.14 or newer is required. TensorFlow for the neural networks is an optional extra: `pip install "opennve-...whl[tensorflow]"` (see [Installation](docs/installation.md)).
+Download the wheel for your platform and Python version from the [releases](https://github.com/fr3ak2402/openNVE/releases) (or the artifacts of the Build workflow) and install it. It contains neuromorphic_drivers with the SE1-S4 driver; pip installs the other dependencies (numpy, OpenCV, LiteRT for TensorFlow Lite models) automatically. Python 3.14 or newer is required. TensorFlow for the neural networks and PyTorch for PyTorch models are optional extras: `pip install "opennve-...whl[tensorflow]"`, `"opennve-...whl[pytorch]"` (see [Installation](docs/installation.md)).
 
 ```sh
 pip uninstall -y neuromorphic_drivers   # if a separate neuromorphic_drivers is installed

@@ -41,13 +41,14 @@ Optional extras:
 | Extra | Installs | Used for |
 |---|---|---|
 | `tensorflow` | tf-nightly (about 600 MB, includes Keras 3) | [Neural networks](networks.md) (building, training, TensorFlow Lite export) and agents with Keras / SavedModel models |
+| `pytorch` | torch | Agents with PyTorch models (`.pt2`, `.pt`, `.pth`, `nn.Module`), see [Agents](agents.md#pytorch-models). Linux x64 gets the CUDA build; other builds from [pytorch.org](https://pytorch.org/get-started) |
 | `pandas` | pandas, PyTables | Events as pandas DataFrames (for instance for `FrameEngine.generate_frame`), HDF5 files written by pandas in table format |
 | `hdf5` | hdf5plugin | Compressed HDF5 files of other tools (Blosc, LZ4, Zstd, Bitshuffle); without it h5py cannot read them |
 | `npu-intel` | LiteRT Intel SDK (OpenVINO) | NPU of Intel Core Ultra (AI Boost), see [GPU and NPU](accelerators.md#npu-runtimes); needs `--extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly` |
 | `npu-qualcomm` | LiteRT Qualcomm SDK | Qualcomm NPU (Hexagon) on Linux ARM64 |
 | `test` | pytest | Running the tests |
 | `dev` | pytest, build, packaging | Tests and building the wheel |
-| `all` | tensorflow, pandas, PyTables, hdf5plugin, pytest | Everything except the NPU runtimes |
+| `all` | tensorflow, pytorch, pandas, PyTables, hdf5plugin, pytest | Everything except the NPU runtimes |
 
 ```sh
 pip install "opennve-1.2.0-cp314-cp314-win_amd64.whl[tensorflow]"

@@ -102,6 +102,7 @@ def version_info() -> dict[str, typing.Any]:
         "flatbuffers": installed("flatbuffers"),
         # optional (extras)
         "tensorflow": installed("tf-nightly") or installed("tensorflow") or installed("tensorflow-cpu"),
+        "pytorch": installed("torch"),
         "pandas": installed("pandas"),
         "tables": installed("tables"),
         "hdf5plugin": installed("hdf5plugin"),
