@@ -156,6 +156,74 @@ dataset = opennve.representative_dataset(tiles)              # tiles or arrays
 
 Smaller tiles are padded to `input_shape`. The samples are collected once; the returned function yields them as the converter expects.
 
+## int8 models for the agents: `opennve quantize`
+
+`opennve quantize` makes an int8 `.tflite` of an agent's Keras model from recordings with typical
+data, usually the training data (HDF5 event files, `.raw`). It uses the agent's own frame
+configuration and preprocessing, so the int8 model sees the same inputs as later in the
+workflow. It always reports how close the int8 model is to the original on inputs it did not see.
+
+```sh
+# post-training quantization: round the finished network (seconds to minutes)
+opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --frames config/frames.json
+
+# quantization aware training: train the U-Net further with the int8 rounding (as accurate as the float network)
+opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --frames config/frames.json \
+    --qat --samples 50000 --epochs 10 --output models/unet_int8.tflite
+```
+
+```text
+training      epoch: loss, same class as the float network (in the training, with simulated int8)
+    0: -, 91.741 %, class 2 IoU 12.6 %
+    1: 0.2897, 99.952 %, class 2 IoU 79.0 %
+    ...
+int8 .tflite  (LiteRT, as openNVE runs it) compared with the original on other inputs:
+agreement     99.95 % of the pixels / inputs have the same class as with the original model
+class 2       IoU 80.7 %, found 92.0 % of 4285 pixels of the original
+```
+
+**Post-training quantization** (without `--qat`) measures the value ranges on `--samples` inputs
+(default 500) and rounds the float network to int8. This is enough for robust networks. For the
+U-Net it is not: its errors add up from layer to layer (on the test data only about 60 % of the
+insect pixels stay the same), and `opennve quantize` warns about this.
+
+**Quantization aware training** (`--qat`, for the opennve `UNet`) trains the network further with
+the int8 rounding in the forward pass (`opennve.networks.qat`):
+
+- The batch normalization is folded into the convolutions, as the TensorFlow Lite export does it.
+- The weights are rounded per output channel.
+- Every activation is rounded to 256 steps in the range measured on the training inputs.
+- The output convolution stays float32. It decides the class from small differences between
+  large values, and costs almost nothing.
+
+The teacher is the current float network (distillation). The int8 network learns to give the same
+classes as the float network on the recordings, so no labels are needed and the result is measured
+against the network you use today:
+
+- Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are rare
+  and matter most.
+- After every epoch the classes are compared on `--validation` other inputs (default 1000). The
+  best epoch is kept, judged by the IoU of the target classes.
+- The ranges of the activations are fixed from the calibration (up to 2048 inputs). This trains
+  more steadily with sparse event data.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--samples` | 500 (QAT 20000) | inputs for the calibration / the training, chosen at random from all recordings |
+| `--validation` | 200 (QAT 1000) | other inputs for the comparison |
+| `--stride` | 5 | use every n-th time window (`--window-ms`, default 40) |
+| `--epochs`, `--batch-size`, `--learning-rate` | 5, 32, 1e-4 | QAT: passes, inputs per step, start of the cosine-decaying learning rate |
+| `--target-weight` | 10 | QAT: weight of the target-class pixels |
+| `--int8-io` | off | int8 inputs / outputs too (default float32; openNVE converts either way) |
+| `--output` | `<model>_int8.tflite` | the int8 model |
+
+More inputs and epochs bring the int8 network closer to the float network. Aim for an agreement
+of 99.9 % or more and a target-class IoU close to 100 %. The time per input is about that of the
+float network on the CPU, times three per epoch; a GPU (TensorFlow with CUDA) is much faster. The
+int8 model runs like every `.tflite` (`"model": "models/unet_int8.tflite"`), and
+`opennve benchmark` compares it with the float model. In Python:
+`opennve.quantize_agent(config, recordings, frame_config, output, qat=True, epochs=10)`.
+
 ## `NeuralEngine`
 
 A collection of named networks:

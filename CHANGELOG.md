@@ -59,6 +59,21 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 - `opennve system` shows a loaded DPU design (zocl driver) as NPU and suggests the plugin on a Kria
   board without it
 
+### int8 models (opennve quantize)
+
+- `opennve quantize agents.json --data ... --frames ...` makes an int8 TensorFlow Lite model of an
+  agent's Keras model from recordings (the training data). It uses the agent's frame
+  configuration and preprocessing, takes inputs at random from all files, and compares the int8
+  model with the original on other inputs: share of equal classes, IoU / recall of the target
+  classes. It warns if they differ clearly
+- `--qat`: quantization aware training of the opennve U-Net (`opennve.networks.qat`). The network
+  is trained further with the int8 rounding (batch normalization folded, weights per channel,
+  activation ranges from the calibration, float32 output convolution) to give the same classes as
+  the float network (distillation, no labels needed). Target-class pixels are weighted and the
+  best epoch is kept. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
+  them
+- Python: `opennve.quantize_agent(...)`, `opennve.quantize_report(report)`
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class

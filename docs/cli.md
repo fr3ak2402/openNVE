@@ -115,6 +115,16 @@ opennve benchmark config/agents.json --devices cpu,gpu --inputs 256      # rando
 | `--inputs` | Number of inputs (default: all tiles of the windows, or 64 random inputs) |
 | `--json` | Output as JSON |
 
+## `opennve quantize <agents.json>`
+
+int8 TensorFlow Lite model of an agent's Keras model, calibrated (or with `--qat` trained) with
+recordings, usually the training data; reports how close it is to the original. See
+[int8 models for the agents](networks.md#int8-models-for-the-agents-opennve-quantize).
+
+```sh
+opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --frames config/frames.json --qat --epochs 10
+```
+
 ## `opennve workflow run|list|threads <file>`
 
 Runs or lists the [workflows](workflows.md) of a workflow configuration file, or shows the threads of every step on this machine.

@@ -90,6 +90,8 @@ from .frames import (
 from .agents import (
     benchmark_agent,
     benchmark_report,
+    quantize_agent,
+    quantize_report,
     litert_accelerators,
     Agent,
     AgentConfig,
@@ -236,6 +238,8 @@ __all__ = [
     "load_agents",
     "benchmark_agent",
     "benchmark_report",
+    "quantize_agent",
+    "quantize_report",
     "litert_accelerators",
     "load_config",
     "load_configs",
