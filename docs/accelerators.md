@@ -11,7 +11,9 @@ with openNVE):
 | `delegate` | TensorFlow Lite delegate libraries, for instance the Coral Edge TPU (`libedgetpu`) | | |
 
 Hailo accelerators (Hailo-8, Hailo-8L, Hailo-10H, Hailo-15; Raspberry Pi AI Kit, AI HAT+,
-AI HAT+ 2) run compiled Hailo models (`.hef`) with HailoRT, see [Hailo](#hailo).
+AI HAT+ 2) run compiled Hailo models (`.hef`) with HailoRT, see [Hailo](#hailo). The DPU of
+AMD Kria boards (KV260, KR260) runs compiled Vitis AI models (`.xmodel`), see
+[AMD Kria DPU](#amd-kria-dpu).
 
 `opennve system` shows the GPUs and NPUs of the computer and what the installed LiteRT supports
 (example):
@@ -219,6 +221,57 @@ Hailo-15 Linux images do not include) – not tested.
 of a program share the device, HailoRT switches between them. `opennve benchmark agents.json
 --devices npu` measures the model on the Hailo.
 
+## AMD Kria DPU
+
+AMD Kria boards (KV260 Vision AI Starter Kit, KR260, KD240; K26 / K24 SOMs) have no fixed NPU:
+the FPGA is loaded with a design that contains a DPU (Deep Learning Processor Unit,
+DPUCZDX8G), an accelerator for quantized (8 bit) convolutional networks. openNVE runs agents with
+compiled Vitis AI models (`.xmodel`) on it with the Vitis AI Runtime (VART).
+
+```json
+{"name": "prototyp", "model": "../models/unet_kv260.xmodel", "frame": "tiles80",
+ "prediction": {"task": "segmentation", "activation": "softmax", "target_classes": [2]}}
+```
+
+`"backend": "auto"` picks the `vitis` backend for `.xmodel` files; `"device"` can be left out (or
+`"npu"`): an `.xmodel` runs only on the DPU.
+
+**The model.** An `.xmodel` is quantized and compiled on a PC (x86_64) with the Vitis AI 3.5
+Docker image (`vai_q_tensorflow2` / `vai_q_pytorch` with calibration tiles of your recordings,
+then `vai_c_tensorflow2` / `vai_c_xir` with the `arch.json` of the board's DPU, for the KV260
+`DPUCZDX8G/KV260/arch.json`). It runs only on the DPU configuration it was compiled for (the
+fingerprint must match, otherwise loading it gives a clear error). The network must compile into
+one DPU subgraph; leave out a final softmax / sigmoid (openNVE applies the activation of
+`"prediction"`). The inputs and outputs are converted from float32 to the 8 bit values of the DPU
+and back, so `preprocess` and `prediction` stay as for the `.tflite` model; channels last (`nhwc`).
+
+**Installation.** The DPU is a [plugin](plugins.md):
+[openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis) (package `opennve_vitis`), the
+Vitis AI Runtime in Rust with a Python module, like the camera drivers. The package brings its own
+Vitis AI Runtime (built from AMD's source), so it does not depend on the Ubuntu version or the
+Python of AMD's packages. On the board (Ubuntu 22.04, 24.04 or newer):
+
+```sh
+source ~/opennve/.venv/bin/activate
+opennve plugin install vitis                   # asks before changing the system (-- --yes: does not ask)
+opennve vitis                                  # XRT, zocl driver, DPU design, DPU cores (command of the plugin)
+opennve vitis --model unet_kv260.xmodel        # also: subgraphs, inputs, outputs, DPU of the model
+```
+
+It installs XRT with the zocl driver from AMD's package sources for Kria, the DPU design (KV260:
+`kv260-benchmark-b4096`, DPUCZDX8G B4096; other boards: your own design with
+`-- --firmware=DIR`), loads it at boot, writes `/etc/vart.conf` and installs the ready-made
+`opennve_vitis` package (aarch64, every Python from 3.11).
+
+```text
+  NPU                   AMD DPU (Kria / Zynq UltraScale+, zocl) (zocl)
+  Vitis AI 5.0.0        1 DPU core (DPUCZDX8G:DPUCZDX8G_1) (.xmodel models, plugin vitis 0.1.0)
+```
+
+**Workflows.** DPU agents get 2 workflow threads (like GPU agents), each with its own DPU runner;
+the DPU cores of the design are shared. `opennve benchmark agents.json --devices npu` measures
+the model on the DPU.
+
 ## Limits
 
 - **TensorFlow in the same program:** the LiteRT GPU accelerator crashes in a program that has
@@ -232,7 +285,10 @@ of a program share the device, HailoRT switches between them. `opennve benchmark
   PyTorch has no NPU support. See [Agents](agents.md#pytorch-models).
 - **Hailo**: only compiled `.hef` models; openNVE does not compile them (Hailo Dataflow
   Compiler, see [Hailo](#hailo)). Not tested on Hailo hardware yet; Hailo-15 only with openNVE
-  running on the Hailo-15. The
-  **Apple Neural Engine** needs Core ML models.
+  running on the Hailo-15.
+- **AMD Kria DPU**: only compiled `.xmodel` models with one DPU subgraph and one input; openNVE
+  does not compile them (Vitis AI, see [AMD Kria DPU](#amd-kria-dpu)). Not tested on a Kria
+  board yet.
+- The **Apple Neural Engine** needs Core ML models.
 - `fp16` on the GPU can change the class of single pixels close to a decision boundary;
   `"gpu_precision": "fp32"` gives the results of the CPU.

@@ -46,6 +46,19 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   `opennve hailo` (command of the plugin) shows module, driver, HailoRT and devices
 - `opennve system` shows HailoRT and its devices with their chip (Hailo-8L, Hailo-10H, ...)
 
+### AMD Kria DPU (plugin vitis: KV260, KR260, K26 / K24)
+
+- Plugin `vitis` in the catalog: agents run compiled Vitis AI models (`.xmodel`) on the DPU
+  (DPUCZDX8G) of AMD Kria boards; `"backend": "auto"` picks it for `.xmodel` files. The runtime
+  is a separate project, [openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis) (package
+  `opennve_vitis`): the Vitis AI Runtime in Rust with a Python module, with its own Vitis AI
+  Runtime inside (independent of the Ubuntu version and AMD's Python packages)
+- `opennve plugin install vitis` sets up the board: XRT and the zocl driver, the DPU design
+  (KV260: `kv260-benchmark-b4096`), `/etc/vart.conf`, and the ready-made package; `opennve vitis`
+  (command of the plugin) shows XRT, the DPU design and the DPU cores
+- `opennve system` shows a loaded DPU design (zocl driver) as NPU and suggests the plugin on a Kria
+  board without it
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class

@@ -16,6 +16,7 @@ agents.json   ──►  agent "insects" (model.tflite) ──► predict(tiles)
 | TensorFlow / Keras (`.keras`, `.h5`, SavedModel directory) | TensorFlow | Extra `opennve[tensorflow]` (installs `tf-nightly`, see below) |
 | PyTorch (`.pt2`, `.pt`, `.pth`, `nn.Module`) | [PyTorch](https://pytorch.org) | Extra `opennve[pytorch]` (installs `torch`, see [PyTorch models](#pytorch-models)) |
 | Hailo (`.hef`, compiled for Hailo-8 / 8L / 10H / 15) | HailoRT 4 / 5 | Raspberry Pi OS `hailo-all` / `hailo-h10-all` + [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo), see [Hailo](accelerators.md#hailo) |
+| AMD Kria DPU (`.xmodel`, compiled with Vitis AI for the board's DPU) | Vitis AI Runtime | Plugin `vitis` ([openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis)), see [AMD Kria DPU](accelerators.md#amd-kria-dpu) |
 
 LiteRT is small (about 15 MB) and has wheels for Python 3.14 on Windows x64, Linux x64 and ARM64 (Raspberry Pi 5) and macOS Apple Silicon. It is the recommended runtime for live cameras.
 
@@ -67,8 +68,8 @@ A file contains one agent (an object), a list, or `{"agents": [...]}`. Names mus
 | Field | Default | Description |
 |---|---|---|
 | `name` | model file name | Name of the agent (key of the results) |
-| `model` | – | Model path: `.tflite`, `.keras`, `.h5`, a SavedModel directory, a PyTorch model (`.pt2`, `.pt`, `.pth`) or a compiled Hailo model (`.hef`). Relative paths are relative to the agent file |
-| `backend` | `"auto"` | `tflite`, `tensorflow`, `pytorch`, `hailo`, or `auto` (by the file name: `.tflite` → `tflite`, `.pt2` / `.pt` / `.pth` → `pytorch`, `.hef` → `hailo`, otherwise `tensorflow`) |
+| `model` | – | Model path: `.tflite`, `.keras`, `.h5`, a SavedModel directory, a PyTorch model (`.pt2`, `.pt`, `.pth`), a compiled Hailo model (`.hef`) or a compiled Vitis AI model (`.xmodel`, AMD Kria DPU). Relative paths are relative to the agent file |
+| `backend` | `"auto"` | `tflite`, `tensorflow`, `pytorch`, `hailo`, `vitis`, or `auto` (by the file name: `.tflite` → `tflite`, `.pt2` / `.pt` / `.pth` → `pytorch`, `.hef` → `hailo`, `.xmodel` → `vitis`, otherwise `tensorflow`) |
 | `device` | `null` (CPU) | `cpu`, `gpu`, `npu` or `auto`: where the model runs; a list such as `["gpu", "cpu"]` uses several devices at the same time in workflows. See [GPU and NPU](accelerators.md) |
 | `fallback` | `true` | Device not available: `true` runs on the CPU (with a message), `false` raises an error |
 | `gpu_precision` | `"fp16"` | GPU: `fp16` (faster) or `fp32` (the same results as the CPU) |
@@ -322,4 +323,4 @@ The example prints the selected tiles of every agent and draws them on the frame
 | `AgentStep` | `window`, `frames`, `results`, `step[agent name]` |
 | `AgentResult`, `Prediction` | See [Results](#results) and [Segmentation](#segmentation) |
 | `register_task(name)`, `list_tasks()`, `TaskInput` | Output decoders (`classification`, `segmentation`) |
-| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`, `pytorch`, `hailo`) |
+| `register_backend(name, suffixes=())`, `list_backends()` | Model runtimes (`tflite`, `tensorflow`, `pytorch`, from plugins `hailo`, `vitis`) |

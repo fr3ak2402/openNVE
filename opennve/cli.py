@@ -215,6 +215,10 @@ def _system(args) -> int:
     # hardware that a plugin not yet installed would use
     if any(device.get("vendor") == "Hailo" for device in info.get("npus", [])) and "hailo" not in plugins:
         print("  Hailo                 plugin not installed: opennve plugin install hailo")
+    kria = any(device.get("driver") == "zocl" for device in info.get("npus", [])) or any(
+        name in (info.get("model") or "") for name in ("Kria", "K26", "K24", "KV260", "KR260", "KD240"))
+    if kria and "vitis" not in plugins:
+        print("  AMD Kria DPU          plugin not installed: opennve plugin install vitis")
     return 0
 
 

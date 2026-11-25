@@ -7,6 +7,7 @@ that can be installed.
 | Plugin | What it adds | Platforms | Repository |
 |---|---|---|---|
 | `hailo` | Hailo accelerators (Hailo-8, 8L, 10H, 15; Raspberry Pi AI Kit, AI HAT+, AI HAT+ 2): agents with compiled `.hef` models, `opennve hailo`, Hailo in `opennve system` | Linux | [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) |
+| `vitis` | DPU of AMD Kria boards (KV260, KR260, K26 / K24 SOMs): agents with compiled Vitis AI `.xmodel` models, `opennve vitis`, the DPU in `opennve system` | Linux (Kria, aarch64) | [openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis) |
 
 ## Use
 
@@ -36,13 +37,14 @@ Install methods (from the catalog):
   copy) and runs its install script with that Python (`PYTHON=...`). For plugins that also set
   up the system, like `hailo`: on a Raspberry Pi it enables PCIe Gen 3, installs driver,
   firmware and HailoRT with apt (asks first) and the ready-made `opennve_hailo` package, see
-  [Hailo](accelerators.md#hailo).
+  [Hailo](accelerators.md#hailo); `vitis` installs XRT and the DPU design on a Kria board, see
+  [AMD Kria DPU](accelerators.md#amd-kria-dpu).
 
 `remove` uninstalls the plugin's package; system parts that its installer added (drivers, apt
 packages) stay.
 
 Agents use the backends of plugins like the built-in ones: `"backend": "auto"` picks them by
-the model file (`.hef` → `hailo`). A model file of a plugin that is not installed gives a hint:
+the model file (`.hef` → `hailo`, `.xmodel` → `vitis`). A model file of a plugin that is not installed gives a hint:
 `.hef models need the plugin hailo: opennve plugin install hailo`.
 
 ## Writing a plugin

@@ -242,6 +242,7 @@ _NPU_DRIVERS = {
     "hailo1x_pci": ("Hailo", "Hailo AI accelerator"),
     "apex": ("Google", "Coral Edge TPU"),
     "rknpu": ("Rockchip", "Rockchip NPU"),
+    "zocl": ("AMD", "AMD DPU (Kria / Zynq UltraScale+, zocl)"),
     "ethosu": ("Arm", "Arm Ethos-U NPU"),
     "ivpu": ("Intel", "Intel NPU (AI Boost)"),
 }
@@ -340,6 +341,9 @@ def _linux_devices(root: pathlib.Path = pathlib.Path("/")) -> list[dict[str, typ
             npu_drivers.add(driver)
     if "rknpu" not in npu_drivers and "rknpu" in _read(root / "proc/device-tree/compatible"):
         npu_drivers.add("rknpu")
+    zocl = root / "sys/bus/platform/drivers/zocl"
+    if zocl.is_dir() and any(entry.is_symlink() and entry.name != "module" for entry in zocl.iterdir()):
+        npu_drivers.add("zocl")  # XRT driver of AMD Kria / Zynq UltraScale+ boards: a DPU design is loaded
     for driver in sorted(npu_drivers):
         vendor, name = _NPU_DRIVERS.get(driver, (None, f"NPU ({driver})"))
         devices.append(_device("npu", name, vendor, None, driver))

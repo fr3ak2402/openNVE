@@ -186,10 +186,12 @@ opennve plugin install hailo                     # Hailo: PCIe, driver + HailoRT
 opennve plugin install hailo -- --yes --reboot   # options for the plugin's installer after --
 opennve plugin install hailo --ref v0.1.0        # a branch or tag of the plugin (--source DIR: a local copy)
 opennve plugin remove hailo
+opennve plugin install vitis                     # AMD Kria DPU: XRT, DPU design, opennve_vitis; asks before changes
 ```
 
 Installed plugins can add commands, for instance `opennve hailo` (plugin hailo): module on PCIe,
-driver, HailoRT and devices.
+driver, HailoRT and devices; `opennve vitis [--model M.xmodel]` (plugin vitis): XRT, DPU design,
+DPU cores and the structure of a model.
 
 ## `opennve raw <file>`
 

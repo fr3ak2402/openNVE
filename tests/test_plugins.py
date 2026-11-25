@@ -131,6 +131,10 @@ def test_hint_for_plugin_models(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="opennve plugin install hailo"):
         opennve.AgentConfig(model=str(tmp_path / "unet.hef"), backend="hailo")
     assert plugins.plugin_for_suffix(".HEF").name == "hailo"
+    (tmp_path / "unet.xmodel").write_bytes(b"x")
+    with pytest.raises(ValueError, match="opennve plugin install vitis"):
+        opennve.AgentConfig(model=str(tmp_path / "unet.xmodel")).resolved_backend
+    assert plugins.plugin_for_backend("vitis").name == "vitis"
     plugins._reset()
 
 
@@ -145,6 +149,9 @@ def test_catalog_and_info(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "not installed" in out and "github.com/fr3ak2402/openNVE-hailo" in out
     assert main(["plugin", "info", "nothing"]) == 1
+    entry = plugins.catalog_entry("vitis")
+    assert entry.method == "script" and entry.suffixes == (".xmodel",) and entry.commands == ("vitis",)
+    assert "codeload.github.com/fr3ak2402/openNVE-vitis" in entry.archive
     plugins._reset()
 
 
@@ -177,4 +184,20 @@ def test_install_pip_plugin_and_remove(monkeypatch):
     assert calls[-1] == [sys.executable, "-m", "pip", "install", "--upgrade", "opennve-pipplugin>=1"]
     assert manager.remove("pipplugin") == 0
     assert calls[-1] == [sys.executable, "-m", "pip", "uninstall", "--yes", "opennve-pipplugin"]
+    plugins._reset()
+
+
+def test_system_hint_for_kria(monkeypatch, capsys):
+    """opennve system on a Kria board (DPU design loaded, zocl) without the plugin vitis."""
+    from opennve import system
+    from opennve.cli import main
+
+    monkeypatch.setattr(plugins, "_entry_points", lambda: [])
+    plugins._reset()
+    info = system.system_info()
+    info["npus"] = [{"type": "npu", "name": "AMD DPU (Kria / Zynq UltraScale+, zocl)", "vendor": "AMD",
+                     "memory": None, "driver": "zocl"}]
+    monkeypatch.setattr(system, "system_info", lambda devices=True: info)
+    assert main(["system"]) == 0
+    assert "plugin not installed: opennve plugin install vitis" in capsys.readouterr().out
     plugins._reset()

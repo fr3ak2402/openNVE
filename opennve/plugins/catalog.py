@@ -53,6 +53,23 @@ CATALOG: list[CatalogEntry] = [
         "(apt, asks first); a reboot may be needed afterwards. Options of install.sh after --: "
         "--yes, --reboot, --no-gen3, --package=hailo-all|hailo-h10-all, --no-system, --build",
     ),
+    CatalogEntry(
+        name="vitis",
+        description="DPU of AMD Kria boards (KV260, KR260, K26 / K24): agents with compiled Vitis AI .xmodel models",
+        distribution="opennve-vitis",
+        repository="https://github.com/fr3ak2402/openNVE-vitis",
+        method="script",
+        platforms=("linux",),
+        archive="https://codeload.github.com/fr3ak2402/openNVE-vitis/tar.gz/{ref}",
+        script="install.sh",
+        backends=("vitis",),
+        suffixes=(".xmodel",),
+        commands=("vitis",),
+        notes="On a Kria board (Ubuntu 22.04 or newer) it also installs XRT with the zocl driver (apt, AMD's "
+        "package sources for Kria), the DPU design (KV260: kv260-benchmark-b4096) and /etc/vart.conf (asks "
+        "first). The package brings its own Vitis AI Runtime. Options of install.sh after --: --yes, "
+        "--no-system, --design=NAME, --firmware=DIR, --no-boot, --build",
+    ),
 ]
 
 
