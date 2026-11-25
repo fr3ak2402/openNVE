@@ -148,6 +148,7 @@ def test_catalog_and_info(monkeypatch, capsys):
     plugins._reset()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="runs an install.sh with bash (plugins with install scripts are for Linux)")
 def test_install_script_plugin(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(plugins, "_entry_points", lambda: [])
