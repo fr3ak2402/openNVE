@@ -395,7 +395,7 @@ def test_system_info_memory_and_devices(tmp_path, monkeypatch):
     (tmp_path / "dev/hailo0").write_text("")
     zocl = tmp_path / "sys/bus/platform/drivers/zocl"  # AMD Kria with a loaded DPU design
     zocl.mkdir(parents=True)
-    (zocl / "axi:zyxclmm_drm").symlink_to(tmp_path)
+    (zocl / "zyxclmm_drm").symlink_to(tmp_path, target_is_directory=True)
     found = system._linux_devices(tmp_path)
     assert [(d["type"], d["name"], d["vendor"]) for d in found] == [
         ("gpu", "AMD GPU (amdgpu)", "AMD"),
