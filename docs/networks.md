@@ -214,7 +214,10 @@ against the network you use today:
 |---|---|---|
 | `--samples` | 500 (QAT 20000) | inputs for the calibration / the training, chosen at random from all recordings |
 | `--validation` | 200 (QAT 1000) | other inputs for the comparison |
-| `--stride` | 5 | use every n-th time window (`--window-ms`, default 40) |
+| `--sampling` | `auto` | `random` (default for HDF5): time windows at random places, read directly; fast also for very large files (hundreds of GB), at most 16 tiles per window. `sequential` (default for `.raw`): every `--stride`-th window of the whole files |
+| `--stride` | 5 | sequential: use every n-th time window (`--window-ms`, default 40) |
+| `--width`, `--height` | from the file | sensor size if the HDF5 file does not store it (else estimated from 64 samples) |
+| `--max-windows` | all | read at most this many windows (quick trial runs) |
 | `--epochs`, `--batch-size`, `--learning-rate` | 5, 32, 1e-4 | QAT: passes, inputs per step, start of the cosine-decaying learning rate |
 | `--target-weight` | 10 | QAT: weight of the target-class pixels |
 | `--int8-io` | off | int8 inputs / outputs too (default float32; openNVE converts either way) |

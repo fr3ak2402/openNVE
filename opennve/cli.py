@@ -278,7 +278,8 @@ def _quantize(args) -> int:
         config, recordings, frame_config, args.output, samples=args.samples, validation=args.validation,
         window_ms=args.window_ms, stride=args.stride, max_windows=args.max_windows, int8_io=args.int8_io,
         qat=args.qat, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate,
-        target_weight=args.target_weight, seed=args.seed, progress=progress,
+        target_weight=args.target_weight, seed=args.seed, sampling=args.sampling, width=args.width,
+        height=args.height, progress=progress,
     )
     if args.json:
         print(json.dumps(report, indent=4))
@@ -532,7 +533,12 @@ def main(argv=None) -> int:
     command.add_argument("--learning-rate", type=float, default=1e-4, help="--qat: start learning rate (default 1e-4, cosine decay)")
     command.add_argument("--target-weight", type=float, default=10.0,
                          help="--qat: weight of the pixels of the agent's target classes in the training (default 10)")
-    command.add_argument("--stride", type=int, default=5, help="use every n-th time window of the recordings (default 5)")
+    command.add_argument("--sampling", choices=["auto", "random", "sequential"], default="auto",
+                         help="random: time windows at random places, read directly (default for HDF5, fast for very "
+                              "large files); sequential: every --stride-th window of the whole files (default for .raw)")
+    command.add_argument("--stride", type=int, default=5, help="sequential: use every n-th time window (default 5)")
+    command.add_argument("--width", type=int, help="sensor width if the HDF5 file does not store it (else estimated)")
+    command.add_argument("--height", type=int, help="sensor height if the HDF5 file does not store it (else estimated)")
     command.add_argument("--window-ms", type=float, default=40.0, help="window length in ms (default 40)")
     command.add_argument("--max-windows", type=int, help="use at most this many windows (default: all)")
     command.add_argument("--int8-io", action="store_true", help="int8 inputs and outputs too (default: float32, openNVE converts either way)")

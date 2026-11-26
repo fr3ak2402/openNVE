@@ -73,6 +73,10 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   best epoch is kept. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
   them. Functional U-Nets with the HSNR layer names (`enc_conv0-1` ... `dec_output`) are copied
   into the opennve U-Net automatically
+- Inputs from HDF5 files are taken from time windows at random places, read directly
+  (`Hdf5Reader.window_at`): a 300 GB training file needs seconds to minutes, not a pass over all
+  events. Without width / height in the file the size is estimated from samples
+  (`open_hdf5(..., estimate_size=True)`, or `--width` / `--height`). Progress every 10 s
 - Python: `opennve.quantize_agent(...)`, `opennve.quantize_report(report)`
 
 ### Fixes

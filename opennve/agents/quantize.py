@@ -105,6 +105,68 @@ def _windows(config: AgentConfig, recordings, frame_config, window_ms: float, st
                     yield images
 
 
+PER_WINDOW = 16  # at most this many tiles of one random window (more different windows)
+
+
+def _is_hdf5(path) -> bool:
+    from ..recordings.hdf5 import HDF5_SUFFIXES, is_hdf5
+
+    path = pathlib.Path(path)
+    return path.suffix.lower() in HDF5_SUFFIXES or (path.suffix.lower() != ".raw" and is_hdf5(path))
+
+
+def _random_windows(config: AgentConfig, recordings, frame_config, window_ms: float, max_windows: int | None,
+                    stats: dict, seed: int, width: int | None = None, height: int | None = None,
+                    progress: typing.Callable[[str], None] | None = None) -> typing.Iterator[list[np.ndarray]]:
+    """Model inputs of time windows at random places of HDF5 recordings, read directly there
+    (random access: a 300 GB file needs only the windows that are used, not a pass over all of it).
+    The files are chosen in proportion to their events; of one window at most PER_WINDOW tiles are
+    used. Runs until the caller stops (or max_windows)."""
+    from ..recordings.hdf5 import open_hdf5
+
+    rng = np.random.default_rng(seed)
+    readers = []
+    try:
+        for path in recordings:
+            name = os.path.basename(os.fspath(path))
+            if progress:
+                progress(f"opening {name}")
+            reader = open_hdf5(path, window={"duration_ms": window_ms}, width=width, height=height, estimate_size=True)
+            readers.append(reader)
+            stats["files"] += 1
+            if progress:
+                size = f"{reader.width} x {reader.height}"
+                note = (" (estimated from samples: not in the file; give --width / --height if it is wrong)"
+                        if reader.size_estimated else "")
+                progress(f"  {name}: {reader.event_count:,} events, {size}{note}")
+        counts = np.array([reader.event_count for reader in readers], np.float64)
+        if not counts.sum():
+            return
+        weights = counts / counts.sum()
+        last = time.perf_counter()
+        empty = 0
+        while max_windows is None or stats["windows"] < max_windows:
+            reader = readers[int(rng.choice(len(readers), p=weights))]
+            window = reader.window_at(int(rng.integers(0, reader.event_count)), window_ms)
+            stats["windows"] += 1
+            images = _images(config, window.frame(frame_config))
+            stats["candidates"] += len(images)
+            if len(images) > PER_WINDOW:
+                images = [images[i] for i in rng.choice(len(images), PER_WINDOW, replace=False)]
+            if progress and time.perf_counter() - last >= PROGRESS_SECONDS:
+                last = time.perf_counter()
+                progress(f"  {stats['windows']} random windows read")
+            if not images:
+                empty += 1
+                if empty >= 1000 and empty == stats["windows"]:
+                    return  # no inputs at all (min_events?)
+                continue
+            yield images
+    finally:
+        for reader in readers:
+            reader.close()
+
+
 def collect_inputs(
     config: AgentConfig,
     recordings: typing.Sequence[PathLike],
@@ -150,16 +212,35 @@ def collect_prepared(
     seed: int = 0,
     max_windows: int | None = None,
     progress: typing.Callable[[str], None] | None = None,
+    sampling: str = "auto",
+    width: int | None = None,
+    height: int | None = None,
 ) -> tuple[np.ndarray, dict[str, int]]:
     """Like collect_inputs, but prepared for the model (the agent's preprocessing) and stored as
-    float16 in one array (count x height x width x channels): for training with many inputs."""
+    float16 in one array (count x height x width x channels): for training with many inputs.
+
+    sampling "random" (default for HDF5 files): time windows at random places, read directly
+    (fast for very large files); "sequential" (default for .raw): every stride-th window of the
+    whole files, inputs chosen by reservoir sampling. width / height: sensor size if the HDF5 file
+    does not store it (else it is estimated from samples)."""
     config = agent.config
     stats = {"files": 0, "windows": 0, "candidates": 0}
     rng = np.random.default_rng(seed)
     data: np.ndarray | None = None
     filled = seen = 0
     pad_to = None
-    for images in _windows(config, recordings, frame_config, window_ms, stride, max_windows, stats, progress):
+    if sampling == "auto":
+        sampling = "random" if all(_is_hdf5(path) for path in recordings) else "sequential"
+    if sampling == "random":
+        source = _random_windows(config, recordings, frame_config, window_ms, max_windows, stats, seed, width, height,
+                                 progress)
+    elif sampling == "sequential":
+        source = _windows(config, recordings, frame_config, window_ms, stride, max_windows, stats, progress)
+    else:
+        raise ValueError("sampling must be auto, random or sequential")
+    for images in source:
+        if sampling == "random" and filled >= count:
+            break
         if pad_to is None:
             pad_to = _pad_size(config, frame_config, images)
         prepared = agent.prepare(images, pad_to)
@@ -267,6 +348,9 @@ def quantize_agent(
     learning_rate: float = 1e-4,
     target_weight: float = 10.0,
     seed: int = 0,
+    sampling: str = "auto",
+    width: int | None = None,
+    height: int | None = None,
     progress: typing.Callable[[str], None] | None = None,
 ) -> dict[str, typing.Any]:
     """Quantizes the agent's model to int8 and writes it as .tflite (default: <model>_int8.tflite
@@ -278,7 +362,8 @@ def quantize_agent(
     further with the 8 bit rounding, `epochs` times over `samples` inputs (default 20000), to give
     the same classes as the float network (distillation, no labels needed); see
     opennve.networks.qat. validation other inputs (default 200 / QAT 1000) compare the int8 model
-    with the original one.
+    with the original one. The inputs come from time windows at random places of HDF5 files (fast
+    also for very large files) or from every stride-th window of .raw files (see collect_prepared).
 
     Returns a report: output, sizes, inputs, calibration / validation counts, agreement (share of
     equal classes, 0..1), classes (IoU / recall of the target classes), history (QAT: per epoch),
@@ -300,7 +385,8 @@ def quantize_agent(
     float_agent = Agent(config.copy(device="cpu", fallback=True, delegate=None, batch_size=None))
     say(f"reading inputs from {len(recordings)} recording(s)")
     inputs, stats = collect_prepared(float_agent, recordings, frame_config, samples + validation, window_ms=window_ms,
-                                     stride=stride, seed=seed, max_windows=max_windows, progress=say)
+                                     stride=stride, seed=seed, max_windows=max_windows, progress=say,
+                                     sampling=sampling, width=width, height=height)
     say(f"{len(inputs)} inputs from {stats['windows']} windows ({stats['candidates']} candidates)")
     if not len(inputs):
         raise ValueError("the recordings gave no inputs (no events in the windows, or tiles below min_events)")

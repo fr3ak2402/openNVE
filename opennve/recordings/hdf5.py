@@ -297,6 +297,7 @@ class Hdf5Reader(RecordingReader):
         sort: bool = False,
         speed: typing.Optional[float] = None,
         zero_time: bool = False,
+        estimate_size: bool = False,
     ):
         h5py = _h5py()
         path = pathlib.Path(path)
@@ -316,7 +317,8 @@ class Hdf5Reader(RecordingReader):
             self.has_labels = labels and "l" in self.source.columns
             self.time_unit = self._time_unit(time_unit)
             self._t_offset = self._find_t_offset()
-            self._width, self._height = self._size(width, height)
+            self.size_estimated = False
+            self._width, self._height = self._size(width, height, estimate_size)
             self._chunk_events = chunk_events
             self._position = 0
             self._last_t: typing.Optional[int] = None
@@ -377,7 +379,7 @@ class Hdf5Reader(RecordingReader):
                 return int(np.asarray(self._h5[location][()]).ravel()[0])
         return 0
 
-    def _size(self, width, height) -> tuple[int, int]:
+    def _size(self, width, height, estimate: bool = False) -> tuple[int, int]:
         attrs = {**dict(self._h5.attrs), **self.source.attrs()}
         for w_key, h_key in (("width", "height"), ("sensor_width", "sensor_height"), ("x_size", "y_size")):
             if width is None and w_key in attrs:
@@ -388,10 +390,17 @@ class Hdf5Reader(RecordingReader):
             text = _decode_names(attrs["geometry"])[0]
             if "x" in text:
                 width, height = width or int(text.split("x")[0]), height or int(text.split("x")[1])
-        if width is None or height is None:  # one pass over x and y
+        if width is None or height is None:  # one pass over x and y (estimate: 64 samples of 1 M events)
             max_x = max_y = -1
-            for start in range(0, len(self.source), 4_000_000):
-                part = self.source.read(start, min(len(self.source), start + 4_000_000))
+            total = len(self.source)
+            if estimate and total > 64 * 1_000_000:
+                self.size_estimated = True
+                starts = np.linspace(0, total - 1_000_000, 64).astype(np.int64).tolist()
+                blocks = [(start, start + 1_000_000) for start in starts]
+            else:
+                blocks = [(start, min(total, start + 4_000_000)) for start in range(0, total, 4_000_000)]
+            for start, stop in blocks:
+                part = self.source.read(start, stop)
                 if len(part["x"]):
                     max_x, max_y = max(max_x, int(np.max(part["x"]))), max(max_y, int(np.max(part["y"])))
             width = width if width is not None else max(1, max_x + 1)
@@ -457,6 +466,41 @@ class Hdf5Reader(RecordingReader):
 
     # Reading
 
+    @property
+    def event_count(self) -> int:
+        """Number of events in the file."""
+        return len(self.source)
+
+    def window_at(self, index: int, duration_ms: float):
+        """The time window that starts at the event with this index (random access: reads only
+        that part of the file, for sampling large files). Filtered like read() (without the
+        events before it, which a filter would otherwise see). The file must be sorted by time."""
+        from ..events.window import EventWindow
+
+        duration_us = WindowConfig(duration_ms=duration_ms).duration_us
+        total = len(self.source)
+        if total == 0:
+            raise ValueError(f"{self.path}: no events")
+        position = int(min(max(index, 0), total - 1))
+        step = 65536
+        parts = []
+        start_t = None
+        while position < total:
+            stop = min(total, position + step)
+            events = self._convert(self.source.read(position, stop))
+            if start_t is None:
+                start_t = int(events["t"][0])
+            cut = int(np.searchsorted(events["t"], start_t + duration_us, side="left"))
+            parts.append(events[:cut])
+            if cut < len(events):
+                break
+            position, step = stop, step * 2
+        events = parts[0] if len(parts) == 1 else np.concatenate(parts)
+        if self._filter is not None:
+            events = self._filter(events)
+        return EventWindow(camera=self.name, start_t=start_t, end_t=start_t + duration_us, width=self.width,
+                           height=self.height, polarity_events=events, output_config=self.output_config)
+
     def _next_chunk(self):
         total = len(self.source)
         if self._position >= total:
@@ -497,7 +541,9 @@ def open_hdf5(
     Keyword arguments: dataset (group or dataset with the events), columns (column order of a 2D
     dataset), time_unit ("auto", "us", "ms", "s", "ns"), width / height (else from the attributes or
     the largest x / y), labels (read the l column, default True), chunk_events, sort (sort by time,
-    reads the whole file), speed (1.0 = real time), zero_time, filter, output, window.
+    reads the whole file), speed (1.0 = real time), zero_time, filter, output, window, estimate_size
+    (without width / height in the file: estimate them from 64 samples instead of a pass over all
+    events, for very large files).
     """
     if config_path is not None:
         config = load_config(config_path, name)

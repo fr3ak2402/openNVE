@@ -196,3 +196,34 @@ def test_qat_of_a_functional_unet(setup):
                             batch_size=8, stride=1, progress=messages.append)
     assert (path / "unet_float32_int8.tflite").is_file() and report["agreement"] is not None
     assert any("functional U-Net" in message for message in messages)
+
+
+def test_window_at_reads_a_window_directly(tmp_path):
+    events = _events(count=20000, duration=2_000_000)
+    opennve.write_hdf5(tmp_path / "rec.h5", events, width=64, height=48)
+    with opennve.open_hdf5(tmp_path / "rec.h5") as recording:
+        assert recording.event_count == 20000
+        window = recording.window_at(5000, 40)
+        start = int(events["t"][5000])
+        expected = events[(events["t"] >= start) & (events["t"] < start + 40_000)]
+        assert window.start_t == start and window.end_t == start + 40_000
+        assert len(window.polarity_events) == len(expected)
+        np.testing.assert_array_equal(window.polarity_events["x"], expected["x"])
+        assert recording.window_at(19999, 40).polarity_events["t"][0] == events["t"][-1]
+
+
+@needs_tensorflow
+def test_random_and_sequential_sampling(setup):
+    from opennve.agents.quantize import collect_prepared
+
+    path, _ = setup
+    config = opennve.load_agent_config(path / "agents.json")
+    frame = opennve.load_frame_config(path / "frames.json", "t16")
+    agent = opennve.Agent(config)
+    messages = []
+    data, stats = collect_prepared(agent, [path / "train.h5"], frame, 30, progress=messages.append)
+    assert data.shape == (30, 16, 16, 2) and data.dtype == np.float16
+    assert any("64 x 48" in message for message in messages)
+    data, stats = collect_prepared(agent, [path / "train.h5"], frame, 30, sampling="sequential", stride=1)
+    assert len(data) == 30 and stats["windows"] == 10
+    agent.close()
