@@ -81,6 +81,20 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   (`open_hdf5(..., estimate_size=True)`, or `--width` / `--height`). Progress every 10 s
 - Python: `opennve.quantize_agent(...)`, `opennve.quantize_report(report)`
 
+### Weight transfer (opennve transfer)
+
+- `opennve transfer` / `opennve.transfer_weights(source, destination)`: copies trained weights
+  into any network with the same layers. Sources: models, `.keras`, Keras 3 `.weights.h5`, Keras 2
+  `.h5`. Destinations: models, `.keras` files or a network name (`UNet`: depth, filters, kernel
+  size, classes and channels read from the weights). Layers are paired by name or in order per
+  layer type with shape checks. The result is compared with the source or a reference model, and
+  weights that still have their initial values (saved before the trained weights were loaded)
+  are reported. `Network.transfer_weights_from(source, method="auto")`
+- Lambda layers: `.keras` files load with any Python version and in safe mode when their Lambda
+  layers have a registered replacement (`opennve.register_lambda(pattern, layer)`; built in:
+  `resize_to_same<n>` of the HSNR U-Net). Before, such files loaded only with the Python version
+  that saved them
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class
