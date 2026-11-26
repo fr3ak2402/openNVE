@@ -255,6 +255,26 @@ def test_random_and_sequential_sampling(setup):
 
 
 @needs_tensorflow
+def test_inputs_with_target_classes(setup):
+    """target_share: that share of the inputs has target class pixels (by the model); a class the
+    model never gives stops at max_windows with the other inputs only."""
+    from opennve.agents.quantize import _classes, collect_prepared
+
+    path, _ = setup
+    config = opennve.load_agent_config(path / "agents.json")
+    frame = opennve.load_frame_config(path / "frames.json", "t16")
+    agent = opennve.Agent(config)
+    data, stats = collect_prepared(agent, [path / "train.h5"], frame, 40, target_share=0.5, target_classes=[2])
+    assert len(data) == 40 and stats["target_inputs"] == 20
+    classes = _classes(np.asarray(agent.predict_batch(data.astype(np.float32))[0]), agent.layout)
+    assert (classes.reshape(40, -1) == 2).any(axis=1).sum() >= 20
+    data, stats = collect_prepared(agent, [path / "train.h5"], frame, 40, target_share=0.5, target_classes=[7],
+                                   max_windows=30)
+    assert stats["target_inputs"] == 0 and len(data) == 20 and stats["windows"] == 30
+    agent.close()
+
+
+@needs_tensorflow
 def test_qat_of_a_model_with_softmax_around_the_unet(setup):
     """A saved model that wraps the U-Net and applies a softmax after it: the quantized network
     must do the same (else it learns from probabilities as if they were logits)."""
