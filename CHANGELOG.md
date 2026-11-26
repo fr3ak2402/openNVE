@@ -69,7 +69,7 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
 - `--qat`: quantization aware training of the opennve U-Net (`opennve.networks.qat`). The network
   is trained further with the int8 rounding (batch normalization folded, weights per channel,
   activation ranges from the calibration, float32 output convolution) to give the same classes as
-  the float network (distillation of the logits, no labels needed; checks first that the copy
+  the float network (distillation of the logits, no labels needed; target-class pixels of either network weighted; checks first that the copy
   without rounding gives the float network's classes and how sure the float network is). Target-class pixels are weighted and the
   best epoch is kept; the activation ranges (minimum / maximum or a percentile) are chosen by
   how well they keep the target classes. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps

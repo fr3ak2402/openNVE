@@ -237,8 +237,10 @@ against the network you use today:
   probability` shows how sure the float network is. A low value (for three classes, below about
   60 %) means its classes depend on small differences, which 8 bit rounding easily changes;
   check then that the agent's inputs are prepared as in the training of the network.
-- Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are rare
-  and matter most.
+- Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are
+  rare and matter most. Pixels the float network *or* the int8 network gives a target class count,
+  so a falsely marked pixel costs as much as a missed one. For very rare classes (insects at about
+  0.1 % of the pixels) a weight of 100 works better.
 - After every epoch the classes are compared on `--validation` other inputs (default 1000). The
   best epoch is kept, judged by the IoU of the target classes.
 - The ranges of the activations are fixed from the calibration (up to 2048 inputs). This trains

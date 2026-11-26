@@ -375,19 +375,32 @@ def _probabilities(output, final_activation: str, activation: str):
     return output, tf.math.log(tf.clip_by_value(output, 1e-7, 1.0)) if final_activation == "softmax" else None
 
 
+def _target_pixels(teacher, student, target_classes):
+    """Pixels that the teacher or the student gives one of the target classes. Both count: with
+    only the teacher's, a missed target pixel costs target_weight times more than a false one, and
+    the network learns to mark too many pixels (for instance too large insects)."""
+    wanted = tf.constant(list(target_classes), tf.int32)
+
+    def of(output):
+        classes = tf.argmax(output, axis=-1, output_type=tf.int32)
+        return tf.reduce_any(tf.equal(classes[..., tf.newaxis], wanted), -1)
+
+    return tf.logical_or(of(teacher), of(student))
+
+
 def distillation_loss(teacher_output, student_output, final_activation: str, activation: str,
                       target_classes: typing.Sequence[int] = (), target_weight: float = 1.0):
     """How far the quantized network is from the float network: cross entropy with the float
     network's probabilities (softmax), binary cross entropy (sigmoid) or the squared difference.
-    Pixels the float network gives one of the target classes count target_weight times (they are
-    rare, for instance insects, and matter most)."""
+    Pixels the float network or the quantized network gives one of the target classes count
+    target_weight times (they are rare, for instance insects, and matter most; both, so that a
+    false target pixel costs as much as a missed one)."""
     target, _ = _probabilities(teacher_output, final_activation, activation)
     if activation == "softmax":
         _, log_probabilities = _probabilities(student_output, final_activation, activation)
         per_pixel = -tf.reduce_sum(target * log_probabilities, axis=-1)
         if target_classes and target_weight != 1.0:
-            classes = tf.argmax(target, axis=-1, output_type=tf.int32)
-            important = tf.reduce_any(tf.equal(classes[..., tf.newaxis], tf.constant(list(target_classes), tf.int32)), -1)
+            important = _target_pixels(target, student_output, target_classes)
             weights = tf.where(important, target_weight, 1.0)
             return tf.reduce_sum(per_pixel * weights) / tf.reduce_sum(weights)
         return tf.reduce_mean(per_pixel)
@@ -431,8 +444,7 @@ def logit_loss(teacher_logits, student_logits, activation: str, scale: float = 1
         student_logits -= tf.reduce_mean(student_logits, axis=-1, keepdims=True)
     per_pixel = tf.reduce_mean(tf.square(teacher_logits - student_logits), axis=-1) / (scale * scale)
     if target_classes and target_weight != 1.0 and teacher_logits.shape[-1] > 1:
-        classes = tf.argmax(teacher_logits, axis=-1, output_type=tf.int32)
-        important = tf.reduce_any(tf.equal(classes[..., tf.newaxis], tf.constant(list(target_classes), tf.int32)), -1)
+        important = _target_pixels(teacher_logits, student_logits, target_classes)
         weights = tf.where(important, target_weight, 1.0)
         return tf.reduce_sum(per_pixel * weights) / tf.reduce_sum(weights)
     return tf.reduce_mean(per_pixel)
