@@ -107,7 +107,7 @@ def _windows(config: AgentConfig, recordings, frame_config, window_ms: float, st
 
 
 PER_WINDOW = 16  # at most this many tiles of one random window (more different windows)
-STALE_WINDOWS = 2000  # target_share: stop after this many windows without a target tile
+STALE_WINDOWS = 500  # target_share: stop after this many windows without a target tile
 
 
 def _is_hdf5(path) -> bool:
@@ -457,6 +457,8 @@ def quantize_agent(
 
     float_agent = Agent(config.copy(device="cpu", fallback=True, delegate=None, batch_size=None))
     target_classes = list(config.prediction.target_classes or ())
+    if qat:
+        _qat_model(config)  # fails early for models QAT does not support
     if target_share is None:
         target_share = DEFAULT_TARGET_SHARE if qat and target_classes and all(_is_hdf5(p) for p in recordings) else 0.0
     if target_share and not target_classes:
@@ -628,16 +630,30 @@ def _output_activation(teacher, unet, inputs: np.ndarray) -> str | None:
                      "training can not reproduce: save the U-Net alone")
 
 
-def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, target_classes, *, epochs, batch_size,
-         learning_rate, target_weight, int8_io, seed, say) -> tuple[bytes, list[dict]]:
-    from ..networks.qat import QuantizedUNet, train_qat, unet_logits
+def _qat_model(config: AgentConfig):
+    """The agent's Keras model for quantization aware training; ValueError if it is no U-Net that
+    QAT supports (checked before the inputs are collected)."""
     from .backends import _load_keras_model
 
     path = config.model_path
     if path.suffix.lower() not in (".keras", ".h5", ".hdf5"):
         raise ValueError(f"agent {config.name}: quantization aware training needs the Keras model (.keras / .h5) "
                          f"of the U-Net, not {path.name}")
-    teacher = _load_keras_model(os.fspath(path), config.safe_mode)
+    model = _load_keras_model(os.fspath(path), config.safe_mode)
+    if _find_unet(model) is None and not _is_functional_unet(model):
+        raise ValueError(f"agent {config.name}: quantization aware training supports the opennve U-Net "
+                         "(opennve.networks.UNet, or a functional U-Net with the layers enc_conv0-1 ... dec_output); "
+                         "use post-training quantization (without --qat) for other models")
+    return model
+
+
+def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, target_classes, *, epochs, batch_size,
+         learning_rate, target_weight, int8_io, seed, say) -> tuple[bytes, list[dict]]:
+    from ..networks.qat import QuantizedUNet, train_qat, unet_logits
+    from .backends import _load_keras_model
+
+    path = config.model_path
+    teacher = _qat_model(config)
     unet = _find_unet(teacher)
     if unet is None and _is_functional_unet(teacher):
         say(f"{path.name}: functional U-Net (enc_conv0-1 ... dec_output), copied into the opennve U-Net")

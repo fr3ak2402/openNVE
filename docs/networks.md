@@ -242,7 +242,7 @@ against the network you use today:
   classes such as insects are otherwise in very few of the inputs, and the network has few
   examples to learn them from. Of one time window at most 16 such tiles are taken, so they come
   from many different windows. The comparison inputs stay at random: they show how the int8 network
-  does on typical data. If the float network hardly finds the classes, the search stops after 2000
+  does on typical data. If the float network hardly finds the classes, the search stops after 500
   windows without one and reports how many it found.
 - Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are
   rare and matter most. Pixels the float network *or* the int8 network gives a target class count,
