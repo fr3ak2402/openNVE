@@ -187,7 +187,10 @@ class 2       IoU 80.7 %, found 92.0 % of 4285 pixels of the original
 U-Net it is not: its errors add up from layer to layer (on the test data only about 60 % of the
 insect pixels stay the same), and `opennve quantize` warns about this.
 
-**Quantization aware training** (`--qat`, for the opennve `UNet`) trains the network further with
+**Quantization aware training** (`--qat`) works with the opennve `UNet` and with functional
+U-Nets that use the layer names `enc_conv0-1` ... `dec_output`, such as the HSNR U-Net
+(`unet_float32.keras` of embedded-unet). The latter are copied into the opennve `UNet`
+automatically, after checking that both give the same outputs. QAT trains the network further with
 the int8 rounding in the forward pass (`opennve.networks.qat`):
 
 - The batch normalization is folded into the convolutions, as the TensorFlow Lite export does it.

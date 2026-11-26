@@ -352,6 +352,41 @@ def _find_unet(model):
     return None
 
 
+def _is_functional_unet(model) -> bool:
+    names = {layer.name for layer in getattr(model, "layers", [])}
+    return {"enc_conv0-1", "enc_convbtleneck-1", "dec_output"} <= names
+
+
+def _unet_from_functional(model, inputs: np.ndarray):
+    """The opennve U-Net with the weights of a functional U-Net with named layers (enc_conv{i}-1,
+    enc_bn{i}-1, ..., dec_output; for instance the HSNR U-Net of embedded-unet). Checks that both
+    give the same outputs."""
+    from ..networks import Network, NetworkParameters
+
+    names = {layer.name for layer in model.layers}
+    depth = 0
+    while f"enc_conv{depth}-1" in names:
+        depth += 1
+    first = model.get_layer("enc_conv0-1")
+    head = model.get_layer("dec_output")
+    activation = getattr(head.activation, "__name__", "linear")
+    height, width, channels = model.input_shape[1:4]
+    parameters = NetworkParameters(number_of_classes=head.filters, tile_height=height or inputs.shape[1],
+                                   tile_width=width or inputs.shape[2], channels=channels)
+    batch_norm = "enc_bn0-1" in names
+    network = Network.build("UNet", parameters, layer_depth=depth, filters_orig=first.filters,
+                            kernel_size=first.kernel_size[0], batch_norm=batch_norm,
+                            final_activation=activation)
+    network.transfer_weights_from(model, method="hsnr_unet", layer_depth=depth, batch_norm=batch_norm)
+    expected = np.asarray(model.predict(inputs, verbose=0), np.float32)
+    actual = np.asarray(network.model.predict(inputs, verbose=0), np.float32)
+    scale = max(float(np.abs(expected).max()), 1.0)
+    if expected.shape != actual.shape or float(np.abs(expected - actual).max()) > 1e-3 * scale:
+        raise ValueError("the functional U-Net does not match the opennve U-Net (other layers or activations): "
+                         "quantization aware training is not possible for it")
+    return network.model
+
+
 def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, target_classes, *, epochs, batch_size,
          learning_rate, target_weight, int8_io, seed, say) -> tuple[bytes, list[dict]]:
     from ..networks.qat import QuantizedUNet, train_qat
@@ -363,9 +398,14 @@ def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, tar
                          f"of the U-Net, not {path.name}")
     teacher = _load_keras_model(os.fspath(path), config.safe_mode)
     unet = _find_unet(teacher)
+    if unet is None and _is_functional_unet(teacher):
+        say(f"{path.name}: functional U-Net (enc_conv0-1 ... dec_output), copied into the opennve U-Net")
+        teacher = _unet_from_functional(teacher, train[: min(len(train), 64)].astype(np.float32))
+        unet = _find_unet(teacher)
     if unet is None:
         raise ValueError(f"agent {config.name}: quantization aware training supports the opennve U-Net "
-                         "(opennve.networks.UNet); use post-training quantization (without --qat) for other models")
+                         "(opennve.networks.UNet, or a functional U-Net with the layers enc_conv0-1 ... dec_output); "
+                         "use post-training quantization (without --qat) for other models")
     activation = config.prediction.activation or "none"
     shape = tuple(train.shape[1:])
     student = QuantizedUNet.from_unet(unet, shape)

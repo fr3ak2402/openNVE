@@ -71,7 +71,8 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   activation ranges from the calibration, float32 output convolution) to give the same classes as
   the float network (distillation, no labels needed). Target-class pixels are weighted and the
   best epoch is kept. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
-  them
+  them. Functional U-Nets with the HSNR layer names (`enc_conv0-1` ... `dec_output`) are copied
+  into the opennve U-Net automatically
 - Python: `opennve.quantize_agent(...)`, `opennve.quantize_report(report)`
 
 ### Fixes

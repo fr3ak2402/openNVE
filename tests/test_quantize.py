@@ -147,3 +147,52 @@ def test_cli(setup, capsys):
     assert report["method"] == "qat" and report["output"].endswith("unet_int8.tflite")
     assert main(["quantize", str(path / "agents.json"), "--data", str(path / "missing.h5"), "--frames",
                  str(path / "frames.json")]) == 2
+
+
+def _functional_unet(depth=2, filters=4, classes=3, size=16):
+    """A functional U-Net with the layer names of the HSNR U-Net (enc_conv0-1 ... dec_output)."""
+    import keras
+    import tensorflow as tf
+
+    def block(x, name, count, bn_name, act):
+        x = keras.layers.Conv2D(count, 3, padding="same", name=name)(x)
+        x = keras.layers.BatchNormalization(name=bn_name)(x)
+        return keras.layers.LeakyReLU(negative_slope=0.3, name=act)(x)
+
+    inputs = keras.Input((size, size, 2))
+    x, skips, count = inputs, [], filters
+    for i in range(depth):
+        x = block(x, f"enc_conv{i}-1", count, f"enc_bn{i}-1", f"enc_act{i}-1")
+        x = block(x, f"enc_conv{i}-2", count, f"enc_bn{i}-2", f"enc_act{i}-2")
+        skips.append(x)
+        x = keras.layers.MaxPooling2D(2)(x)
+        count *= 2
+    x = block(x, "enc_convbtleneck-1", count, "enc_bnbtleneck-1", "btl_act1")
+    x = block(x, "enc_convbtleneck-2", count, "enc_bnbtleneck-2", "btl_act2")
+    for i in range(depth):
+        count = max(count // 2, filters)
+        x = block(x, f"dec_conv{i}-1", count, f"dec_bn{i}-1", f"dec_act{i}-1")
+        x = keras.layers.Conv2DTranspose(count, 3, strides=2, padding="same", name=f"dec_conv{i}-2")(x)
+        x = keras.layers.BatchNormalization(name=f"dec_bn{i}-2")(x)
+        x = keras.layers.LeakyReLU(negative_slope=0.3)(x)
+        x = keras.layers.Concatenate()([x, skips[-(i + 1)]])
+    x = keras.layers.Conv2D(count, 3, padding="same", activation="relu", name="dec_out1")(x)
+    x = keras.layers.Conv2D(count, 3, padding="same", activation="relu", name="dec_out2")(x)
+    return keras.Model(inputs, keras.layers.Conv2D(classes, 1, name="dec_output")(x))
+
+
+@needs_tensorflow
+def test_qat_of_a_functional_unet(setup):
+    """unet_float32.keras of embedded-unet (functional, HSNR layer names) is copied into the opennve
+    U-Net automatically."""
+    from opennve.agents import quantize_agent
+
+    path, _ = setup
+    _functional_unet().save(path / "unet_float32.keras")
+    config = opennve.load_agent_config(path / "agents.json").copy(model=str(path / "unet_float32.keras"))
+    frame = opennve.load_frame_config(path / "frames.json", "t16")
+    messages = []
+    report = quantize_agent(config, [path / "train.h5"], frame, qat=True, samples=32, validation=8, epochs=1,
+                            batch_size=8, stride=1, progress=messages.append)
+    assert (path / "unet_float32_int8.tflite").is_file() and report["agreement"] is not None
+    assert any("functional U-Net" in message for message in messages)
