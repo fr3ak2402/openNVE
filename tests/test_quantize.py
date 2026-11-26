@@ -30,6 +30,9 @@ def _events(seed=0, count=6000, width=64, height=48, duration=400_000):
 @pytest.fixture
 def setup(tmp_path):
     """A small U-Net with non-trivial batch normalization, a recording, agents.json and frames.json."""
+    import keras
+
+    keras.utils.set_random_seed(0)  # the same network every run (which tiles get class 2)
     network = opennve.Network.build("UNet", opennve.NetworkParameters(3, 16, 16, 2), **SMALL_UNET)
     rng = np.random.default_rng(1)
     for layer in network.model._flatten_layers(include_self=False):
