@@ -279,7 +279,7 @@ def _quantize(args) -> int:
         window_ms=args.window_ms, stride=args.stride, max_windows=args.max_windows, int8_io=args.int8_io,
         qat=args.qat, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate,
         target_weight=args.target_weight, seed=args.seed, sampling=args.sampling, width=args.width,
-        height=args.height, progress=progress,
+        height=args.height, target_share=args.target_share, progress=progress,
     )
     if args.json:
         print(json.dumps(report, indent=4))
@@ -533,6 +533,10 @@ def main(argv=None) -> int:
     command.add_argument("--learning-rate", type=float, default=1e-4, help="--qat: start learning rate (default 1e-4, cosine decay)")
     command.add_argument("--target-weight", type=float, default=10.0,
                          help="--qat: weight of the pixels of the agent's target classes in the training (default 10)")
+    command.add_argument("--target-share", type=float,
+                         help="--qat: share of the training inputs that are tiles in which the float model finds one of "
+                              "the agent's target classes (default 0.5 with HDF5 recordings; 0: all at random); the "
+                              "comparison inputs stay at random")
     command.add_argument("--sampling", choices=["auto", "random", "sequential"], default="auto",
                          help="random: time windows at random places, read directly (default for HDF5, fast for very "
                               "large files); sequential: every --stride-th window of the whole files (default for .raw)")

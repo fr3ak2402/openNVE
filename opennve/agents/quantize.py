@@ -39,6 +39,7 @@ DEFAULT_WINDOW_MS = 40.0
 DEFAULT_EPOCHS = 5
 DEFAULT_QAT_SAMPLES = 20000
 DEFAULT_QAT_VALIDATION = 1000
+DEFAULT_TARGET_SHARE = 0.5  # QAT: share of training tiles with target classes
 
 
 def _tensorflow():
@@ -106,6 +107,7 @@ def _windows(config: AgentConfig, recordings, frame_config, window_ms: float, st
 
 
 PER_WINDOW = 16  # at most this many tiles of one random window (more different windows)
+STALE_WINDOWS = 2000  # target_share: stop after this many windows without a target tile
 
 
 def _is_hdf5(path) -> bool:
@@ -117,11 +119,12 @@ def _is_hdf5(path) -> bool:
 
 def _random_windows(config: AgentConfig, recordings, frame_config, window_ms: float, max_windows: int | None,
                     stats: dict, seed: int, width: int | None = None, height: int | None = None,
-                    progress: typing.Callable[[str], None] | None = None) -> typing.Iterator[list[np.ndarray]]:
+                    progress: typing.Callable[[str], None] | None = None,
+                    per_window: int | None = PER_WINDOW) -> typing.Iterator[list[np.ndarray]]:
     """Model inputs of time windows at random places of HDF5 recordings, read directly there
     (random access: a 300 GB file needs only the windows that are used, not a pass over all of it).
-    The files are chosen in proportion to their events; of one window at most PER_WINDOW tiles are
-    used. Runs until the caller stops (or max_windows)."""
+    The files are chosen in proportion to their events; of one window at most per_window tiles are
+    used (None: all). Runs until the caller stops (or max_windows)."""
     from ..recordings.hdf5 import open_hdf5
 
     rng = np.random.default_rng(seed)
@@ -151,8 +154,8 @@ def _random_windows(config: AgentConfig, recordings, frame_config, window_ms: fl
             stats["windows"] += 1
             images = _images(config, window.frame(frame_config))
             stats["candidates"] += len(images)
-            if len(images) > PER_WINDOW:
-                images = [images[i] for i in rng.choice(len(images), PER_WINDOW, replace=False)]
+            if per_window is not None and len(images) > per_window:
+                images = [images[i] for i in rng.choice(len(images), per_window, replace=False)]
             if progress and time.perf_counter() - last >= PROGRESS_SECONDS:
                 last = time.perf_counter()
                 progress(f"  {stats['windows']} random windows read")
@@ -215,6 +218,8 @@ def collect_prepared(
     sampling: str = "auto",
     width: int | None = None,
     height: int | None = None,
+    target_share: float = 0.0,
+    target_classes: typing.Sequence[int] = (),
 ) -> tuple[np.ndarray, dict[str, int]]:
     """Like collect_inputs, but prepared for the model (the agent's preprocessing) and stored as
     float16 in one array (count x height x width x channels): for training with many inputs.
@@ -222,8 +227,16 @@ def collect_prepared(
     sampling "random" (default for HDF5 files): time windows at random places, read directly
     (fast for very large files); "sequential" (default for .raw): every stride-th window of the
     whole files, inputs chosen by reservoir sampling. width / height: sensor size if the HDF5 file
-    does not store it (else it is estimated from samples)."""
+    does not store it (else it is estimated from samples).
+
+    target_share > 0 (random sampling only): that share of the inputs are tiles in which the agent's
+    model finds one of target_classes (for instance insects, often in less than 1 % of the tiles);
+    the rest are chosen as usual. stats["target_inputs"] counts them."""
     config = agent.config
+    if target_share > 0 and target_classes:
+        return _collect_with_targets(agent, recordings, frame_config, count, window_ms=window_ms, seed=seed,
+                                     max_windows=max_windows, progress=progress, width=width, height=height,
+                                     share=target_share, target_classes=target_classes)
     stats = {"files": 0, "windows": 0, "candidates": 0}
     rng = np.random.default_rng(seed)
     data: np.ndarray | None = None
@@ -259,6 +272,61 @@ def collect_prepared(
         return np.zeros((0,), np.float16), stats
     data = data[:filled]
     return data[rng.permutation(filled)], stats
+
+
+def _collect_with_targets(agent: Agent, recordings, frame_config, count: int, *, window_ms: float, seed: int,
+                          max_windows: int | None, progress, width, height, share: float,
+                          target_classes: typing.Sequence[int]) -> tuple[np.ndarray, dict[str, int]]:
+    """count prepared inputs, share of them with target class pixels (by the agent's model), from
+    random windows: all tiles of a window are run through the model while target tiles are still
+    missing; at most PER_WINDOW target and PER_WINDOW other tiles of one window are kept (variety).
+    Stops with fewer target tiles after STALE_WINDOWS windows without one (or max_windows)."""
+    config = agent.config
+    if not all(_is_hdf5(path) for path in recordings):
+        raise ValueError("preferring tiles with target classes (target_share) needs HDF5 recordings (random windows)")
+    stats = {"files": 0, "windows": 0, "candidates": 0, "target_inputs": 0}
+    rng = np.random.default_rng(seed)
+    wanted_targets = int(round(count * min(max(share, 0.0), 1.0)))
+    wanted_others = count - wanted_targets
+    targets: list[np.ndarray] = []
+    others: list[np.ndarray] = []
+    pad_to = None
+    last = time.perf_counter()
+    wanted = np.asarray(list(target_classes))
+    since_target = 0  # windows since the last target tile
+    source = _random_windows(config, recordings, frame_config, window_ms, max_windows, stats, seed, width, height,
+                             progress, per_window=None)
+    for images in source:
+        if len(targets) >= wanted_targets and len(others) >= wanted_others:
+            break
+        if len(others) >= wanted_others and since_target >= STALE_WINDOWS:
+            break  # the model hardly finds the target classes: keep what was found
+        if pad_to is None:
+            pad_to = _pad_size(config, frame_config, images)
+        if len(targets) < wanted_targets:
+            prepared = agent.prepare(images, pad_to)
+            classes = _classes(np.asarray(agent.predict_batch(np.asarray(prepared, np.float32))[0]), agent.layout)
+            found = np.isin(classes.reshape(len(classes), -1), wanted).any(axis=1)
+            hits, misses = np.flatnonzero(found), np.flatnonzero(~found)
+            since_target = 0 if len(hits) else since_target + 1
+            for index in rng.permutation(hits)[:min(PER_WINDOW, wanted_targets - len(targets))]:
+                targets.append(np.asarray(prepared[index], np.float16))
+            if len(others) < wanted_others:
+                for index in rng.permutation(misses)[:min(PER_WINDOW, wanted_others - len(others))]:
+                    others.append(np.asarray(prepared[index], np.float16))
+        else:
+            chosen = [images[i] for i in rng.permutation(len(images))[:min(PER_WINDOW, wanted_others - len(others))]]
+            for sample in agent.prepare(chosen, pad_to):
+                others.append(np.asarray(sample, np.float16))
+        if progress and time.perf_counter() - last >= PROGRESS_SECONDS:
+            last = time.perf_counter()
+            progress(f"  {stats['windows']} windows: {len(targets)} / {wanted_targets} inputs with target classes, "
+                     f"{len(others)} / {wanted_others} others")
+    stats["target_inputs"] = len(targets)
+    if not targets and not others:
+        return np.zeros((0,), np.float16), stats
+    data = np.stack(targets + others)
+    return data[rng.permutation(len(data))], stats
 
 
 def _pad_size(config: AgentConfig, frame_config, images: typing.Sequence[np.ndarray]) -> tuple[int, int] | None:
@@ -351,6 +419,7 @@ def quantize_agent(
     sampling: str = "auto",
     width: int | None = None,
     height: int | None = None,
+    target_share: float | None = None,
     progress: typing.Callable[[str], None] | None = None,
 ) -> dict[str, typing.Any]:
     """Quantizes the agent's model to int8 and writes it as .tflite (default: <model>_int8.tflite
@@ -364,6 +433,10 @@ def quantize_agent(
     opennve.networks.qat. validation other inputs (default 200 / QAT 1000) compare the int8 model
     with the original one. The inputs come from time windows at random places of HDF5 files (fast
     also for very large files) or from every stride-th window of .raw files (see collect_prepared).
+    target_share (QAT with HDF5 recordings; default 0.5 if the agent has target_classes): that share
+    of the training inputs are tiles in which the float model finds a target class (rare classes
+    such as insects would otherwise be in very few of them); the comparison inputs stay chosen at
+    random, so they show how the model does on typical data.
 
     Returns a report: output, sizes, inputs, calibration / validation counts, agreement (share of
     equal classes, 0..1), classes (IoU / recall of the target classes), history (QAT: per epoch),
@@ -383,18 +456,43 @@ def quantize_agent(
         raise ValueError("the quantized model is a .tflite file")
 
     float_agent = Agent(config.copy(device="cpu", fallback=True, delegate=None, batch_size=None))
+    target_classes = list(config.prediction.target_classes or ())
+    if target_share is None:
+        target_share = DEFAULT_TARGET_SHARE if qat and target_classes and all(_is_hdf5(p) for p in recordings) else 0.0
+    if target_share and not target_classes:
+        raise ValueError(f"agent {config.name}: target_share needs target_classes in the agent's prediction")
     say(f"reading inputs from {len(recordings)} recording(s)")
-    inputs, stats = collect_prepared(float_agent, recordings, frame_config, samples + validation, window_ms=window_ms,
-                                     stride=stride, seed=seed, max_windows=max_windows, progress=say,
-                                     sampling=sampling, width=width, height=height)
-    say(f"{len(inputs)} inputs from {stats['windows']} windows ({stats['candidates']} candidates)")
+    if target_share:
+        # comparison inputs at random (typical data); training inputs with the share of target tiles
+        held_back, stats = collect_prepared(float_agent, recordings, frame_config, validation, window_ms=window_ms,
+                                            stride=stride, seed=seed + 1, max_windows=max_windows, progress=say,
+                                            sampling=sampling, width=width, height=height)
+        say(f"{len(held_back)} comparison inputs at random; training inputs: {target_share * 100:.0f} % with "
+            f"target classes {', '.join(map(str, target_classes))} (found by the float model)")
+        calibration, train_stats = collect_prepared(float_agent, recordings, frame_config, samples, window_ms=window_ms,
+                                                    seed=seed, max_windows=max_windows, progress=say, width=width,
+                                                    height=height, target_share=target_share,
+                                                    target_classes=target_classes)
+        if train_stats["target_inputs"] < round(samples * target_share):
+            say(f"note: only {train_stats['target_inputs']} inputs with target classes found in "
+                f"{train_stats['windows']} windows")
+        say(f"{len(calibration)} training inputs ({train_stats['target_inputs']} with target classes) from "
+            f"{train_stats['windows']} windows")
+        stats = {"files": stats["files"], "windows": stats["windows"] + train_stats["windows"],
+                 "candidates": stats["candidates"] + train_stats["candidates"],
+                 "target_inputs": train_stats["target_inputs"]}
+        inputs = calibration
+    else:
+        inputs, stats = collect_prepared(float_agent, recordings, frame_config, samples + validation,
+                                         window_ms=window_ms, stride=stride, seed=seed, max_windows=max_windows,
+                                         progress=say, sampling=sampling, width=width, height=height)
+        say(f"{len(inputs)} inputs from {stats['windows']} windows ({stats['candidates']} candidates)")
+        if len(inputs) > validation:
+            calibration, held_back = inputs[: len(inputs) - validation], inputs[len(inputs) - validation:]
+        else:
+            calibration, held_back = inputs, inputs[:0]
     if not len(inputs):
         raise ValueError("the recordings gave no inputs (no events in the windows, or tiles below min_events)")
-    if len(inputs) > validation:
-        calibration, held_back = inputs[: len(inputs) - validation], inputs[len(inputs) - validation:]
-    else:
-        calibration, held_back = inputs, inputs[:0]
-    target_classes = list(config.prediction.target_classes or ())
     history: list[dict] = []
 
     if qat:
@@ -432,6 +530,8 @@ def quantize_agent(
         "windows": stats["windows"],
         "candidates": stats["candidates"],
         "calibration": len(calibration),
+        "target_inputs": stats.get("target_inputs"),
+        "target_share": target_share,
         "validation": len(held_back),
         "agreement": None,
         "max_abs_difference": None,
@@ -580,7 +680,9 @@ def quantize_report(report: dict[str, typing.Any]) -> str:
         f"agent {report['agent']}: {pathlib.Path(report['model']).name} ({megabytes(report['model_bytes'])})"
         f" -> {report['output']} ({megabytes(report['output_bytes'])}, int8"
         f"{', int8 inputs / outputs' if report['int8_io'] else ', float32 inputs / outputs'})",
-        f"inputs        {report['calibration']} for {'training' if qat else 'calibration'}, {report['validation']} for the comparison "
+        f"inputs        {report['calibration']} for {'training' if qat else 'calibration'}"
+        + (f" ({report['target_inputs']} with target classes)" if report.get("target_inputs") is not None else "")
+        + f", {report['validation']} for the comparison{' (at random)' if report.get('target_inputs') is not None else ''} "
         f"(chosen from {report['candidates']} in {report['windows']} windows of {report['recordings']} recording(s))",
     ]
     if qat and report.get("history"):

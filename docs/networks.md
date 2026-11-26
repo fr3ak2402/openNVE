@@ -213,6 +213,13 @@ against the network you use today:
   probability` shows how sure the float network is. A low value (for three classes, below about
   60 %) means its classes depend on small differences, which 8 bit rounding easily changes;
   check then that the agent's inputs are prepared as in the training of the network.
+- Half of the training inputs are tiles in which the float network finds one of the agent's
+  `target_classes` (`--target-share`, default 0.5 with HDF5 recordings; 0: all at random). Rare
+  classes such as insects are otherwise in very few of the inputs, and the network has few
+  examples to learn them from. Of one time window at most 16 such tiles are taken, so they come
+  from many different windows. The comparison inputs stay at random: they show how the int8 network
+  does on typical data. If the float network hardly finds the classes, the search stops after 2000
+  windows without one and reports how many it found.
 - Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are
   rare and matter most. Pixels the float network *or* the int8 network gives a target class count,
   so a falsely marked pixel costs as much as a missed one. For very rare classes (insects at about
