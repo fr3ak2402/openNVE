@@ -56,6 +56,7 @@ class ActivationQuantizer(keras.layers.Layer):
         super().__init__(**kwargs)
         self.momentum = momentum
         self.observe = False
+        self.enabled = True  # False: passes the tensor unchanged (QuantizedUNet.rounding)
         self._batch_ranges: list[np.ndarray] = []  # per calibration batch: (low, high) per percentile
 
     def build(self, input_shape):
@@ -65,6 +66,8 @@ class ActivationQuantizer(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, x, training=False):
+        if not self.enabled:
+            return x
         if self.observe:
             low, high = tf.reduce_min(x), tf.reduce_max(x)
             first = tf.equal(self.seen, 0.0)
@@ -273,7 +276,8 @@ class QuantizedUNet(keras.Model):
         model(tf.zeros((1, *input_shape), tf.float32))  # build
         return model
 
-    def call(self, x, training=False):
+    def call(self, x, training=False, logits=False):
+        """Output of the network; logits=True: before the final activation (softmax / sigmoid)."""
         x = self.input_quantizer(x, training=training)
         skips = []
         for first, second in zip(self.encoder_a, self.encoder_b):
@@ -291,6 +295,8 @@ class QuantizedUNet(keras.Model):
         x = self.head(x, training=training)
         if self.head_range is not None:
             x = self.head_range(x, training=training)
+        if logits:
+            return x
         if self.final_activation == "sigmoid":
             x = tf.nn.sigmoid(x)
         elif self.final_activation == "softmax":
@@ -298,6 +304,17 @@ class QuantizedUNet(keras.Model):
         if self.output_range is not None:
             x = self.output_range(x, training=training)
         return x
+
+    def rounding(self, enabled: bool) -> None:
+        """Switches the 8 bit rounding of activations and weights on or off (off: the float network
+        with the batch normalization folded in; for checks, call the network eagerly)."""
+        for layer in self._flatten_layers(include_self=False):
+            if isinstance(layer, ActivationQuantizer):
+                layer.enabled = enabled
+            elif isinstance(layer, QuantizedConv):
+                if not hasattr(layer, "_quantize_default"):
+                    layer._quantize_default = layer.quantize
+                layer.quantize = enabled and layer._quantize_default
 
     def quantizers(self) -> list[ActivationQuantizer]:
         return [layer for layer in self._flatten_layers(include_self=False) if isinstance(layer, ActivationQuantizer)]
@@ -382,6 +399,45 @@ def distillation_loss(teacher_output, student_output, final_activation: str, act
     return tf.reduce_mean(tf.square(teacher_output - student_output))
 
 
+def unet_logits(unet: UNet):
+    """Function batch -> outputs of the U-Net before its final activation (the logits; the output
+    convolution's softmax / sigmoid is skipped)."""
+    head = unet.output_layer
+
+    def logits(batch):
+        activation = head.activation
+        head.activation = keras.activations.linear
+        try:
+            return unet(batch, training=False)
+        finally:
+            head.activation = activation
+
+    return logits
+
+
+def logit_loss(teacher_logits, student_logits, activation: str, scale: float = 1.0,
+               target_classes: typing.Sequence[int] = (), target_weight: float = 1.0):
+    """How far the quantized network is from the float network: squared difference of the logits
+    (before softmax / sigmoid), divided by scale ** 2 (the spread of the teacher's logits: 0.01 means
+    the logits are off by a tenth of their spread). For softmax only the differences between the
+    classes count (the logits are centered). Unlike the cross entropy with the teacher's
+    probabilities this does not stop at the teacher's entropy: a teacher that is unsure (probabilities
+    close to each other) still gives clear targets. Pixels the teacher gives one of the target classes
+    count target_weight times."""
+    teacher_logits = tf.cast(teacher_logits, tf.float32)
+    student_logits = tf.cast(student_logits, tf.float32)
+    if activation == "softmax" and teacher_logits.shape[-1] > 1:
+        teacher_logits -= tf.reduce_mean(teacher_logits, axis=-1, keepdims=True)
+        student_logits -= tf.reduce_mean(student_logits, axis=-1, keepdims=True)
+    per_pixel = tf.reduce_mean(tf.square(teacher_logits - student_logits), axis=-1) / (scale * scale)
+    if target_classes and target_weight != 1.0 and teacher_logits.shape[-1] > 1:
+        classes = tf.argmax(teacher_logits, axis=-1, output_type=tf.int32)
+        important = tf.reduce_any(tf.equal(classes[..., tf.newaxis], tf.constant(list(target_classes), tf.int32)), -1)
+        weights = tf.where(important, target_weight, 1.0)
+        return tf.reduce_sum(per_pixel * weights) / tf.reduce_sum(weights)
+    return tf.reduce_mean(per_pixel)
+
+
 def classes_of(output: np.ndarray, activation: str) -> np.ndarray:
     """Class per pixel: arg max (softmax / several classes), else the sign / 0.5 threshold."""
     output = np.asarray(output, np.float32)
@@ -420,12 +476,15 @@ def train_qat(
     target_weight: float = 10.0,
     seed: int = 0,
     progress: typing.Callable[[str], None] | None = None,
+    teacher_logits: typing.Callable | None = None,
 ) -> list[dict]:
     """Trains the quantized network to give the float network's (teacher) outputs on the inputs
     (distillation, no labels). After every epoch the classes of both are compared on the validation
     inputs; the best epoch's weights are kept (by the IoU of the target classes, else the share of
     equal classes; also the starting point: training never makes it worse). Pixels of the target
-    classes count target_weight times in the loss. Returns one entry per epoch (0: before the training)."""
+    classes count target_weight times in the loss. teacher_logits: function batch -> the teacher's
+    logits (see unet_logits); then the logits are compared (logit_loss), else the outputs
+    (distillation_loss). Returns one entry per epoch (0: before the training)."""
     say = progress or (lambda message: None)
     rng = np.random.default_rng(seed)
     final_activation = student.final_activation
@@ -448,15 +507,49 @@ def train_qat(
     optimizer = keras.optimizers.Adam(learning_rate=schedule)
     variables = student.trainable_variables
 
+    scale = 1.0
+    if teacher_logits is not None:
+        # spread of the teacher's logits: the loss is relative to it
+        sample = np.asarray(teacher_logits(tf.convert_to_tensor(train[:min(len(train), 256)].astype(np.float32))), np.float32)
+        if activation == "softmax" and sample.shape[-1] > 1:
+            sample = sample - sample.mean(axis=-1, keepdims=True)
+        scale = max(float(np.sqrt(np.mean(np.square(sample)))), 1e-6)
+
     @tf.function(reduce_retracing=True)
     def step(batch):
-        target = teacher(batch, training=False)
-        with tf.GradientTape() as tape:
-            output = student(batch, training=True)
-            loss = distillation_loss(target, output, final_activation, activation, target_classes, target_weight)
+        if teacher_logits is not None:
+            target = teacher_logits(batch)
+            with tf.GradientTape() as tape:
+                output = student(batch, training=True, logits=True)
+                loss = logit_loss(target, output, activation, scale, target_classes, target_weight)
+        else:
+            target = teacher(batch, training=False)
+            with tf.GradientTape() as tape:
+                output = student(batch, training=True)
+                loss = distillation_loss(target, output, final_activation, activation, target_classes, target_weight)
         gradients = tape.gradient(loss, variables)
         optimizer.apply_gradients(zip(gradients, variables))
         return loss
+
+    if len(validation):
+        # the int8 copy without the rounding must give the float network's classes (else it lacks
+        # something of the model and training can not fix that)
+        student.rounding(False)
+        exact = evaluate()
+        student.rounding(True)
+        say(f"without the 8 bit rounding: {_describe(exact)}")
+        if exact["agreement"] is not None and exact["agreement"] < 0.995:
+            say("warning: even without the rounding the copy differs from the float network: the model has layers "
+                "or settings the int8 copy does not reproduce")
+        if activation == "softmax" and teacher_logits is not None:
+            sample = np.asarray(teacher_logits(tf.convert_to_tensor(validation[:min(len(validation), 64)].astype(np.float32))),
+                                np.float32)
+            if sample.shape[-1] > 1:
+                top = np.sort(sample, axis=-1)
+                margin = top[..., -1] - top[..., -2]
+                probability = tf.nn.softmax(sample, axis=-1).numpy().max(axis=-1)
+                say(f"float network: highest probability {np.mean(probability) * 100:.1f} % on average, distance "
+                    f"of the two largest logits {np.median(margin):.3g} (median)")
 
     # ranges of the activations: minimum / maximum or a percentile of the calibration, whichever
     # keeps the classes best (rare outliers can make the 8 bit steps too coarse)
@@ -483,7 +576,7 @@ def train_qat(
             losses.append(float(step(tf.convert_to_tensor(batch))))
         entry = {"epoch": epoch, "loss": float(np.mean(losses)) if losses else None, **evaluate()}
         history.append(entry)
-        say(f"epoch {epoch}/{epochs}: loss {entry['loss']:.4f}, {_describe(entry)}")
+        say(f"epoch {epoch}/{epochs}: loss {entry['loss']:.5f}, {_describe(entry)}")
         if _score(entry) >= best[0]:
             best = (_score(entry), [v.numpy() for v in student.weights])
     for variable, value in zip(student.weights, best[1]):

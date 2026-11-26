@@ -88,6 +88,20 @@ def test_distillation_helpers():
     assert classes_of(np.array([[0.1, 0.9]]), "softmax").tolist() == [1]
 
 
+def test_logit_loss():
+    """Compares the logits: an unsure teacher (probabilities close together) still gives a loss of
+    0 for the same logits; a common offset of all classes does not count (softmax)."""
+    import tensorflow as tf
+
+    from opennve.networks.qat import logit_loss
+
+    teacher = tf.constant([[[[0.2, 0.0, 0.1], [0.0, 0.05, 0.3]]]])
+    assert float(logit_loss(teacher, teacher, "softmax")) == 0.0
+    assert float(logit_loss(teacher, teacher + 7.0, "softmax")) < 1e-10
+    assert float(logit_loss(teacher, tf.reverse(teacher, [-1]), "softmax", scale=0.1)) > 1.0
+    assert float(logit_loss(teacher, tf.reverse(teacher, [-1]), "softmax", 0.1, [2], 10.0)) > 1.0
+
+
 @needs_tensorflow
 def test_post_training_and_qat(setup):
     from opennve.agents import quantize_agent, quantize_report
@@ -107,6 +121,8 @@ def test_post_training_and_qat(setup):
     assert [entry["epoch"] for entry in report["history"]] == [0, 1, 2]
     assert report["agreement"] is not None and 2 in report["classes"]
     assert any("epoch 2/2" in message for message in messages)
+    assert any("without the 8 bit rounding: 100.000 %" in message for message in messages)
+    assert any("highest probability" in message for message in messages)
     text = quantize_report(report)
     assert "training" in text and "LiteRT" in text
 

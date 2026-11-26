@@ -173,9 +173,9 @@ opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --
 ```
 
 ```text
-training      epoch: loss, same class as the float network (in the training, with simulated int8)
+training      epoch: loss (difference of the logits, relative), same class as the float network (in the training, with simulated int8)
     0: -, 91.741 %, class 2 IoU 12.6 %
-    1: 0.2897, 99.952 %, class 2 IoU 79.0 %
+    1: 0.00231, 99.952 %, class 2 IoU 79.0 %
     ...
 int8 .tflite  (LiteRT, as openNVE runs it) compared with the original on other inputs:
 agreement     99.95 % of the pixels / inputs have the same class as with the original model
@@ -203,6 +203,16 @@ The teacher is the current float network (distillation). The int8 network learns
 classes as the float network on the recordings, so no labels are needed and the result is measured
 against the network you use today:
 
+- The loss compares the logits (the values before the softmax / sigmoid), relative to their
+  spread: 0.01 means the int8 network's logits are off by a tenth of their usual size. The
+  probabilities would be a poor target when the float network is unsure (probabilities close
+  together): their cross entropy can not fall below the float network's own uncertainty, so it
+  barely moves, while the classes still depend on small differences of the logits.
+- Before the training two lines check the starting point: `without the 8 bit rounding` must give
+  100 % (else the model contains something the int8 copy lacks), and `float network: highest
+  probability` shows how sure the float network is. A low value (for three classes, below about
+  60 %) means its classes depend on small differences, which 8 bit rounding easily changes;
+  check then that the agent's inputs are prepared as in the training of the network.
 - Pixels of the agent's `target_classes` count `--target-weight` times (default 10). They are rare
   and matter most.
 - After every epoch the classes are compared on `--validation` other inputs (default 1000). The

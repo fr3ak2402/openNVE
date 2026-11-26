@@ -530,7 +530,7 @@ def _output_activation(teacher, unet, inputs: np.ndarray) -> str | None:
 
 def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, target_classes, *, epochs, batch_size,
          learning_rate, target_weight, int8_io, seed, say) -> tuple[bytes, list[dict]]:
-    from ..networks.qat import QuantizedUNet, train_qat
+    from ..networks.qat import QuantizedUNet, train_qat, unet_logits
     from .backends import _load_keras_model
 
     path = config.model_path
@@ -559,7 +559,7 @@ def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, tar
         f"learning rate {learning_rate:g}")
     history = train_qat(student, teacher, train, validation, activation=activation, target_classes=target_classes,
                         epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-                        target_weight=target_weight, seed=seed, progress=say)
+                        target_weight=target_weight, seed=seed, progress=say, teacher_logits=unet_logits(unet))
     say("converting the trained network to int8 TensorFlow Lite")
     return student.to_tflite(shape, int8_io=int8_io), history
 
@@ -584,9 +584,10 @@ def quantize_report(report: dict[str, typing.Any]) -> str:
         f"(chosen from {report['candidates']} in {report['windows']} windows of {report['recordings']} recording(s))",
     ]
     if qat and report.get("history"):
-        lines.append("training      epoch: loss, same class as the float network (in the training, with simulated int8)")
+        lines.append("training      epoch: loss (difference of the logits, relative), same class as the float network "
+                     "(in the training, with simulated int8)")
         for entry in report["history"]:
-            loss = "-" if entry["loss"] is None else f"{entry['loss']:.4f}"
+            loss = "-" if entry["loss"] is None else f"{entry['loss']:.5f}"
             agreement = "-" if entry["agreement"] is None else f"{entry['agreement'] * 100:.3f} %"
             ious = ", ".join(f"class {k} IoU {v['iou'] * 100:.1f} %" for k, v in entry["classes"].items() if v["iou"] is not None)
             lines.append(f"  {entry['epoch']:>3}: {loss}, {agreement}{', ' + ious if ious else ''}")
