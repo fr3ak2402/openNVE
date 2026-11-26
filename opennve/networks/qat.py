@@ -214,7 +214,7 @@ class QuantizedUNet(keras.Model):
     """The U-Net with int8 rounding (quantization aware training). Built from a trained UNet with
     from_unet(); to_tflite() gives the int8 TensorFlow Lite model."""
 
-    def __init__(self, unet: UNet, float_head: bool = True, **kwargs):
+    def __init__(self, unet: UNet, float_head: bool = True, output_activation: str | None = None, **kwargs):
         super().__init__(**kwargs)
         if not isinstance(unet, UNet):
             raise TypeError("quantization aware training supports the opennve U-Net (opennve.networks.UNet)")
@@ -251,6 +251,9 @@ class QuantizedUNet(keras.Model):
         self.out2 = plain(unet.dec_out2, unet.dec_out2.activation.__name__ == "relu", "out2")
         self.out2_range = ActivationQuantizer(name="out2_range")
         self.final_activation = unet.output_layer.activation.__name__
+        if output_activation and self.final_activation == "linear":
+            # the saved model applies it after the U-Net (for instance a softmax layer around it)
+            self.final_activation = output_activation
         if self.final_activation not in ("linear", "sigmoid", "softmax"):
             raise ValueError(f"final activation {self.final_activation} is not supported for quantization aware training")
         # the output convolution (1 x 1, few channels) stays float: the classes are decided by small
@@ -261,10 +264,12 @@ class QuantizedUNet(keras.Model):
         self.output_range = ActivationQuantizer(name="output_range") if self.final_activation != "linear" and not float_head else None
 
     @classmethod
-    def from_unet(cls, unet: UNet, input_shape: typing.Sequence[int], float_head: bool = True) -> QuantizedUNet:
+    def from_unet(cls, unet: UNet, input_shape: typing.Sequence[int], float_head: bool = True,
+                  output_activation: str | None = None) -> QuantizedUNet:
         """Quantized copy of a trained U-Net (input_shape: height, width, channels). float_head:
-        the output convolution stays float32 (more accurate classes, almost no extra time)."""
-        model = cls(unet, float_head=float_head)
+        the output convolution stays float32 (more accurate classes, almost no extra time).
+        output_activation: "softmax" / "sigmoid" if the saved model applies it after the U-Net."""
+        model = cls(unet, float_head=float_head, output_activation=output_activation)
         model(tf.zeros((1, *input_shape), tf.float32))  # build
         return model
 

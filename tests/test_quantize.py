@@ -228,3 +228,29 @@ def test_random_and_sequential_sampling(setup):
     data, stats = collect_prepared(agent, [path / "train.h5"], frame, 30, sampling="sequential", stride=1)
     assert len(data) == 30 and stats["windows"] == 10
     agent.close()
+
+
+@needs_tensorflow
+def test_qat_of_a_model_with_softmax_around_the_unet(setup):
+    """A saved model that wraps the U-Net and applies a softmax after it: the quantized network
+    must do the same (else it learns from probabilities as if they were logits)."""
+    import keras
+
+    from opennve.agents import quantize_agent
+    from opennve.agents.quantize import _find_unet
+
+    path, network = setup
+    unet = _find_unet(network.model)
+    head = unet.output_layer
+    head.kernel.assign(head.kernel.numpy() * 200)  # confident like a trained network (logits of hundreds)
+    inputs = keras.Input((16, 16, 2))
+    keras.Model(inputs, keras.layers.Softmax()(unet(inputs))).save(path / "wrapped.keras")
+    config = opennve.load_agent_config(path / "agents.json").copy(model=str(path / "wrapped.keras"))
+    frame = opennve.load_frame_config(path / "frames.json", "t16")
+    messages = []
+    report = quantize_agent(config, [path / "train.h5"], frame, qat=True, samples=64, validation=16, epochs=2,
+                            batch_size=8, progress=messages.append)
+    assert any("applies softmax after the U-Net" in message for message in messages)
+    losses = [entry["loss"] for entry in report["history"][1:]]
+    assert losses[-1] < 0.6  # a mix-up of probabilities and logits gives about ln(3) = 1.1
+    assert report["agreement"] > 0.9

@@ -501,6 +501,33 @@ def _unet_from_functional(model, inputs: np.ndarray):
     return network.model
 
 
+def _output_activation(teacher, unet, inputs: np.ndarray) -> str | None:
+    """What the saved model does after the U-Net layer: nothing (None), "softmax" or "sigmoid"
+    (for instance a model that wraps the U-Net and adds a softmax layer). Anything else can not be
+    reproduced by the quantized network."""
+    if teacher is unet:
+        return None
+    expected = np.asarray(teacher.predict(inputs, verbose=0), np.float32)
+    logits = np.asarray(unet(inputs, training=False), np.float32)
+    if expected.shape != logits.shape:
+        raise ValueError("the model has layers around the U-Net that change the output shape: quantization aware "
+                         "training needs the U-Net alone")
+
+    def close(values):
+        return float(np.abs(values - expected).max()) <= 1e-3 * max(1.0, float(np.abs(expected).max()))
+
+    if close(logits):
+        return None
+    if unet.output_layer.activation.__name__ == "linear":
+        shifted = np.exp(logits - logits.max(axis=-1, keepdims=True))
+        if close(shifted / shifted.sum(axis=-1, keepdims=True)):
+            return "softmax"
+        if close(1.0 / (1.0 + np.exp(-logits))):
+            return "sigmoid"
+    raise ValueError("the model has layers around the U-Net (for instance preprocessing) that quantization aware "
+                     "training can not reproduce: save the U-Net alone")
+
+
 def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, target_classes, *, epochs, batch_size,
          learning_rate, target_weight, int8_io, seed, say) -> tuple[bytes, list[dict]]:
     from ..networks.qat import QuantizedUNet, train_qat
@@ -522,7 +549,10 @@ def _qat(config: AgentConfig, tf, train: np.ndarray, validation: np.ndarray, tar
                          "use post-training quantization (without --qat) for other models")
     activation = config.prediction.activation or "none"
     shape = tuple(train.shape[1:])
-    student = QuantizedUNet.from_unet(unet, shape)
+    output_activation = _output_activation(teacher, unet, train[: min(len(train), 16)].astype(np.float32))
+    if output_activation:
+        say(f"{path.name}: the model applies {output_activation} after the U-Net; the int8 model does too")
+    student = QuantizedUNet.from_unet(unet, shape, output_activation=output_activation)
     calibration = train[: min(len(train), 2048)]
     student.calibrate(calibration[i:i + batch_size].astype(np.float32) for i in range(0, len(calibration), batch_size))
     say(f"quantization aware training: {len(train)} inputs, {epochs} epochs, batch {batch_size}, "
