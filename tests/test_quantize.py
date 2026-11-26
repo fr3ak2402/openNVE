@@ -199,6 +199,7 @@ def test_qat_of_a_functional_unet(setup):
 
 
 def test_window_at_reads_a_window_directly(tmp_path):
+    pytest.importorskip("h5py")
     events = _events(count=20000, duration=2_000_000)
     opennve.write_hdf5(tmp_path / "rec.h5", events, width=64, height=48)
     with opennve.open_hdf5(tmp_path / "rec.h5") as recording:
