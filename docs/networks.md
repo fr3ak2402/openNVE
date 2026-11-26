@@ -208,7 +208,10 @@ against the network you use today:
 - After every epoch the classes are compared on `--validation` other inputs (default 1000). The
   best epoch is kept, judged by the IoU of the target classes.
 - The ranges of the activations are fixed from the calibration (up to 2048 inputs). This trains
-  more steadily with sparse event data.
+  more steadily with sparse event data. Before the training four choices are compared on the
+  validation inputs: minimum / maximum, or the percentiles 99.999 / 99.99 / 99.9 (they cut off
+  rare outliers, which makes the steps finer for the usual values; but insects can be such
+  outliers). The one that keeps the target classes best is used.
 
 | Option | Default | Meaning |
 |---|---|---|

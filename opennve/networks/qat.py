@@ -49,10 +49,14 @@ class ActivationQuantizer(keras.layers.Layer):
     average of the batch minimum / maximum); the default 1 keeps the calibrated range, which trains
     more steadily with sparse event data (the batch ranges jump)."""
 
+    PERCENTILES = (100.0, 99.999, 99.99, 99.9)
+    SAMPLE = 200_000  # values per calibration batch for the percentiles
+
     def __init__(self, momentum: float = 1.0, **kwargs):
         super().__init__(**kwargs)
         self.momentum = momentum
         self.observe = False
+        self._batch_ranges: list[np.ndarray] = []  # per calibration batch: (low, high) per percentile
 
     def build(self, input_shape):
         self.minimum = self.add_weight(name="minimum", shape=(), initializer="zeros", trainable=False)
@@ -67,12 +71,33 @@ class ActivationQuantizer(keras.layers.Layer):
             self._set(tf.where(first, low, tf.minimum(self.minimum, low)),
                       tf.where(first, high, tf.maximum(self.maximum, high)))
             self.seen.assign_add(1.0)
+            if tf.executing_eagerly():  # percentiles of the batch (calibrate() runs eagerly)
+                values = np.asarray(x).ravel()
+                if len(values) > self.SAMPLE:
+                    values = values[np.random.default_rng(len(self._batch_ranges)).integers(0, len(values), self.SAMPLE)]
+                ranges = [(float(np.min(values)), float(np.max(values))) if p >= 100 else
+                          (float(np.percentile(values, 100 - p)), float(np.percentile(values, p))) for p in self.PERCENTILES]
+                ranges[0] = (float(low), float(high))  # exact minimum / maximum
+                self._batch_ranges.append(np.array(ranges))
             return x
         if training and self.momentum < 1.0:
             m = self.momentum
             self._set(m * self.minimum + (1.0 - m) * tf.reduce_min(x), m * self.maximum + (1.0 - m) * tf.reduce_max(x))
         # the converter reads the range from these variables (constants in the exported model)
         return tf.quantization.fake_quant_with_min_max_vars(x, self.minimum, self.maximum, num_bits=8, narrow_range=False)
+
+    def use_percentile(self, percentile: float) -> None:
+        """Range from the calibration: minimum / maximum (100) or the mean over the calibration
+        batches of that percentile (cuts off rare outliers, finer steps for the usual values)."""
+        if not self._batch_ranges:
+            return
+        ranges = np.stack(self._batch_ranges)  # batch, percentile, (low, high)
+        index = self.PERCENTILES.index(percentile)
+        if percentile >= 100:
+            low, high = ranges[:, index, 0].min(), ranges[:, index, 1].max()
+        else:
+            low, high = ranges[:, index, 0].mean(), ranges[:, index, 1].mean()
+        self._set(tf.constant(low, tf.float32), tf.constant(high, tf.float32))
 
     def _set(self, low, high):
         low = tf.minimum(low, 0.0)  # zero must be exact (padding, ReLU)
@@ -273,11 +298,13 @@ class QuantizedUNet(keras.Model):
         return [layer for layer in self._flatten_layers(include_self=False) if isinstance(layer, ActivationQuantizer)]
 
     def calibrate(self, batches: typing.Iterable[np.ndarray]) -> int:
-        """Start ranges of all activations: minimum / maximum over the batches (no rounding)."""
+        """Start ranges of all activations: minimum / maximum over the batches (no rounding); the
+        percentiles are kept for use_percentile()."""
         quantizers = self.quantizers()
         for quantizer in quantizers:
             quantizer.observe = True
             quantizer.seen.assign(0.0)
+            quantizer._batch_ranges = []
         count = 0
         try:
             for batch in batches:
@@ -287,6 +314,12 @@ class QuantizedUNet(keras.Model):
             for quantizer in quantizers:
                 quantizer.observe = False
         return count
+
+    def use_percentile(self, percentile: float) -> None:
+        """Ranges of all activations from the calibration at this percentile (see
+        ActivationQuantizer.use_percentile)."""
+        for quantizer in self.quantizers():
+            quantizer.use_percentile(percentile)
 
     def to_tflite(self, input_shape: typing.Sequence[int], int8_io: bool = False) -> bytes:
         """The int8 TensorFlow Lite model (ranges from the training, no representative data)."""
@@ -420,7 +453,21 @@ def train_qat(
         optimizer.apply_gradients(zip(gradients, variables))
         return loss
 
-    history = [{"epoch": 0, "loss": None, **evaluate()}]
+    # ranges of the activations: minimum / maximum or a percentile of the calibration, whichever
+    # keeps the classes best (rare outliers can make the 8 bit steps too coarse)
+    percentile = 100.0
+    if len(validation) and any(q._batch_ranges for q in student.quantizers()):
+        best_start = None
+        for candidate in ActivationQuantizer.PERCENTILES:
+            student.use_percentile(candidate)
+            entry = evaluate()
+            label = "minimum / maximum" if candidate >= 100 else f"percentile {candidate:g}"
+            say(f"ranges {label}: {_describe(entry)}")
+            if best_start is None or _score(entry) > best_start[0]:
+                best_start = (_score(entry), candidate)
+        percentile = best_start[1]
+        student.use_percentile(percentile)
+    history = [{"epoch": 0, "loss": None, "percentile": percentile, **evaluate()}]
     say(f"before the training: {_describe(history[0])}")
     best = (_score(history[0]), [v.numpy() for v in student.weights])
     for epoch in range(1, epochs + 1):

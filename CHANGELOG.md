@@ -70,7 +70,8 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   is trained further with the int8 rounding (batch normalization folded, weights per channel,
   activation ranges from the calibration, float32 output convolution) to give the same classes as
   the float network (distillation, no labels needed). Target-class pixels are weighted and the
-  best epoch is kept. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
+  best epoch is kept; the activation ranges (minimum / maximum or a percentile) are chosen by
+  how well they keep the target classes. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
   them. Functional U-Nets with the HSNR layer names (`enc_conv0-1` ... `dec_output`) are copied
   into the opennve U-Net automatically
 - Inputs from HDF5 files are taken from time windows at random places, read directly
