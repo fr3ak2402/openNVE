@@ -88,6 +88,7 @@ def test_distillation_helpers():
     assert classes_of(np.array([[0.1, 0.9]]), "softmax").tolist() == [1]
 
 
+@needs_tensorflow
 def test_logit_loss():
     """Compares the logits: an unsure teacher (probabilities close together) still gives a loss of
     0 for the same logits; a common offset of all classes does not count (softmax)."""
