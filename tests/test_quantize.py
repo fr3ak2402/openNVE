@@ -101,6 +101,13 @@ def test_logit_loss():
     assert float(logit_loss(teacher, teacher + 7.0, "softmax")) < 1e-10
     assert float(logit_loss(teacher, tf.reverse(teacher, [-1]), "softmax", scale=0.1)) > 1.0
     assert float(logit_loss(teacher, tf.reverse(teacher, [-1]), "softmax", 0.1, [2], 10.0)) > 1.0
+    # a pixel only the student gives the target class counts as much as one only the teacher gives
+    background = tf.constant([[[[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]]])
+    false_target = tf.constant([[[[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]]])
+    plain = float(logit_loss(background, false_target, "softmax"))
+    weighted = float(logit_loss(background, false_target, "softmax", 1.0, [2], 10.0))
+    assert weighted > 1.5 * plain
+    assert abs(weighted - float(logit_loss(false_target, background, "softmax", 1.0, [2], 10.0))) < 1e-6
 
 
 @needs_tensorflow
