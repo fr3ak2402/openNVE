@@ -57,17 +57,43 @@ def _images(config: AgentConfig, frame) -> list[np.ndarray]:
     return [frame.data]
 
 
+PROGRESS_SECONDS = 10.0
+
+
+def _share_read(recording) -> float | None:
+    """How much of a recording has been read (0..1), if the reader knows it."""
+    try:
+        total = len(recording.source)
+        return min(1.0, recording._position / total) if total else None
+    except (AttributeError, TypeError):
+        return None
+
+
 def _windows(config: AgentConfig, recordings, frame_config, window_ms: float, stride: int,
-             max_windows: int | None, stats: dict) -> typing.Iterator[list[np.ndarray]]:
-    """The model inputs (tiles or frame) of every stride-th time window of the recordings."""
+             max_windows: int | None, stats: dict,
+             progress: typing.Callable[[str], None] | None = None) -> typing.Iterator[list[np.ndarray]]:
+    """The model inputs (tiles or frame) of every stride-th time window of the recordings. Reports
+    every PROGRESS_SECONDS how far it is."""
     from ..recordings import open_recording
 
     used = 0
-    for path in recordings:
+    for number, path in enumerate(recordings, 1):
         stats["files"] += 1
+        name = os.path.basename(os.fspath(path))
+        if progress:
+            progress(f"opening {name} ({number}/{len(recordings)}; without width / height in the file its size is "
+                     "measured first, one pass over the events)")
+        last = time.perf_counter()
         with open_recording(path, window={"duration_ms": window_ms}) as recording:
             for index, window in enumerate(recording.windows()):
                 stats["windows"] += 1
+                if progress and time.perf_counter() - last >= PROGRESS_SECONDS:
+                    last = time.perf_counter()
+                    share = _share_read(recording)
+                    progress(f"  {name}: {window.end_t / 1e6:,.0f} s of the recording"
+                             + (f" ({share * 100:.0f} %)" if share is not None else "")
+                             + f", {stats['windows']} windows, {stats['candidates']} inputs found"
+                             + (f", {used} of --max-windows {max_windows} used" if max_windows else ""))
                 if index % max(1, stride):
                     continue
                 if max_windows is not None and used >= max_windows:
@@ -123,6 +149,7 @@ def collect_prepared(
     stride: int = DEFAULT_STRIDE,
     seed: int = 0,
     max_windows: int | None = None,
+    progress: typing.Callable[[str], None] | None = None,
 ) -> tuple[np.ndarray, dict[str, int]]:
     """Like collect_inputs, but prepared for the model (the agent's preprocessing) and stored as
     float16 in one array (count x height x width x channels): for training with many inputs."""
@@ -132,7 +159,7 @@ def collect_prepared(
     data: np.ndarray | None = None
     filled = seen = 0
     pad_to = None
-    for images in _windows(config, recordings, frame_config, window_ms, stride, max_windows, stats):
+    for images in _windows(config, recordings, frame_config, window_ms, stride, max_windows, stats, progress):
         if pad_to is None:
             pad_to = _pad_size(config, frame_config, images)
         prepared = agent.prepare(images, pad_to)
@@ -273,7 +300,8 @@ def quantize_agent(
     float_agent = Agent(config.copy(device="cpu", fallback=True, delegate=None, batch_size=None))
     say(f"reading inputs from {len(recordings)} recording(s)")
     inputs, stats = collect_prepared(float_agent, recordings, frame_config, samples + validation, window_ms=window_ms,
-                                     stride=stride, seed=seed, max_windows=max_windows)
+                                     stride=stride, seed=seed, max_windows=max_windows, progress=say)
+    say(f"{len(inputs)} inputs from {stats['windows']} windows ({stats['candidates']} candidates)")
     if not len(inputs):
         raise ValueError("the recordings gave no inputs (no events in the windows, or tiles below min_events)")
     if len(inputs) > validation:
