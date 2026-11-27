@@ -295,6 +295,33 @@ def _quantize(args) -> int:
     return 0
 
 
+def _transfer(args) -> int:
+    from .networks import transfer_weights
+
+    options = {}
+    for item in args.set or []:
+        key, separator, value = item.partition("=")
+        if not separator:
+            print(f"--set expects key=value, not {item!r}", file=sys.stderr)
+            return 2
+        try:
+            options[key] = json.loads(value)
+        except ValueError:
+            options[key] = value
+    input_size = None
+    if args.input:
+        try:
+            height, width = (int(v) for v in args.input.lower().split("x")[:2])
+        except ValueError:
+            print("--input expects HEIGHTxWIDTH, for instance 80x80", file=sys.stderr)
+            return 2
+        input_size = (height, width)
+    report = transfer_weights(args.source, args.to, output=args.output, reference=args.reference, match=args.match,
+                              options=options, input_size=input_size, safe_mode=not args.unsafe)
+    print(json.dumps(report.to_dict(), indent=4) if args.json else report.text())
+    return 0 if report.ok else 1
+
+
 def _check(args) -> int:
     for path in args.paths:
         with open(path, encoding="utf-8") as file:
@@ -549,6 +576,30 @@ def main(argv=None) -> int:
     command.add_argument("--seed", type=int, default=0, help="random seed for choosing the inputs (default 0)")
     command.add_argument("--json", action="store_true", help="output the report as JSON")
     command.set_defaults(function=_quantize)
+
+    command = commands.add_parser(
+        "transfer", help="copy trained weights into another network of the same layers and check them",
+        description="Copies the weights layer by layer (by name, else in order per layer type) and checks the shapes; "
+                    "compares the result with the source (if it is a model) or --reference. Exit status 1 if the "
+                    "outputs differ or the weights look untrained.",
+        epilog="examples: opennve transfer unet.weights.h5 --to UNet --reference original.keras --output unet.keras\n"
+               "          opennve transfer original.keras --to UNet --output unet.keras",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    command.add_argument("source", help="trained weights: .weights.h5 (Keras 3), .h5 (Keras 2), .keras")
+    command.add_argument("--to", required=True,
+                         help="destination: a .keras file (its structure) or a network name (UNet: options read from the weights)")
+    command.add_argument("--output", help="save the destination with the weights (.keras)")
+    command.add_argument("--reference", help="model to compare the outputs with (default: the source if it is a model)")
+    command.add_argument("--match", choices=["auto", "name", "order"], default="auto",
+                         help="pair the layers by name or in order per layer type (default auto: by name if possible)")
+    command.add_argument("--input", help="input size HEIGHTxWIDTH of a destination network given by name (default: from the reference)")
+    command.add_argument("--set", action="append", metavar="KEY=VALUE",
+                         help="option of a destination network given by name, for instance --set final_activation=softmax")
+    command.add_argument("--unsafe", action="store_true",
+                         help="load Lambda layers without a registered replacement (Python bytecode: only with the Python version that saved the file)")
+    command.add_argument("--json", action="store_true", help="output the report as JSON")
+    command.set_defaults(function=_transfer)
 
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")

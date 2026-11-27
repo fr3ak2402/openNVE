@@ -123,8 +123,10 @@ from .networks import (
     list_networks,
     register_custom_objects,
     register_network,
+    register_lambda,
     register_weight_transfer,
     representative_dataset,
+    transfer_weights,
 )
 # workflows
 from .workflows import (
@@ -259,7 +261,9 @@ __all__ = [
     "register_network",
     "register_step",
     "register_task",
+    "register_lambda",
     "register_weight_transfer",
+    "transfer_weights",
     "representative_dataset",
     "run_agents",
     "save_agent_configs",

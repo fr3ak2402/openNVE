@@ -125,6 +125,23 @@ recordings, usually the training data; reports how close it is to the original. 
 opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --frames config/frames.json --qat --epochs 10
 ```
 
+## `opennve transfer <source>`
+
+Copies trained weights into another network with the same layers and checks them. Sources:
+`.weights.h5`, `.h5`, `.keras`. Destination (`--to`): a `.keras` file or a network name (`UNet`:
+options read from the weights). The result is compared with the source (if it is a model) or
+`--reference`; exit status 1 if the outputs differ or the weights look untrained. See
+[transferring weights](networks.md#transferring-weights).
+
+```sh
+opennve transfer unet_tiled.weights.h5 --to UNet --reference ORGIN_NET.keras --output models/unet.keras
+opennve transfer ORGIN_NET.keras --to UNet --output models/unet.keras
+opennve transfer unet_tiled.weights.h5 --to UNet --input 80x80 --set final_activation=softmax --output models/unet.keras
+```
+
+Options: `--match auto|name|order`, `--input HxW`, `--set key=value` (options of a network given by
+name), `--unsafe` (load Lambda layers without a replacement), `--json`.
+
 ## `opennve workflow run|list|threads <file>`
 
 Runs or lists the [workflows](workflows.md) of a workflow configuration file, or shows the threads of every step on this machine.

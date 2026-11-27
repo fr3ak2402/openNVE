@@ -100,7 +100,31 @@ Keras needs the classes of custom layers to load a saved model. Register them on
 opennve.register_custom_objects({"MyLayer": MyLayer}, package="Custom")
 ```
 
-`package` is the package the class was registered with in `@keras.saving.register_keras_serializable(package=...)` (`"Custom"` by default). Models with `Lambda` layers need `safe_mode=False` (`Network.load(path, safe_mode=False)`, or `"safe_mode": false` in the agent configuration).
+`package` is the package the class was registered with in `@keras.saving.register_keras_serializable(package=...)` (`"Custom"` by default).
+
+### Lambda layers
+
+Keras stores the function of a `Lambda` layer as Python bytecode. Bytecode loads only with the
+Python version that saved the file, and only with `safe_mode=False`. A `.keras` file with Lambda
+layers saved with Python 3.14 therefore does not load with 3.13 or 3.15, for instance on a
+Raspberry Pi or a Kria board. openNVE loads Lambda layers whose name matches a registered
+replacement as a regular layer instead, with any Python version and in safe mode. Built in:
+`resize_to_same<n>` of the HSNR U-Net (resizes the first input to the height and width of the
+second). Other Lambda layers:
+
+```python
+import keras, opennve
+
+@keras.saving.register_keras_serializable(package="mine")
+class AddOne(keras.layers.Layer):
+    def call(self, x):
+        return x + 1
+
+opennve.register_lambda(r"add_one\d*", AddOne)   # Lambda layers named add_one, add_one2, ...
+```
+
+Lambda layers without a replacement still need `safe_mode=False` (`Network.load(path,
+safe_mode=False)`, or `"safe_mode": false` in the agent configuration) and the same Python version.
 
 ## `Network`
 
@@ -117,7 +141,7 @@ opennve.register_custom_objects({"MyLayer": MyLayer}, package="Custom")
 | `input_shape`, `output_shape` | Shapes including the batch dimension |
 | `get_weights()` / `set_weights(weights)` | Weight arrays |
 | `compare_weights(other)` | `WeightComparison` (see below) |
-| `transfer_weights_from(source, method="hsnr_unet", **options)` | Copies weights from another network |
+| `transfer_weights_from(source, method="hsnr_unet", **options)` | Copies weights from another network (`method="auto"`: any network with the same layers) |
 | `to_tflite(path, quantization="none", representative_dataset=None)` | TensorFlow Lite export |
 | `agent(name=None, **settings)` | [Agent](agents.md) that runs this network directly |
 
@@ -283,6 +307,49 @@ network = engine["unet"]                                           # by name or 
 | `compare_weights(a, b)` | `WeightComparison` |
 
 ### Transferring weights
+
+`opennve.transfer_weights(source, destination)` (command: [`opennve transfer`](cli.md#opennve-transfer-source))
+copies trained weights into any network with the same layers and checks the result. This is the
+way to use weights that come without the code that built them, or a network rebuilt with other
+classes (a functional HSNR U-Net as the opennve `UNet`, and back):
+
+```python
+report = opennve.transfer_weights("unet_tiled.weights.h5", "UNet", reference="ORGIN_NET.keras",
+                                  output="models/unet.keras")
+print(report.text())
+```
+
+```text
+source        unet_tiled.weights.h5
+destination   UNet (80 x 80 x 2 -> 3 classes, layer_depth=4, filters_orig=16, kernel_size=3, batch_norm=True, final_activation=linear)
+transferred   39 layers (114 weight arrays), paired in order per layer type
+lambda layers resize_to_same0, resize_to_same1, resize_to_same2, resize_to_same3 loaded as portable layers
+reference     ORGIN_NET.keras: same outputs (largest difference 0, outputs up to 836, 100.000 % same class)
+saved         models/unet.keras
+```
+
+- **Sources:** a Keras model or `Network`, a `.keras` file, a Keras 3 `.weights.h5` file, or a
+  Keras 2 `.h5` file (model or weights).
+- **Destinations:** a Keras model or `Network`, a `.keras` file (its structure; its weights are
+  replaced), or the name of a registered network. For `"UNet"` the options are read from the
+  weights: depth, filters, kernel size, classes, input channels and batch normalization. The
+  final activation and the input size come from the reference; otherwise give `input_size=(h, w)`
+  and `options={...}`.
+- **Pairing:** by name if the source has the names of the destination layers (models, Keras 2
+  files); otherwise in order within each layer type (the 3rd `Conv2D` of the source goes into the
+  3rd `Conv2D` of the destination, and so on). Every pair must have the same weight shapes, and
+  every layer type the same number of layers; else the transfer stops with the difference
+  (`match="name"` / `"order"` forces one way). Keras 3 `.weights.h5` files of subclassed models
+  (nested by attribute names) only load into a model of the same classes.
+- **Checks:** the result is compared with the reference (the source if it is a model, else
+  `reference=`) on random sparse inputs like event frames. Weights that still have their initial
+  values (every batch normalization at 1 / 0 / 0 / 1, every bias 0) are reported: they were
+  saved before the trained weights were loaded. `report.ok` is false then, or if the outputs differ.
+
+`TransferReport`: `ok`, `text()`, `to_dict()`, `layers`, `arrays`, `match`, `max_difference`,
+`same_class`, `warnings`, `replaced_lambdas`, `output`, `model` (the destination Keras model).
+`opennve.networks.read_weights(source)` reads the weights of any source as `WeightGroup`s
+(`name`, `kind`, `arrays`).
 
 `method="hsnr_unet"` copies the weights of a functional U-Net with the layer names `enc_conv{i}-1`, `enc_bn{i}-1`, `enc_conv{i}-2`, `enc_bn{i}-2`, `enc_convbtleneck-1/2`, `enc_bnbtleneck-1/2`, `dec_conv{i}-1`, `dec_bn{i}-1`, `dec_conv{i}-2` (transposed convolution), `dec_bn{i}-2`, `dec_out1`, `dec_out2`, `dec_output` (for instance the HSNR U-Net) into a network built with `UNet`. Options: `layer_depth=4`, `batch_norm=True`.
 
