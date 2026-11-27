@@ -421,7 +421,9 @@ Building, loading, saving and converting networks (TensorFlow / Keras), see [Neu
 | `NeuralEngine(model_directory=".")` | Named networks: `add_network`, `add`, `get`, `save`, `quantize`, `transfer_weights`, `compare_weights` |
 | `list_networks()`, `register_network(name)` | Architectures (built in: `UNet`) |
 | `register_custom_objects(objects, package=None)`, `custom_objects()` | Custom Keras layers for loading models |
-| `register_weight_transfer(name)` | Weight transfer methods (built in: `hsnr_unet`) |
+| `register_weight_transfer(name)` | Weight transfer methods (built in: `hsnr_unet`, `auto`) |
+| `transfer_weights(source, destination, output=None, reference=None, ...)` | Copies trained weights into any network with the same layers and checks them; `TransferReport` (see [transferring weights](networks.md#transferring-weights)) |
+| `register_lambda(pattern, layer)` | Lambda layers of saved models loaded as a regular layer (any Python version; built in: `resize_to_same<n>`) |
 | `representative_dataset(data, input_shape=None, max_samples=200, min_events=1)` | Samples for int8 quantization |
 | `compare_weights(a, b)` | `WeightComparison` |
 

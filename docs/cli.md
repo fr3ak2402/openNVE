@@ -115,6 +115,33 @@ opennve benchmark config/agents.json --devices cpu,gpu --inputs 256      # rando
 | `--inputs` | Number of inputs (default: all tiles of the windows, or 64 random inputs) |
 | `--json` | Output as JSON |
 
+## `opennve quantize <agents.json>`
+
+int8 TensorFlow Lite model of an agent's Keras model, calibrated (or with `--qat` trained) with
+recordings, usually the training data; reports how close it is to the original. See
+[int8 models for the agents](networks.md#int8-models-for-the-agents-opennve-quantize).
+
+```sh
+opennve quantize config/agents.json --agent prototyp --data "data/train/*.h5" --frames config/frames.json --qat --epochs 10
+```
+
+## `opennve transfer <source>`
+
+Copies trained weights into another network with the same layers and checks them. Sources:
+`.weights.h5`, `.h5`, `.keras`. Destination (`--to`): a `.keras` file or a network name (`UNet`:
+options read from the weights). The result is compared with the source (if it is a model) or
+`--reference`; exit status 1 if the outputs differ or the weights look untrained. See
+[transferring weights](networks.md#transferring-weights).
+
+```sh
+opennve transfer unet_tiled.weights.h5 --to UNet --reference ORGIN_NET.keras --output models/unet.keras
+opennve transfer ORGIN_NET.keras --to UNet --output models/unet.keras
+opennve transfer unet_tiled.weights.h5 --to UNet --input 80x80 --set final_activation=softmax --output models/unet.keras
+```
+
+Options: `--match auto|name|order`, `--input HxW`, `--set key=value` (options of a network given by
+name), `--unsafe` (load Lambda layers without a replacement), `--json`.
+
 ## `opennve workflow run|list|threads <file>`
 
 Runs or lists the [workflows](workflows.md) of a workflow configuration file, or shows the threads of every step on this machine.
@@ -186,10 +213,12 @@ opennve plugin install hailo                     # Hailo: PCIe, driver + HailoRT
 opennve plugin install hailo -- --yes --reboot   # options for the plugin's installer after --
 opennve plugin install hailo --ref v0.1.0        # a branch or tag of the plugin (--source DIR: a local copy)
 opennve plugin remove hailo
+opennve plugin install vitis                     # AMD Kria DPU: XRT, DPU design, opennve_vitis; asks before changes
 ```
 
 Installed plugins can add commands, for instance `opennve hailo` (plugin hailo): module on PCIe,
-driver, HailoRT and devices.
+driver, HailoRT and devices; `opennve vitis [--model M.xmodel]` (plugin vitis): XRT, DPU design,
+DPU cores and the structure of a model.
 
 ## `opennve raw <file>`
 

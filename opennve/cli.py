@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import sys
 
@@ -215,6 +216,10 @@ def _system(args) -> int:
     # hardware that a plugin not yet installed would use
     if any(device.get("vendor") == "Hailo" for device in info.get("npus", [])) and "hailo" not in plugins:
         print("  Hailo                 plugin not installed: opennve plugin install hailo")
+    kria = any(device.get("driver") == "zocl" for device in info.get("npus", [])) or any(
+        name in (info.get("model") or "") for name in ("Kria", "K26", "K24", "KV260", "KR260", "KD240"))
+    if kria and "vitis" not in plugins:
+        print("  AMD Kria DPU          plugin not installed: opennve plugin install vitis")
     return 0
 
 
@@ -247,6 +252,74 @@ def _benchmark(args) -> int:
     else:
         print(benchmark_report(results))
     return 0
+
+
+def _quantize(args) -> int:
+    import glob
+
+    from .agents import load_agent_config, quantize_agent, quantize_report
+    from .frames import load_frame_config
+
+    config = load_agent_config(args.agents, args.agent)
+    if config.frame is None and not args.frame:
+        print("the agent has no \"frame\": give the frame configuration with --frame", file=sys.stderr)
+        return 2
+    recordings = []
+    for pattern in args.data:
+        matches = sorted(glob.glob(pattern, recursive=True))
+        recordings.extend(matches or [pattern])
+    missing = [path for path in recordings if not os.path.exists(path)]
+    if missing:
+        print(f"not found: {', '.join(missing)}", file=sys.stderr)
+        return 2
+    frame_config = load_frame_config(args.frames, args.frame or config.frame)
+    progress = None if args.json else (lambda message: print(message, flush=True))
+    report = quantize_agent(
+        config, recordings, frame_config, args.output, samples=args.samples, validation=args.validation,
+        window_ms=args.window_ms, stride=args.stride, max_windows=args.max_windows, int8_io=args.int8_io,
+        qat=args.qat, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate,
+        target_weight=args.target_weight, seed=args.seed, sampling=args.sampling, width=args.width,
+        height=args.height, target_share=args.target_share, progress=progress,
+    )
+    if args.json:
+        print(json.dumps(report, indent=4))
+    else:
+        print(quantize_report(report))
+        output = pathlib.Path(report["output"])
+        try:
+            model = os.path.relpath(output, pathlib.Path(args.agents).resolve().parent)
+        except ValueError:
+            model = str(output)
+        print(f"\nagent with the quantized model: \"model\": \"{pathlib.Path(model).as_posix()}\" "
+              f"(opennve benchmark compares it on CPU / GPU / NPU)")
+    return 0
+
+
+def _transfer(args) -> int:
+    from .networks import transfer_weights
+
+    options = {}
+    for item in args.set or []:
+        key, separator, value = item.partition("=")
+        if not separator:
+            print(f"--set expects key=value, not {item!r}", file=sys.stderr)
+            return 2
+        try:
+            options[key] = json.loads(value)
+        except ValueError:
+            options[key] = value
+    input_size = None
+    if args.input:
+        try:
+            height, width = (int(v) for v in args.input.lower().split("x")[:2])
+        except ValueError:
+            print("--input expects HEIGHTxWIDTH, for instance 80x80", file=sys.stderr)
+            return 2
+        input_size = (height, width)
+    report = transfer_weights(args.source, args.to, output=args.output, reference=args.reference, match=args.match,
+                              options=options, input_size=input_size, safe_mode=not args.unsafe)
+    print(json.dumps(report.to_dict(), indent=4) if args.json else report.text())
+    return 0 if report.ok else 1
 
 
 def _check(args) -> int:
@@ -464,6 +537,69 @@ def main(argv=None) -> int:
     command.add_argument("--inputs", type=int, default=0, help="number of inputs (default: all of the windows, or 64 random)")
     command.add_argument("--json", action="store_true", help="output as JSON")
     command.set_defaults(function=_benchmark)
+
+    command = commands.add_parser(
+        "quantize", help="int8 TensorFlow Lite model of an agent, calibrated with recordings (training data)",
+        epilog="example: opennve quantize agents.json --agent prototyp --data \"data/*.h5\" --frames frames.json",
+    )
+    command.add_argument("agents", help="agent configuration file (agents.json); the agent's model is a .keras / .h5 / SavedModel")
+    command.add_argument("--agent", help="agent name (default: the first)")
+    command.add_argument("--data", nargs="+", required=True, help="recordings with typical data (.h5 / .hdf5 / .raw, globs allowed)")
+    command.add_argument("--frames", required=True, help="frame configuration file (frames.json)")
+    command.add_argument("--frame", help="frame configuration name (default: the agent's \"frame\")")
+    command.add_argument("--output", help="quantized model (default: <model>_int8.tflite next to the model)")
+    command.add_argument("--qat", action="store_true",
+                         help="quantization aware training: train the U-Net further with the int8 rounding so that it gives "
+                              "the same classes as the float network (as accurate as the original; takes longer)")
+    command.add_argument("--samples", type=int, default=500,
+                         help="inputs for the calibration (default 500), with --qat for the training (default 20000)")
+    command.add_argument("--validation", type=int,
+                         help="other inputs to compare with the original model (default 200, with --qat 1000; 0: no comparison)")
+    command.add_argument("--epochs", type=int, default=5, help="--qat: passes over the training inputs (default 5)")
+    command.add_argument("--batch-size", type=int, default=32, help="--qat: inputs per training step (default 32)")
+    command.add_argument("--learning-rate", type=float, default=1e-4, help="--qat: start learning rate (default 1e-4, cosine decay)")
+    command.add_argument("--target-weight", type=float, default=10.0,
+                         help="--qat: weight of the pixels of the agent's target classes in the training (default 10)")
+    command.add_argument("--target-share", type=float,
+                         help="--qat: share of the training inputs that are tiles in which the float model finds one of "
+                              "the agent's target classes (default 0.5 with HDF5 recordings; 0: all at random); the "
+                              "comparison inputs stay at random")
+    command.add_argument("--sampling", choices=["auto", "random", "sequential"], default="auto",
+                         help="random: time windows at random places, read directly (default for HDF5, fast for very "
+                              "large files); sequential: every --stride-th window of the whole files (default for .raw)")
+    command.add_argument("--stride", type=int, default=5, help="sequential: use every n-th time window (default 5)")
+    command.add_argument("--width", type=int, help="sensor width if the HDF5 file does not store it (else estimated)")
+    command.add_argument("--height", type=int, help="sensor height if the HDF5 file does not store it (else estimated)")
+    command.add_argument("--window-ms", type=float, default=40.0, help="window length in ms (default 40)")
+    command.add_argument("--max-windows", type=int, help="use at most this many windows (default: all)")
+    command.add_argument("--int8-io", action="store_true", help="int8 inputs and outputs too (default: float32, openNVE converts either way)")
+    command.add_argument("--seed", type=int, default=0, help="random seed for choosing the inputs (default 0)")
+    command.add_argument("--json", action="store_true", help="output the report as JSON")
+    command.set_defaults(function=_quantize)
+
+    command = commands.add_parser(
+        "transfer", help="copy trained weights into another network of the same layers and check them",
+        description="Copies the weights layer by layer (by name, else in order per layer type) and checks the shapes; "
+                    "compares the result with the source (if it is a model) or --reference. Exit status 1 if the "
+                    "outputs differ or the weights look untrained.",
+        epilog="examples: opennve transfer unet.weights.h5 --to UNet --reference original.keras --output unet.keras\n"
+               "          opennve transfer original.keras --to UNet --output unet.keras",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    command.add_argument("source", help="trained weights: .weights.h5 (Keras 3), .h5 (Keras 2), .keras")
+    command.add_argument("--to", required=True,
+                         help="destination: a .keras file (its structure) or a network name (UNet: options read from the weights)")
+    command.add_argument("--output", help="save the destination with the weights (.keras)")
+    command.add_argument("--reference", help="model to compare the outputs with (default: the source if it is a model)")
+    command.add_argument("--match", choices=["auto", "name", "order"], default="auto",
+                         help="pair the layers by name or in order per layer type (default auto: by name if possible)")
+    command.add_argument("--input", help="input size HEIGHTxWIDTH of a destination network given by name (default: from the reference)")
+    command.add_argument("--set", action="append", metavar="KEY=VALUE",
+                         help="option of a destination network given by name, for instance --set final_activation=softmax")
+    command.add_argument("--unsafe", action="store_true",
+                         help="load Lambda layers without a registered replacement (Python bytecode: only with the Python version that saved the file)")
+    command.add_argument("--json", action="store_true", help="output the report as JSON")
+    command.set_defaults(function=_transfer)
 
     command = commands.add_parser("list", help="list connected cameras")
     command.add_argument("--json", action="store_true", help="output JSON")

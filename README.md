@@ -96,7 +96,8 @@ Agents with TensorFlow Lite models run on the CPU (default), the GPU or an NPU (
 
 `"device": ["gpu", "cpu"]` uses the GPU and the remaining CPU cores at the same time.
 Hailo-8, Hailo-8L, Hailo-10H and Hailo-15 (Raspberry Pi AI Kit, AI HAT+, AI HAT+ 2, M.2 modules):
-compiled Hailo models (`.hef`) with HailoRT 4 / 5 through the plugin [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (Rust + Python, `opennve plugin install hailo`), see [Hailo](docs/accelerators.md#hailo). Not supported: the Apple Neural Engine.
+compiled Hailo models (`.hef`) with HailoRT 4 / 5 through the plugin [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (Rust + Python, `opennve plugin install hailo`), see [Hailo](docs/accelerators.md#hailo).
+The DPU of AMD Kria boards (KV260, KR260): compiled Vitis AI models (`.xmodel`) through the plugin [openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis) (Rust + Python, `opennve plugin install vitis`), see [AMD Kria DPU](docs/accelerators.md#amd-kria-dpu). Not supported: the Apple Neural Engine.
 Keras / SavedModel agents use the GPU through TensorFlow (CUDA on Linux, `tensorflow-metal` on
 macOS), PyTorch agents through PyTorch (CUDA / ROCm, Apple MPS, Intel XPU). `opennve benchmark` compares CPU, GPU and NPU on your computer.
 

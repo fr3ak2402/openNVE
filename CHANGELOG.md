@@ -46,6 +46,55 @@ All notable changes to openNVE. Versions follow [semantic versioning](https://se
   `opennve hailo` (command of the plugin) shows module, driver, HailoRT and devices
 - `opennve system` shows HailoRT and its devices with their chip (Hailo-8L, Hailo-10H, ...)
 
+### AMD Kria DPU (plugin vitis: KV260, KR260, K26 / K24)
+
+- Plugin `vitis` in the catalog: agents run compiled Vitis AI models (`.xmodel`) on the DPU
+  (DPUCZDX8G) of AMD Kria boards; `"backend": "auto"` picks it for `.xmodel` files. The runtime
+  is a separate project, [openNVE-vitis](https://github.com/fr3ak2402/openNVE-vitis) (package
+  `opennve_vitis`): the Vitis AI Runtime in Rust with a Python module, with its own Vitis AI
+  Runtime inside (independent of the Ubuntu version and AMD's Python packages)
+- `opennve plugin install vitis` sets up the board: XRT and the zocl driver, the DPU design
+  (KV260: `kv260-benchmark-b4096`), `/etc/vart.conf`, and the ready-made package; `opennve vitis`
+  (command of the plugin) shows XRT, the DPU design and the DPU cores
+- `opennve system` shows a loaded DPU design (zocl driver) as NPU and suggests the plugin on a Kria
+  board without it
+
+### int8 models (opennve quantize)
+
+- `opennve quantize agents.json --data ... --frames ...` makes an int8 TensorFlow Lite model of an
+  agent's Keras model from recordings (the training data). It uses the agent's frame
+  configuration and preprocessing, takes inputs at random from all files, and compares the int8
+  model with the original on other inputs: share of equal classes, IoU / recall of the target
+  classes. It warns if they differ clearly
+- `--qat`: quantization aware training of the opennve U-Net (`opennve.networks.qat`). The network
+  is trained further with the int8 rounding (batch normalization folded, weights per channel,
+  activation ranges from the calibration, float32 output convolution) to give the same classes as
+  the float network (distillation of the logits, no labels needed; target-class pixels of either network weighted; half of the training tiles with target classes, `--target-share`; checks first that the copy
+  without rounding gives the float network's classes and how sure the float network is). Target-class pixels are weighted and the
+  best epoch is kept; the activation ranges (minimum / maximum or a percentile) are chosen by
+  how well they keep the target classes. Post-training int8 of the U-Net loses many of the insect pixels; QAT keeps
+  them. Functional U-Nets with the HSNR layer names (`enc_conv0-1` ... `dec_output`) are copied
+  into the opennve U-Net automatically
+- Inputs from HDF5 files are taken from time windows at random places, read directly
+  (`Hdf5Reader.window_at`): a 300 GB training file needs seconds to minutes, not a pass over all
+  events. Without width / height in the file the size is estimated from samples
+  (`open_hdf5(..., estimate_size=True)`, or `--width` / `--height`). Progress every 10 s
+- Python: `opennve.quantize_agent(...)`, `opennve.quantize_report(report)`
+
+### Weight transfer (opennve transfer)
+
+- `opennve transfer` / `opennve.transfer_weights(source, destination)`: copies trained weights
+  into any network with the same layers. Sources: models, `.keras`, Keras 3 `.weights.h5`, Keras 2
+  `.h5`. Destinations: models, `.keras` files or a network name (`UNet`: depth, filters, kernel
+  size, classes and channels read from the weights). Layers are paired by name or in order per
+  layer type with shape checks. The result is compared with the source or a reference model, and
+  weights that still have their initial values (saved before the trained weights were loaded)
+  are reported. `Network.transfer_weights_from(source, method="auto")`
+- Lambda layers: `.keras` files load with any Python version and in safe mode when their Lambda
+  layers have a registered replacement (`opennve.register_lambda(pattern, layer)`; built in:
+  `resize_to_same<n>` of the HSNR U-Net). Before, such files loaded only with the Python version
+  that saved them
+
 ### Fixes
 
 - Softmax of channels-first (`"layout": "nchw"`) segmentation outputs is taken along the class

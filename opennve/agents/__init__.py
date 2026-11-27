@@ -45,7 +45,8 @@ or, for one frame: result = agent.predict(frame).
 
 Modules: config (AgentConfig and files), backends (TensorFlow Lite, TensorFlow, model objects), _torch (PyTorch),
 tasks (classification, segmentation), results (Prediction, AgentResult), agent (Agent),
-runner (run_agents), registry (register_backend, register_task).
+runner (run_agents), registry (register_backend, register_task), quantize (int8 TensorFlow Lite
+models from recordings: quantize_agent).
 """
 
 from .agent import Agent, load_agent, load_agents
@@ -53,6 +54,7 @@ from ._litert import AcceleratorUnavailable, CompiledModelBackend, litert_accele
 from ._torch import TorchBackend, torch_info
 from .backends import Backend, ModelBackend, ModelInput, TensorFlowBackend, TFLiteBackend, create_backend
 from .benchmark import benchmark_agent, benchmark_report
+from .quantize import collect_inputs, quantize_agent, quantize_report
 from .config import (
     AgentConfig,
     PredictionConfig,
@@ -72,6 +74,9 @@ __all__ = [
     "CompiledModelBackend",
     "benchmark_agent",
     "benchmark_report",
+    "collect_inputs",
+    "quantize_agent",
+    "quantize_report",
     "litert_accelerators",
     "static_model",
     "torch_info",

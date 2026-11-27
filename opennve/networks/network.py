@@ -7,6 +7,7 @@ import importlib
 import os
 import pathlib
 import typing
+import zipfile
 
 import numpy as np
 
@@ -26,7 +27,10 @@ QUANTIZATIONS = {
 }
 
 _WEIGHT_TRANSFERS: dict[str, typing.Any] = {}
-_LAZY_WEIGHT_TRANSFERS = {"hsnr_unet": ("opennve.networks.unet", "transfer_unet_weights")}
+_LAZY_WEIGHT_TRANSFERS = {
+    "hsnr_unet": ("opennve.networks.unet", "transfer_unet_weights"),
+    "auto": ("opennve.networks.transfer", "transfer_into"),
+}
 
 
 def _keras():
@@ -49,12 +53,55 @@ def _tensorflow():
 
 
 def load_keras_model(path: PathLike, safe_mode: bool = True, objects: typing.Optional[dict] = None, compile: bool = False):
-    """keras.models.load_model with the registered custom objects (UNet layers, ...)."""
+    """keras.models.load_model with the registered custom objects (UNet layers, ...).
+
+    Lambda layers of a .keras file that match a registered replacement (register_lambda; built in:
+    resize_to_same of the HSNR U-Net) are loaded as that layer: Lambda layers store Python bytecode,
+    which only loads with the Python version that saved the file. The names of the replaced layers
+    are in model.opennve_replaced_lambdas."""
     keras = _keras()
     merged = custom_objects()
     if objects:
         merged.update(objects)
-    return keras.models.load_model(os.fspath(path), custom_objects=merged, safe_mode=safe_mode, compile=compile)
+    path = pathlib.Path(path)
+    replaced: list[str] = []
+    remaining: list[str] = []
+    if path.suffix.lower() == ".keras" and zipfile.is_zipfile(path):
+        import json
+        import tempfile
+
+        from .lambdas import lambda_names, replace_lambdas
+
+        with zipfile.ZipFile(path) as archive:
+            config = json.loads(archive.read("config.json"))
+            if lambda_names(config):
+                replaced = replace_lambdas(config)
+                remaining = lambda_names(config)
+            if replaced:
+                with tempfile.TemporaryDirectory() as temp:
+                    portable = pathlib.Path(temp) / path.name
+                    with zipfile.ZipFile(portable, "w") as out:
+                        for name in archive.namelist():
+                            out.writestr(name, json.dumps(config) if name == "config.json" else archive.read(name))
+                    model = _load(keras, portable, merged, safe_mode, compile, remaining)
+                object.__setattr__(model, "opennve_replaced_lambdas", tuple(replaced))  # not tracked by Keras
+                return model
+    model = _load(keras, path, merged, safe_mode, compile, remaining)
+    object.__setattr__(model, "opennve_replaced_lambdas", ())
+    return model
+
+
+def _load(keras, path: pathlib.Path, objects: dict, safe_mode: bool, compile: bool, lambdas: list[str]):
+    try:
+        return keras.models.load_model(os.fspath(path), custom_objects=objects, safe_mode=safe_mode, compile=compile)
+    except Exception as error:
+        if not lambdas:
+            raise
+        raise ValueError(
+            f"{path.name}: the Lambda layer(s) {', '.join(lambdas)} could not be loaded ({error}). Lambda layers "
+            "store Python bytecode, which loads only with the Python version that saved the file and with "
+            "safe_mode=False; register a replacement layer with opennve.register_lambda(pattern, layer)"
+        ) from error
 
 
 def register_weight_transfer(name: str, function=None):
@@ -329,8 +376,9 @@ class Network:
 
     def transfer_weights_from(self, source, method: str = "hsnr_unet", **options) -> WeightComparison:
         """Copies the weights of another network with a registered transfer method
-        ("hsnr_unet": functional U-Net with enc_conv{i}-1 ... layers into a UNet) and returns the
-        weight comparison."""
+        ("hsnr_unet": functional U-Net with enc_conv{i}-1 ... layers into a UNet; "auto": any
+        network with the same layers, paired by name or in order per layer type, see
+        transfer_weights) and returns the weight comparison."""
         source_model = source.model if isinstance(source, Network) else source
         _weight_transfer(method)(source_model, self.model, **options)
         return compare_weights(source_model, self.model)
