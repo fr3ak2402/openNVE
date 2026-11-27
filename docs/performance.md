@@ -30,7 +30,18 @@ The quantization of the TensorFlow Lite model decides the inference speed on the
 | `none` (float32) | ~4–5 ms | |
 | `dynamic` / `float32` (default optimization) | ~13–17 ms | **~3 × slower**: the weights are converted on every call |
 
-int8 needs a representative dataset (sample tiles) and the trained Keras model or its weights:
+The simplest way is `opennve quantize`. It takes the inputs from your recordings, prepared as the
+agent prepares them. With `--qat` (quantization aware training) the int8 network is trained to
+match the float network, which is needed for U-Nets whose classes change with plain rounding to
+int8. It ends with a comparison of the int8 model with the original. See
+[int8 models for the agents](networks.md#int8-models-for-the-agents-opennve-quantize):
+
+```sh
+opennve quantize config/agents.json --agent unet --data data/recording.h5 --frames config/frames.json \
+    --qat --output models/unet_int8.tflite
+```
+
+By hand, int8 needs a representative dataset (sample tiles) and the trained Keras model or its weights:
 
 ```python
 import opennve
@@ -45,7 +56,7 @@ with opennve.open_hdf5("data/recording.h5", window={"duration_ms": 40}) as recor
 The int8 model has int8 inputs and outputs; the agent quantizes the input and dequantizes the
 output automatically, so `agents.json` only needs the new `model` path. Check the results against
 the float model once (the class maps of int8 models can differ for pixels close to a decision
-boundary).
+boundary; `opennve quantize` reports this comparison, and `--qat` reduces the differences).
 
 ## 2. Fewer tiles
 
