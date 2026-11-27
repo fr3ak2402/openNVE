@@ -10,16 +10,16 @@ openNVE (Open Neuromorphic Vision Engine) is a Python library for event cameras.
 | [Python API](api.md) | Reference of all functions, classes and methods |
 | [Time windows and frames](time-windows.md) | Collecting events in windows (40 ms by default) and building images |
 | [Frames and tiles](frames.md) | Frame engine: time surface / binary / count tensors per window, split into tiles (for instance 80 × 80 px) |
-| [Neural networks](networks.md) | Building, loading, saving and converting networks (U-Net, own architectures), quantization to TensorFlow Lite, weight transfer |
+| [Neural networks](networks.md) | Building, loading, saving and converting networks (U-Net, own architectures), quantization to TensorFlow Lite, [int8 models from your recordings](networks.md#int8-models-for-the-agents-opennve-quantize) (`opennve quantize`, quantization aware training), [weight transfer](networks.md#transferring-weights) between networks (`opennve transfer`), Lambda layers |
 | [Agents (TensorFlow models)](agents.md) | Running TensorFlow and TensorFlow Lite models on tiles and frames, configured in `agents.json` |
 | [Workflows](workflows.md) | Free chains of steps (camera / RAW → windows → frames → tiles → agent → labels → files), multithreaded, configured in `workflows.json` |
 | [Performance](performance.md) | Where the time goes, int8 models, fewer tiles, threads |
 | [GPU and NPU](accelerators.md) | Agents on the GPU or an NPU, `opennve benchmark` |
-| [Plugins](plugins.md) | Installed and installable plugins (Hailo), `opennve plugin`, writing a plugin |
+| [Plugins](plugins.md) | Installed and installable plugins (Hailo, AMD Kria DPU), `opennve plugin`, writing a plugin |
 | [Multiple cameras](multiple-cameras.md) | Reading several cameras at once and synchronizing them |
 | [HDF5 files](hdf5-files.md) | Reading and writing HDF5 event files (`.h5`) with x, y, p, t and labels (l) |
 | [RAW files](raw-files.md) | Reading `.raw` recordings (EVT 2.0, 2.1, 3.0) like a live camera |
-| [Command line](cli.md) | `opennve list`, `template`, `frame-template`, `check`, `workflow`, `models`, `driver`, `raw` |
+| [Command line](cli.md) | `opennve list`, `template`, `frame-template`, `check`, `recording`, `system`, `benchmark`, `quantize`, `transfer`, `workflow`, `plugin`, `models`, `driver`, `raw` |
 | [Troubleshooting](troubleshooting.md) | Camera not found, noise, high event rates |
 | [Development](development.md) | Tests, wheel builds, releases, embedded driver |
 
@@ -47,7 +47,7 @@ Camera ──► EventCamera ──► Filter ──► CameraPacket  (events in
 - **Recordings:** `opennve.open_raw("recording.raw")` and `opennve.open_hdf5("recording.h5")` (x, y, p, t and labels l) read recordings with the same interface; `opennve.open_recording(path)` chooses by the file type
 - **Agents:** TensorFlow and TensorFlow Lite models (`agents.json`) run on the tiles or frames of every window: `opennve.run_agents(camera, agents, frame_configs)`; classification or segmentation (pixels per class with frame coordinates)
 - **Workflows:** steps such as collect → frames → tiles → neural network → save, each in its own threads: `opennve workflow run workflows.json`
-- **Networks:** `opennve.Network` / `NeuralEngine` build (U-Net or own architectures), load, save and quantize models for the agents
+- **Networks:** `opennve.Network` / `NeuralEngine` build (U-Net or own architectures), load, save and quantize models for the agents; `opennve quantize` makes int8 models from your recordings (with quantization aware training), `opennve transfer` copies trained weights into another network with the same layers
 - **Frames:** named frame configurations (`frames.json`), separate from the cameras; `camera.frames(config)` yields one frame tensor per window (time surface, binary or count), optionally split into tiles; `window.to_frame(...)` builds simple images
 
 ## Supported cameras

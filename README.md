@@ -2,7 +2,7 @@
 
 Open Neuromorphic Vision Engine: a Python library to find, configure and read event cameras.
 
-📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Plugins](docs/plugins.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
+📖 **Documentation: [Wiki](https://github.com/fr3ak2402/openNVE/wiki) / [docs/](docs/README.md)** – [Installation](docs/installation.md) · [Quick start](docs/quickstart.md) · [Configuration](docs/configuration.md) · [Python API](docs/api.md) · [Time windows and frames](docs/time-windows.md) · [Frames and tiles](docs/frames.md) · [Multiple cameras](docs/multiple-cameras.md) · [RAW files](docs/raw-files.md) · [HDF5 files](docs/hdf5-files.md) · [Neural networks](docs/networks.md) ([int8](docs/networks.md#int8-models-for-the-agents-opennve-quantize), [weight transfer](docs/networks.md#transferring-weights)) · [Agents](docs/agents.md) · [Workflows](docs/workflows.md) · [Performance](docs/performance.md) · [GPU and NPU](docs/accelerators.md) · [Plugins](docs/plugins.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
 
 ## Features
 
@@ -33,8 +33,10 @@ Open Neuromorphic Vision Engine: a Python library to find, configure and read ev
 
 ### Building and converting networks
 - **Build networks:** U-Net (configurable depth, filters, batch normalization) and own architectures through a registry.
-- **Load, save, transfer weights** between models (by name or U-Net layout), compare weights.
+- **Load, save, compare weights**; Keras models with Lambda layers load with any Python version (registered replacements, built in for the HSNR U-Net).
+- **Transfer trained weights** into any network with the same layers (`opennve transfer`): from `.weights.h5`, `.keras` or Keras 2 `.h5` files, for instance a functional U-Net into the opennve `UNet`. Layers are paired by name or by order and shape, the result is checked against the original, and weights that were never trained or loaded are reported.
 - **Export to TensorFlow Lite** with quantization: none, float16, dynamic, int8 (with representative data from your recordings).
+- **int8 models for the agents** (`opennve quantize`): from your recordings (HDF5, `.raw`), post-training or with quantization aware training. In quantization aware training the int8 network learns from the float network, no labels needed. Rare target classes such as insects are weighted and taken more often into the training data. The tool reports how closely the int8 model matches the original (same class, IoU of the target classes). The int8 model is about 4 × smaller and runs as LiteRT on CPU, GPU or NPU.
 
 ### Workflows
 - **Free chains of steps** in `workflows.json`: camera / recording → time windows → frames → tiles → agents → filter → label events → log / callback / write (CSV, HDF5, JSONL) or collect; own steps can be registered.
@@ -134,7 +136,13 @@ opennve template SE1-S4 --serial 05110634 --name left > left.json
 opennve check examples/cameras.json
 opennve models
 opennve recording recording.raw      # information and statistics of a .raw or HDF5 (.h5) recording
+opennve benchmark agents.json        # agents on CPU / GPU / NPU: speed and agreement
+opennve quantize agents.json --agent unet --data recording.h5 --frames frames.json --qat   # int8 model
+opennve transfer unet.weights.h5 --to UNet --reference original.keras --output unet.keras   # trained weights
+opennve plugin list                  # installed and installable plugins (Hailo, Kria DPU)
 ```
+
+See [Command line](docs/cli.md) for all commands and options.
 
 ## Camera configuration (JSON)
 

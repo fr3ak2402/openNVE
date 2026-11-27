@@ -68,3 +68,22 @@ Without synchronization, each camera has its own clock. Solution: a sync cable a
 | `unknown setting(s) in settings` | Typo in a field name. `opennve template <model>` shows the valid names |
 | `output field c is not supported` | The camera name is stored once per packet in `packet.camera`, not in the events |
 | `duplicate camera name` | Each `name` must be unique within a file |
+
+## A model with Lambda layers does not load
+
+`Lambda` layers store Python bytecode, which loads only with the Python version that saved the
+`.keras` file and only with `safe_mode=False`. The error names the Lambda layers. openNVE loads
+the `resize_to_same<n>` layers of the HSNR U-Net with any Python version. For other Lambda
+layers, register a replacement with `opennve.register_lambda(pattern, layer)`. Alternatively,
+transfer the weights once into a network without Lambda layers (`opennve transfer original.keras
+--to UNet --output unet.keras`) and use that file. See [Lambda layers](networks.md#lambda-layers).
+
+## The network gives nearly equal probabilities, or the int8 model differs strongly
+
+If a segmentation network is unsure of almost every pixel (for three classes, highest probability
+close to 33 %), its weights are often untrained. This happens, for instance, when a rebuilt model
+was saved before the trained weights were loaded into it. `opennve quantize --qat` shows this
+before the training (`float network: highest probability ...`). `opennve transfer` reports
+weights that still have their initial values (every batch normalization at 1 / 0 / 0 / 1, every
+bias 0). Transfer the trained weights again with `opennve transfer` and check that the report says
+`same outputs`. See [Transferring weights](networks.md#transferring-weights).
