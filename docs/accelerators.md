@@ -181,7 +181,7 @@ quantization can change results. HailoRT converts the float32 inputs and outputs
 the quantized values and back, so the `preprocess` and `prediction` settings stay the same as for
 the `.tflite` model. Inputs and outputs are channels last (`nhwc`).
 
-**Installation.** openNVE runs `.hef` models with
+**Installation.** Hailo is a [plugin](plugins.md): openNVE runs `.hef` models with
 [openNVE-hailo](https://github.com/fr3ak2402/openNVE-hailo) (package `opennve_hailo`): HailoRT in
 Rust with a Python module, like the camera drivers in neuromorphic-drivers. It uses the
 asynchronous HailoRT API, which works on all Hailo chips, and is compiled against the HailoRT
@@ -190,9 +190,9 @@ command sets up everything that is missing:
 
 ```sh
 source ~/opennve/.venv/bin/activate            # the environment openNVE is installed in
-opennve hailo install                          # asks before changing the system (--yes: does not ask)
+opennve plugin install hailo                   # asks before changing the system (-- --yes: does not ask)
 sudo reboot                                    # if it says so
-opennve hailo                                  # state: module, driver, HailoRT, devices
+opennve hailo                                  # state: module, driver, HailoRT, devices (command of the plugin)
 ```
 
 It finds the module (Hailo-8 / 8L or Hailo-10H), enables PCIe Gen 3 in
@@ -200,14 +200,14 @@ It finds the module (Hailo-8 / 8L or Hailo-10H), enables PCIe Gen 3 in
 (`sudo apt install dkms hailo-all`, Hailo-10H: `hailo-h10-all`) and the ready-made `opennve_hailo`
 package for the installed HailoRT version (releases of openNVE-hailo: HailoRT 4.23 / 4.24 and
 5.1 to 5.5, aarch64 / x86_64, every Python from 3.11; no Rust needed). Only for another HailoRT
-version it installs Rust and builds the package (see [opennve hailo](cli.md#opennve-hailo-install)).
+version it installs Rust and builds the package (see [Plugins](plugins.md)).
 
 ```text
   NPU                   Hailo AI accelerator (hailo_pci)
   HailoRT 4.23.0        1 Hailo device (Hailo-8L) (.hef models)
 ```
 
-Run `opennve hailo install` again after a HailoRT update: each `opennve_hailo` package is made
+Run `opennve plugin install hailo` again after a HailoRT update: each `opennve_hailo` package is made
 for one HailoRT version. Other Linux computers (x86_64, ARM64) with a Hailo M.2 / PCIe module: install
 HailoRT from the Hailo Developer Zone first; Windows (HailoRT Windows installer) is not tested.
 

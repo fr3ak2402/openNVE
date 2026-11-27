@@ -316,7 +316,7 @@ The example prints the selected tiles of every agent and draws them on the frame
 | `Agent(config, model=None)` | `load()`, `predict(frame / tiles / array)`, `predict_batch(batch)`, `prepare(images)`, `input` (model input shape and dtype), `close()`; context manager |
 | `Agent.from_model(model, name="model", **settings)` | Agent for a model object: `torch.nn.Module`, or an object with `predict(batch)` / a callable |
 | `TorchBackend(model, threads=None, device=None, ...)`, `torch_info()` | PyTorch runtime (`opennve.agents`), PyTorch version and GPU |
-| `HailoBackend(path, device=None, batch_size=None)`, `hailo_info()` | Hailo runtime (`opennve.agents`), HailoRT version and devices |
+| `backend_options(name)` | `{"threads", "accelerator"}` of a backend (see [Plugins](plugins.md)) |
 | `run_agents(source, agents, frame_configs=None, duration_ms=None)` | Yields one `AgentStep` per time window of a camera or RAW file |
 | `process_window(window, agents, frame_configs=None)` | One `AgentStep` for one window |
 | `AgentStep` | `window`, `frames`, `results`, `step[agent name]` |
